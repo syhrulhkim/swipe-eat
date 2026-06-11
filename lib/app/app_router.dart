@@ -1,17 +1,19 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/login_page.dart';
 import '../features/auth/presentation/register_page.dart';
 import '../features/auth/state/auth_controller.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
+import '../features/settings/presentation/settings_page.dart';
 
 GoRouter createRouter(AuthController authController) {
   return GoRouter(
     initialLocation: '/dashboard',
     refreshListenable: authController,
     redirect: (context, state) {
-      final isOnAuthPage =
-          state.matchedLocation == '/login' || state.matchedLocation == '/register';
+      final isOnAuthPage = state.matchedLocation == '/login' ||
+          state.matchedLocation == '/register';
 
       if (state.matchedLocation == '/') {
         return authController.isAuthenticated ? '/dashboard' : '/login';
@@ -46,6 +48,32 @@ GoRouter createRouter(AuthController authController) {
         path: '/dashboard',
         builder: (context, state) =>
             DashboardPage(authController: authController),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/restaurant',
+        builder: (context, state) {
+          final payload = state.extra;
+          final data = payload is Map<String, dynamic>
+              ? RestaurantDetailData.fromPayload(payload)
+              : const RestaurantDetailData(
+                  title: 'Restaurant',
+                  tag: '',
+                  details: '',
+                  color: Color(0xFF141922),
+                  rating: 0,
+                  latitude: 0,
+                  longitude: 0,
+                  reviewName: '',
+                  reviewText: '',
+                  imageUrls: [],
+                );
+
+          return RestaurantDetailPage(data: data);
+        },
       ),
     ],
   );
