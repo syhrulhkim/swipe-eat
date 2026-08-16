@@ -2276,31 +2276,61 @@ class _RestaurantInfoPanelState extends State<_RestaurantInfoPanel>
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _TagPill(
-                      label: widget.data.tag,
-                      accent: widget.data.color,
+                    Row(
+                      children: [
+                        _CategoryBadge(
+                          label: widget.data.tag,
+                          accent: widget.data.color,
+                        ),
+                        const Spacer(),
+                        AnimatedRotation(
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOutCubic,
+                          turns: widget.expanded ? 0.5 : 0,
+                          child: Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: Colors.white.withValues(alpha: 0.65),
+                            size: 20,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     Text(
                       widget.data.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
+                                height: 1.15,
                               ),
                     ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
-                        _InfoPill(
-                          icon: Icons.star_rounded,
-                          label: widget.ratingText,
+                        _RatingBadge(ratingText: widget.ratingText),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.place_rounded,
+                          color: Colors.white.withValues(alpha: 0.6),
+                          size: 14,
                         ),
-                        _InfoPill(
-                          icon: Icons.place_rounded,
-                          label: widget.distanceText,
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            widget.distanceText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
                         ),
                       ],
                     ),
@@ -2456,36 +2486,67 @@ class _ConnectedActionButton extends StatelessWidget {
   }
 }
 
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.icon,
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({
     required this.label,
+    required this.accent,
   });
 
-  final IconData icon;
   final String label;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
+        color: accent.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.10),
+          color: accent.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.95),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.10,
+              fontSize: 9,
+            ),
+      ),
+    );
+  }
+}
+
+class _RatingBadge extends StatelessWidget {
+  const _RatingBadge({required this.ratingText});
+
+  final String ratingText;
+
+  static const _gold = Color(0xFFFFC24B);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _gold.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: _gold.withValues(alpha: 0.4),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 14),
-          const SizedBox(width: 5),
+          const Icon(Icons.star_rounded, color: _gold, size: 14),
+          const SizedBox(width: 4),
           Text(
-            label,
+            ratingText,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w800,
                 ),
           ),
         ],
