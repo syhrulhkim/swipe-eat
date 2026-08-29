@@ -18,6 +18,9 @@ dependencies:
   geolocator: ^14.0.2
   go_router: ^17.3.0
   google_sign_in: ^7.2.0
+  # Plays the small vector loops in assets/lottie (splash mark, spinner,
+  # empty-state art). Bundled JSON only — nothing is fetched at runtime.
+  lottie: ^3.3.2
   shared_preferences: ^2.5.5
   sign_in_with_apple: ^8.1.0
   supabase_flutter: ^2.17.2
@@ -38,6 +41,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    # Hand-authored vector loops, a few KB each. Kept deliberately small and
+    # abstract: a spinner, a heart and a location pulse, not illustrations.
+    - assets/lottie/
 
   # Both families are bundled rather than fetched at runtime: the app now
   # serves a cached deck with no connection, and a first offline launch that

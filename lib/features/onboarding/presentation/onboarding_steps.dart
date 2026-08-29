@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/app_buttons.dart';
+import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
 import '../../../core/ui/radius_options.dart';
@@ -259,6 +260,16 @@ class OnboardingLocationStep extends StatelessWidget {
           subtitle: 'Distance is the strongest signal in the deck. We store '
               'one coordinate on your profile and update it as you move — we '
               'never keep a trail.',
+        ),
+        const SizedBox(height: AppOnboardingGaps.section),
+        // Loops only while the fix is being taken: a pulse that never stops
+        // would claim the app is still looking after it has an answer.
+        Center(
+          child: AppLottie(
+            motion: AppMotion.pin,
+            size: 120,
+            repeat: isLocating,
+          ),
         ),
         const SizedBox(height: AppOnboardingGaps.section),
         AppPanel(

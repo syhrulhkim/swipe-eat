@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../core/location/place_name.dart';
 import '../../../core/location/user_location.dart';
 import '../../../core/ui/app_buttons.dart';
+import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
@@ -234,7 +235,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 vertical: AppSpacing.sm,
               ),
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(
+                      child: AppLottie(motion: AppMotion.spinner, size: 72),
+                    )
                   : _loadError != null
                       ? _LoadFailure(
                           message: _loadError!,

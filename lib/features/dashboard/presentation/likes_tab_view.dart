@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/app_buttons.dart';
+import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/rating_label.dart';
@@ -294,7 +295,9 @@ class _EmptyLikes extends StatelessWidget {
       title: 'No likes yet',
       message:
           'Swipe right on restaurants you love and they will show up here.',
-      art: Icon(Icons.favorite_rounded, color: kTextOnPhotoMuted, size: 40),
+      // One pop on arrival, then still: the tab is waiting for the user, not
+      // working.
+      art: AppLottie(motion: AppMotion.heart, size: 96, repeat: false),
     );
   }
 }

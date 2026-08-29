@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/rating_label.dart';
@@ -249,6 +250,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     required String title,
     required String subtitle,
     required String actionLabel,
+    AppMotion? art,
   }) {
     return _deckMessage(
       AppEmptyState(
@@ -257,6 +259,11 @@ class _SwipeDeckState extends State<SwipeDeck>
         message: subtitle,
         actionLabel: actionLabel,
         onAction: () => unawaited(_deck.load()),
+        // Played once, not looped: the state is standing still, and art that
+        // keeps moving on it reads as work in progress.
+        art: art == null
+            ? null
+            : AppLottie(motion: art, size: 96, repeat: false),
       ),
     );
   }
@@ -271,7 +278,7 @@ class _SwipeDeckState extends State<SwipeDeck>
 
   Widget _buildDeck(BuildContext context) {
     if (_deck.loading) {
-      return _deckMessage(const CircularProgressIndicator(strokeWidth: 2));
+      return _deckMessage(const AppLottie(motion: AppMotion.spinner, size: 72));
     }
 
     final deckError = _deck.error;
@@ -290,6 +297,7 @@ class _SwipeDeckState extends State<SwipeDeck>
         title: 'No restaurants yet',
         subtitle: 'Check back soon.',
         actionLabel: 'Reload',
+        art: AppMotion.pin,
       );
     }
 
@@ -304,6 +312,7 @@ class _SwipeDeckState extends State<SwipeDeck>
         title: 'No more cards',
         subtitle: 'Reload to keep swiping.',
         actionLabel: 'Reload deck',
+        art: AppMotion.heart,
       );
     }
 
