@@ -8,6 +8,8 @@ import '../../../core/location/place_name.dart';
 import '../../../core/location/user_location.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../../core/storage/cached_at.dart';
+import '../data/deck_cache.dart';
 import '../data/restaurant_repository.dart';
 import '../data/swipe_repository.dart';
 import '../models/restaurant_card.dart';
@@ -28,8 +30,10 @@ class DeckController extends ChangeNotifier {
     ProfileRepository? profiles,
     LikesController? likes,
     TikTokPlayerCache? players,
+    DeckCache? cache,
     Future<Position> Function()? resolvePosition,
   })  : _restaurants = restaurants ?? RestaurantRepository(),
+        _cache = cache ?? const DeckCache(),
         _swipes = swipes ?? SwipeRepository(),
         _profiles = profiles ?? ProfileRepository(),
         _likes = likes ?? LikesController.instance,
@@ -44,6 +48,7 @@ class DeckController extends ChangeNotifier {
   final SwipeRepository _swipes;
   final ProfileRepository _profiles;
   final LikesController _likes;
+  final DeckCache _cache;
   final Future<Position> Function() _resolvePosition;
 
   /// Warm players for the cards around the top one; the widget hands these to
@@ -64,6 +69,18 @@ class DeckController extends ChangeNotifier {
 
   Position? _userPosition;
   Position? get userPosition => _userPosition;
+
+  DateTime? _dealtFromCacheAt;
+
+  /// True when the cards on screen came off the device rather than the server.
+  bool get isStale => _dealtFromCacheAt != null;
+
+  /// What the deck says about itself when it is stale, so the user is never
+  /// shown a saved deck as if it were live.
+  String? get stalenessLabel {
+    final savedAt = _dealtFromCacheAt;
+    return savedAt == null ? null : 'Offline · saved ${describeAge(savedAt)}';
+  }
 
   /// What the header chip says: the reverse-geocoded name of the last stored
   /// fix, or 'Nearby' for an account that has never granted location.
@@ -141,17 +158,42 @@ class DeckController extends ChangeNotifier {
       _cards = restaurants.map(RestaurantCard.fromRestaurant).toList();
       _index = 0;
       _loading = false;
+      _dealtFromCacheAt = null;
       players.clear();
       notifyListeners();
       _warmPlayers(from: 0, count: 5);
+
+      // Kept for the next launch that cannot reach the server. Fire-and-forget:
+      // the deck is already on screen and a failed write costs nothing.
+      unawaited(_cache.save(
+        userId: authController.sessionUserId ?? '',
+        restaurants: restaurants,
+      ));
     } on Object catch (error) {
       debugPrint('Deck load failed: $error');
       if (generation != _loadGeneration) {
         return;
       }
 
+      final cached = await _cache.read(authController.sessionUserId ?? '');
+      if (generation != _loadGeneration) {
+        return;
+      }
+
       _loading = false;
-      _error = 'Could not load restaurants. Check your connection.';
+      if (cached == null) {
+        _error = 'Could not load restaurants. Check your connection.';
+        notifyListeners();
+        return;
+      }
+
+      // Something to swipe beats an error page. The cards are marked stale, so
+      // the deck says where they came from, and the swipes still write — they
+      // just fail their own way if the connection is still down.
+      _cards = cached.restaurants.map(RestaurantCard.fromRestaurant).toList();
+      _index = 0;
+      _dealtFromCacheAt = cached.savedAt;
+      players.clear();
       notifyListeners();
     }
   }

@@ -20,3 +20,10 @@ Color parseHexColor(String? hex, {Color fallback = const Color(0xFF141922)}) {
 
   return Color(0xFF000000 | int.parse(digits, radix: 16));
 }
+
+/// The inverse of [parseHexColor], for writing a colour back out to a cache
+/// entry in the same '#RRGGBB' shape the database stores.
+String hexFromColor(Color color) {
+  final rgb = color.toARGB32() & 0xFFFFFF;
+  return '#${rgb.toRadixString(16).padLeft(6, '0')}';
+}

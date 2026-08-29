@@ -66,6 +66,33 @@ class AppUser {
     );
   }
 
+  /// Rebuilds a user from [toCache]. Separate from [AppUser.fromProfile]
+  /// because the cache stores the assembled user — email included, which the
+  /// `profiles` row does not have.
+  factory AppUser.fromCache(Map<String, dynamic> json) {
+    return AppUser(
+      id: _string(json['id']) ?? '',
+      name: _string(json['name']) ?? 'User',
+      email: _string(json['email']) ?? '',
+      avatarUrl: _string(json['avatar_url']),
+      onboardedAt: _dateTime(json['onboarded_at']),
+      searchRadiusKm: _int(json['search_radius_km']),
+      lastPlaceName: _string(json['last_place_name']),
+    );
+  }
+
+  Map<String, dynamic> toCache() {
+    return <String, dynamic>{
+      'id': id,
+      'name': name,
+      'email': email,
+      'avatar_url': avatarUrl,
+      'onboarded_at': onboardedAt?.toIso8601String(),
+      'search_radius_km': searchRadiusKm,
+      'last_place_name': lastPlaceName,
+    };
+  }
+
   /// Null keeps the current value. Clearing a nullable field (radius back to
   /// "no limit") never goes through here — the RPCs return the whole profile
   /// row, so writers rebuild via [AppUser.fromProfile] instead.

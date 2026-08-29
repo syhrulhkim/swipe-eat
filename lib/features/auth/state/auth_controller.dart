@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../profile/data/profile_cache.dart';
+import '../../restaurants/data/deck_cache.dart';
 import '../data/auth_repository.dart';
 import '../models/app_user.dart';
 
@@ -17,9 +19,14 @@ enum AuthStatus {
 }
 
 class AuthController extends ChangeNotifier {
-  AuthController(this._repository);
+  AuthController(this._repository, {ProfileCache? profileCache})
+      : _profileCache = profileCache ?? const ProfileCache();
 
   final AuthRepository _repository;
+
+  /// The last profile read, kept on the device so a launch with no connection
+  /// still knows who is signed in.
+  final ProfileCache _profileCache;
   StreamSubscription<AuthState>? _subscription;
 
   AuthStatus _status = AuthStatus.unknown;
@@ -37,6 +44,10 @@ class AuthController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   String? get notice => _notice;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
+
+  /// The signed-in account's id straight from the session, available even
+  /// when the profile row could not be read.
+  String? get sessionUserId => _repository.currentSession?.user.id;
 
   /// The router's gate: false means "do not redirect yet".
   bool get isResolved => _status != AuthStatus.unknown;
@@ -100,6 +111,10 @@ class AuthController extends ChangeNotifier {
     _setBusy(true);
     try {
       await _repository.logout();
+      // The caches are account data; the next account on this device must not
+      // inherit them.
+      await _profileCache.clear();
+      await const DeckCache().clear();
       _status = AuthStatus.unauthenticated;
       _user = null;
       _errorMessage = null;
@@ -126,6 +141,7 @@ class AuthController extends ChangeNotifier {
   /// the controller re-read what it just wrote.
   void applyUser(AppUser user) {
     _user = user;
+    unawaited(_profileCache.save(user));
     if (_status != AuthStatus.authenticated) {
       _status = AuthStatus.authenticated;
     }
@@ -179,10 +195,14 @@ class AuthController extends ChangeNotifier {
     }
 
     try {
-      _user = await _repository.loadCurrentUser();
-      _status = _user == null
+      final user = await _repository.loadCurrentUser();
+      _user = user;
+      _status = user == null
           ? AuthStatus.unauthenticated
           : AuthStatus.authenticated;
+      if (user != null) {
+        unawaited(_profileCache.save(user));
+      }
     } on Object catch (error) {
       // Deliberately everything: the profile read can fail as a Postgrest
       // error, a socket error or a timeout, and a session that cannot load its
@@ -190,6 +210,10 @@ class AuthController extends ChangeNotifier {
       // retries on the next refresh.
       _errorMessage = error.toString();
       _status = AuthStatus.authenticated;
+      // Offline, then: fall back to the profile this device last read for this
+      // account, so the app knows the user's name, radius and onboarding state
+      // instead of showing a signed-in shell with nothing in it.
+      _user ??= await _profileCache.read(sessionUserId ?? '');
     }
     notifyListeners();
   }

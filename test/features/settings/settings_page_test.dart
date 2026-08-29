@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swipe_eat/core/ui/radius_options.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
@@ -23,6 +24,9 @@ void main() {
 
   Future<void> pumpSettings(WidgetTester tester,
       {int? searchRadiusKm}) async {
+    // The auth controller caches the profile on the device; without a fake
+    // store behind it every resolve logs a missing-plugin failure.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     authRepository = FakeAuthRepository()
       ..sessionPresent = true
       ..profile = _user(searchRadiusKm: searchRadiusKm);

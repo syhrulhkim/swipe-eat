@@ -231,7 +231,10 @@ class _SwipeDeckState extends State<SwipeDeck>
           top: 0,
           left: 0,
           right: 0,
-          child: DeckHeader(locationLabel: _deck.locationLabel),
+          child: DeckHeader(
+            locationLabel: _deck.locationLabel,
+            stalenessLabel: _deck.stalenessLabel,
+          ),
         ),
       ],
     );
@@ -323,7 +326,10 @@ class _SwipeDeckState extends State<SwipeDeck>
           top: 0,
           left: 0,
           right: 0,
-          child: DeckHeader(locationLabel: _deck.locationLabel),
+          child: DeckHeader(
+            locationLabel: _deck.locationLabel,
+            stalenessLabel: _deck.stalenessLabel,
+          ),
         ),
       ],
     );
@@ -462,11 +468,19 @@ class _SwipeDeckState extends State<SwipeDeck>
 /// The deck's top chrome: where the user is, and the way into Settings, over a
 /// gradient that keeps both legible against any clip.
 class DeckHeader extends StatelessWidget {
-  const DeckHeader({super.key, required this.locationLabel});
+  const DeckHeader({
+    super.key,
+    required this.locationLabel,
+    this.stalenessLabel,
+  });
 
   /// The user's reverse-geocoded whereabouts, from the profile row — not a
   /// hardcoded town.
   final String locationLabel;
+
+  /// Set when the deck came off the device instead of the server. Shown under
+  /// the location chip so saved cards are never mistaken for fresh ones.
+  final String? stalenessLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -501,22 +515,34 @@ class DeckHeader extends StatelessWidget {
             bottom: false,
             child: Padding(
               padding: const EdgeInsets.only(top: 12, left: 16, right: 18),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GlassChip(
-                    icon: Icons.place_rounded,
-                    label: locationLabel,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GlassChip(
+                        icon: Icons.place_rounded,
+                        label: locationLabel,
+                      ),
+                      GlassCircleButton(
+                        icon: Icons.settings_rounded,
+                        size: kUtilityButtonSize,
+                        iconSize: 20,
+                        background: Colors.black.withValues(alpha: 0.34),
+                        semanticLabel: 'Settings',
+                        onTap: () => context.push('/settings'),
+                      ),
+                    ],
                   ),
-                  GlassCircleButton(
-                    icon: Icons.settings_rounded,
-                    size: kUtilityButtonSize,
-                    iconSize: 20,
-                    background: Colors.black.withValues(alpha: 0.34),
-                    semanticLabel: 'Settings',
-                    onTap: () => context.push('/settings'),
-                  ),
+                  if (stalenessLabel != null) ...[
+                    const SizedBox(height: 10),
+                    GlassChip(
+                      icon: Icons.cloud_off_rounded,
+                      label: stalenessLabel!,
+                    ),
+                  ],
                 ],
               ),
             ),

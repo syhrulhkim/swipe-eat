@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:swipe_eat/features/auth/data/auth_repository.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
@@ -21,6 +22,9 @@ void main() {
     late AuthController controller;
 
     setUp(() {
+    // The auth controller caches the profile on the device; without a fake
+    // store behind it every resolve logs a missing-plugin failure.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
       repository = FakeAuthRepository();
       controller = AuthController(repository);
     });

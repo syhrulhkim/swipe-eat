@@ -49,6 +49,28 @@ class Restaurant {
     );
   }
 
+  /// The row shape [Restaurant.fromJson] reads, so a cached deck is parsed by
+  /// exactly the same code as a fresh one — a field the parser learns about
+  /// cannot silently go missing on the way through the cache.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'name': name,
+      'tag': tag,
+      'details': details,
+      'brand_color': hexFromColor(brandColor),
+      'rating': rating,
+      'latitude': latitude,
+      'longitude': longitude,
+      'video_url': videoUrl,
+      'restaurant_images': <Map<String, dynamic>>[
+        for (var position = 0; position < imageUrls.length; position++)
+          {'url': imageUrls[position], 'position': position},
+      ],
+      'reviews': reviews.map((review) => review.toJson()).toList(),
+    };
+  }
+
   final int id;
   final String name;
   final String tag;
@@ -73,6 +95,10 @@ class RestaurantReview {
       author: json['author_name'] as String? ?? 'Reviewer',
       text: json['body'] as String? ?? '',
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'author_name': author, 'body': text};
   }
 
   final String author;
