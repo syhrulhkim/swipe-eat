@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
 import '../../../core/ui/radius_options.dart';
@@ -147,7 +148,7 @@ class OnboardingHabitsStep extends StatelessWidget {
           title: 'Morning mode',
           subtitle: 'Show breakfast first before 11am',
           trailingLabel: draft.morningMode ? 'On' : 'Off',
-          tint: const Color(0xFFF6D365),
+          tint: kTintMorning,
           onTap: () {
             draft.morningMode = !draft.morningMode;
             onChanged();
@@ -159,7 +160,7 @@ class OnboardingHabitsStep extends StatelessWidget {
           title: 'Spice bias',
           subtitle: 'Prioritize bolder flavors',
           trailingLabel: draft.spiceBias.label,
-          tint: const Color(0xFFE76F51),
+          tint: kTintSpice,
           onTap: () {
             draft.spiceBias = draft.spiceBias.next;
             onChanged();
@@ -171,7 +172,7 @@ class OnboardingHabitsStep extends StatelessWidget {
           title: 'Nearby focus',
           subtitle: 'Favor shorter distances',
           trailingLabel: draft.nearbyFocus ? 'On' : 'Off',
-          tint: const Color(0xFFB7E4C7),
+          tint: kTintNearby,
           onTap: () {
             draft.nearbyFocus = !draft.nearbyFocus;
             onChanged();
@@ -288,25 +289,17 @@ class OnboardingLocationStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppOnboardingGaps.section),
-        FilledButton.icon(
+        AppPrimaryButton(
+          label: isLocating ? 'Finding you...' : 'Use my location',
+          icon: Icons.near_me_rounded,
+          expand: true,
           onPressed: isLocating ? null : onUseLocation,
-          icon: isLocating
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.near_me_rounded),
-          label: Text(isLocating ? 'Finding you...' : 'Use my location'),
-          style: FilledButton.styleFrom(
-            backgroundColor: kAccentEmber,
-            foregroundColor: kOnAccent,
-            minimumSize: const Size.fromHeight(48),
-          ),
         ),
-        TextButton(
+        const SizedBox(height: 8),
+        AppSecondaryButton(
+          label: 'Not now',
+          expand: true,
           onPressed: isLocating ? null : onSkip,
-          child: const Text('Not now'),
         ),
       ],
     );

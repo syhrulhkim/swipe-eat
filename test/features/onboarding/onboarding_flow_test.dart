@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
+import 'package:swipe_eat/core/ui/app_buttons.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
@@ -71,10 +72,11 @@ void main() {
 
   /// The primary button carries the step's action label, so finding it by text
   /// also asserts which step we are on.
-  Finder primaryButton(String label) => find.widgetWithText(FilledButton, label);
+  Finder primaryButton(String label) =>
+      find.widgetWithText(AppPrimaryButton, label);
 
   bool isEnabled(WidgetTester tester, Finder finder) =>
-      tester.widget<FilledButton>(finder).onPressed != null;
+      tester.widget<AppPrimaryButton>(finder).onPressed != null;
 
   Future<void> completeNameStep(WidgetTester tester) async {
     await tester.enterText(find.byType(TextField), 'Aisyah');

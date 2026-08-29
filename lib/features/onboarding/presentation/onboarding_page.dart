@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../../core/location/place_name.dart';
 import '../../../core/location/user_location.dart';
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
@@ -287,20 +288,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
         Row(
           children: [
             if (_step > 0)
-              TextButton(
+              AppSecondaryButton(
+                label: 'Back',
                 onPressed: _saving ? null : () => _goToStep(_step - 1),
-                child: const Text('Back'),
               ),
             const Spacer(),
-            FilledButton(
+            // Disabled rather than busy: the wizard hands off to the router on
+            // success and never rebuilds itself out of the saving state, so a
+            // spinner here would keep spinning after the work is done.
+            AppPrimaryButton(
+              label: _primaryLabel,
               onPressed: _canAdvance && !_saving && !_locating ? _next : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: kAccentEmber,
-                foregroundColor: kOnAccent,
-                disabledBackgroundColor: kSurfacePanel,
-                minimumSize: const Size(140, 48),
-              ),
-              child: Text(_primaryLabel),
             ),
           ],
         ),
@@ -363,14 +361,7 @@ class _LoadFailure extends StatelessWidget {
                 ?.copyWith(color: kTextOnPhotoSecondary),
           ),
           const SizedBox(height: AppSpacing.md),
-          FilledButton(
-            onPressed: onRetry,
-            style: FilledButton.styleFrom(
-              backgroundColor: kAccentEmber,
-              foregroundColor: kOnAccent,
-            ),
-            child: const Text('Try again'),
-          ),
+          AppPrimaryButton(label: 'Try again', onPressed: onRetry),
         ],
       ),
     );

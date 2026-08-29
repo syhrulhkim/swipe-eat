@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 
@@ -114,10 +114,12 @@ class EmptyTabMessage extends StatelessWidget {
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 12),
-              FButton(
-                variant: FButtonVariant.outline,
-                onPress: onAction,
-                child: Text(actionLabel!),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppSecondaryButton(
+                  label: actionLabel!,
+                  onPressed: onAction,
+                ),
               ),
             ],
           ],

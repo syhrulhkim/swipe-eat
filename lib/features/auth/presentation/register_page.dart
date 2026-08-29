@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../state/auth_controller.dart';
 import 'social_sign_in_buttons.dart';
@@ -163,14 +164,13 @@ class _RegisterPageState extends State<RegisterPage> {
                             },
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          FButton(
-                            onPress:
+                          AppPrimaryButton(
+                            label: widget.authController.isBusy
+                                ? 'Creating...'
+                                : 'Create account',
+                            expand: true,
+                            onPressed:
                                 widget.authController.isBusy ? null : _submit,
-                            child: Text(
-                              widget.authController.isBusy
-                                  ? 'Creating...'
-                                  : 'Create account',
-                            ),
                           ),
                           SocialSignInButtons(
                             authController: widget.authController,

@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 
 void main() {
@@ -244,7 +245,7 @@ void main() {
   });
 }
 
-const _fallbackBrandColor = Color(0xFF141922);
+const _fallbackBrandColor = kBrandColorFallback;
 
 Map<String, dynamic> _fullRow() {
   return <String, dynamic>{

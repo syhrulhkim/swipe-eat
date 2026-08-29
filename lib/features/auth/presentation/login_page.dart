@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../state/auth_controller.dart';
 import 'social_sign_in_buttons.dart';
@@ -163,9 +164,10 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.sm),
-                          FButton(
-                            onPress: busy ? null : _submit,
-                            child: Text(busy ? 'Signing in...' : 'Sign in'),
+                          AppPrimaryButton(
+                            label: busy ? 'Signing in...' : 'Sign in',
+                            expand: true,
+                            onPressed: busy ? null : _submit,
                           ),
                           SocialSignInButtons(
                             authController: widget.authController,

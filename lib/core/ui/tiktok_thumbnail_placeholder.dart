@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'design_tokens.dart';
+
 /// Fallback for a missing or no-longer-loading restaurant thumbnail
 /// (plan.md "Expired Thumbnail UI"): a branded TikTok-review placeholder
 /// instead of a blank box. Rendering it never retries the broken URL.
@@ -12,7 +14,7 @@ class TikTokThumbnailPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFF10141B),
+      color: kSurfaceDark,
       child: Center(
         // Thumbnail slots can be shorter than the badge + labels stack (small
         // cards, split-screen widths), so scale the content down instead of

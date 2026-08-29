@@ -97,7 +97,7 @@ RestaurantDetailData _detailData({
     title: title,
     tag: tag,
     details: details,
-    color: const Color(0xFF141922),
+    color: kBrandColorFallback,
     rating: rating,
     latitude: latitude,
     longitude: longitude,
@@ -208,7 +208,7 @@ void main() {
       expect(data.title, 'Restaurant');
       expect(data.tag, isEmpty);
       expect(data.details, isEmpty);
-      expect(data.color, const Color(0xFF141922));
+      expect(data.color, kBrandColorFallback);
       expect(data.rating, 0);
       expect(data.latitude, 0);
       expect(data.longitude, 0);

@@ -148,7 +148,7 @@ class _QuizAnswerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent =
-        selected ? const Color(0xFFB7E4C7) : Colors.white.withValues(alpha: 0.10);
+        selected ? kAccentEmber : Colors.white.withValues(alpha: 0.10);
 
     return Material(
       color: Colors.transparent,

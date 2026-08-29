@@ -37,7 +37,7 @@ class ProfileTab extends StatelessWidget {
               title: 'Morning mode',
               subtitle: 'Show breakfast first',
               trailingLabel: 'On',
-              tint: Color(0xFFF6D365),
+              tint: kTintMorning,
             ),
             const SizedBox(height: 10),
             const PreferenceTile(
@@ -45,7 +45,7 @@ class ProfileTab extends StatelessWidget {
               title: 'Spice bias',
               subtitle: 'Prioritize bolder flavors',
               trailingLabel: 'High',
-              tint: Color(0xFFE76F51),
+              tint: kTintSpice,
             ),
             const SizedBox(height: 10),
             const PreferenceTile(
@@ -53,7 +53,7 @@ class ProfileTab extends StatelessWidget {
               title: 'Nearby focus',
               subtitle: 'Favor shorter distances',
               trailingLabel: 'On',
-              tint: Color(0xFFB7E4C7),
+              tint: kTintNearby,
             ),
           ],
         ),

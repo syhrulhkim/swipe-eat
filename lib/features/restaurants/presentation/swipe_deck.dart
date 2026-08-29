@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/rating_label.dart';
@@ -256,10 +257,12 @@ class _SwipeDeckState extends State<SwipeDeck>
         child: FCard(
           title: Text(title),
           subtitle: Text(subtitle),
-          child: FButton(
-            variant: FButtonVariant.outline,
-            onPress: () => unawaited(_deck.load()),
-            child: Text(actionLabel),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AppPrimaryButton(
+              label: actionLabel,
+              onPressed: () => unawaited(_deck.load()),
+            ),
           ),
         ),
       ),

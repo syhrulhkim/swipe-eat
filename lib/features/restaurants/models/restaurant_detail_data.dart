@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/design_tokens.dart';
 import 'restaurant.dart';
 import 'restaurant_card.dart';
 
@@ -30,7 +31,9 @@ class RestaurantDetailData {
       title: payload['title'] as String? ?? 'Restaurant',
       tag: payload['tag'] as String? ?? '',
       details: payload['details'] as String? ?? '',
-      color: Color((payload['color'] as int?) ?? 0xFF141922),
+      color: payload['color'] is int
+          ? Color(payload['color'] as int)
+          : kBrandColorFallback,
       rating: (payload['rating'] as num?)?.toDouble() ?? 0,
       latitude: (payload['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (payload['longitude'] as num?)?.toDouble() ?? 0,

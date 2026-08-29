@@ -328,7 +328,7 @@ class _RestaurantPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ringColor = selected ? kAccentEmber : const Color(0xFF262C36);
+    final ringColor = selected ? kAccentEmber : const Color(0xFF2A2A2A);
 
     return Semantics(
       label: restaurant.name,
@@ -378,7 +378,7 @@ class _PinAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fallback = Container(
-      color: const Color(0xFF1A202A),
+      color: kSurfacePanel,
       child: const Icon(
         Icons.restaurant_rounded,
         color: Colors.white54,
@@ -624,9 +624,9 @@ class _IsoCityPainter extends CustomPainter {
     );
 
     final random = math.Random(42);
-    final topPaint = Paint()..color = const Color(0xFF1D232D);
-    final leftPaint = Paint()..color = const Color(0xFF151A22);
-    final rightPaint = Paint()..color = const Color(0xFF0E1218);
+    final topPaint = Paint()..color = const Color(0xFF1F1F1F);
+    final leftPaint = Paint()..color = const Color(0xFF161616);
+    final rightPaint = Paint()..color = const Color(0xFF101010);
 
     const cell = 74.0;
     for (var y = -1; y < size.height / cell + 1; y++) {

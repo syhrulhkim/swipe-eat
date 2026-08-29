@@ -25,6 +25,13 @@ const Color kOnAccent = Color(0xFF0B0B0B);
 /// neither reads as primary.
 const Color kAccentCream = Color(0xFFF3E3C3);
 
+/// Tints for the three taste preferences. They have to be distinguishable from
+/// each other and from [kAccentEmber], which rules out a third orange, so the
+/// set runs warm-to-cool inside the same muted family.
+const Color kTintMorning = Color(0xFFF6C664);
+const Color kTintSpice = Color(0xFFE8613C);
+const Color kTintNearby = Color(0xFF9ED8A6);
+
 /// App background behind full-bleed content (deck, likes, detail below-fold).
 const Color kBackgroundDark = Color(0xFF0B0B0B);
 
@@ -37,6 +44,11 @@ const Color kSurfaceDark = Color(0xFF141414);
 /// Raised surface: panels, list rows, anything that must separate from
 /// [kSurfaceDark] without a border.
 const Color kSurfacePanel = Color(0xFF1C1C1C);
+
+/// Stands in for a restaurant's own brand colour when the row has none or the
+/// stored value is unreadable. Matches [kSurfacePanel] so an unbranded card is
+/// simply a neutral card rather than an obviously wrong one.
+const Color kBrandColorFallback = kSurfacePanel;
 
 /// Fill for controls that sit on top of a photo or video, where an opaque
 /// surface would punch a hole in the image.

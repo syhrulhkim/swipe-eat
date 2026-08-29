@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../state/auth_controller.dart';
 
@@ -50,17 +50,17 @@ class SocialSignInButtons extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         if (showGoogle)
-          FButton(
-            variant: FButtonVariant.outline,
-            onPress: busy ? null : () => _run(authController.signInWithGoogle),
-            child: const Text('Continue with Google'),
+          AppSecondaryButton(
+            label: 'Continue with Google',
+            expand: true,
+            onPressed: busy ? null : () => _run(authController.signInWithGoogle),
           ),
         if (showGoogle && showApple) const SizedBox(height: AppSpacing.sm),
         if (showApple)
-          FButton(
-            variant: FButtonVariant.outline,
-            onPress: busy ? null : () => _run(authController.signInWithApple),
-            child: const Text('Continue with Apple'),
+          AppSecondaryButton(
+            label: 'Continue with Apple',
+            expand: true,
+            onPressed: busy ? null : () => _run(authController.signInWithApple),
           ),
       ],
     );

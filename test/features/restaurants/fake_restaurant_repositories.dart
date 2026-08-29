@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'package:swipe_eat/core/ui/design_tokens.dart';
 
 import 'package:swipe_eat/features/restaurants/data/restaurant_repository.dart';
 import 'package:swipe_eat/features/restaurants/data/swipe_repository.dart';
@@ -11,7 +11,7 @@ Restaurant testRestaurant(int id, {String? name}) {
     name: name ?? 'Restaurant $id',
     tag: 'Malay',
     details: 'Test restaurant $id',
-    brandColor: const Color(0xFF141922),
+    brandColor: kBrandColorFallback,
     rating: 0,
     latitude: 1.85,
     longitude: 102.93,

@@ -42,7 +42,7 @@ Restaurant _restaurant({
     name: name ?? 'Restaurant $id',
     tag: tag,
     details: 'A tiny shophouse stall with a very big charcoal grill.',
-    brandColor: const Color(0xFF141922),
+    brandColor: kBrandColorFallback,
     rating: rating,
     latitude: 1.85,
     longitude: 102.933333,
