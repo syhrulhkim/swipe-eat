@@ -1,6 +1,5 @@
 import 'package:go_router/go_router.dart';
 
-import '../core/ui/glass_ui.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/auth/presentation/register_page.dart';
 import '../features/auth/presentation/splash_page.dart';
@@ -8,7 +7,7 @@ import '../features/auth/state/auth_controller.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
 import '../features/restaurants/models/restaurant_detail_data.dart';
-import '../features/restaurants/presentation/restaurant_detail_page.dart';
+import '../features/restaurants/presentation/restaurant_detail_route.dart';
 import '../features/settings/presentation/settings_page.dart';
 
 GoRouter createRouter(AuthController authController) {
@@ -83,26 +82,18 @@ GoRouter createRouter(AuthController authController) {
             SettingsPage(authController: authController),
       ),
       GoRoute(
-        path: '/restaurant',
+        path: '/restaurant/:id',
         builder: (context, state) {
           final payload = state.extra;
-          final data = payload is Map<String, dynamic>
-              ? RestaurantDetailData.fromPayload(payload)
-              : const RestaurantDetailData(
-                  id: 0,
-                  title: 'Restaurant',
-                  tag: '',
-                  details: '',
-                  color: kSurfacePanel,
-                  rating: 0,
-                  latitude: 0,
-                  longitude: 0,
-                  reviewName: '',
-                  reviewText: '',
-                  imageUrls: [],
-                );
 
-          return RestaurantDetailPage(data: data);
+          return RestaurantDetailRoute(
+            restaurantId: int.tryParse(state.pathParameters['id'] ?? ''),
+            // A tap from a card carries the whole restaurant with it, so the
+            // page opens with no fetch. A link carries only the id.
+            initialData: payload is Map<String, dynamic>
+                ? RestaurantDetailData.fromPayload(payload)
+                : null,
+          );
         },
       ),
     ],

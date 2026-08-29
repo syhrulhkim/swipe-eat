@@ -16,7 +16,9 @@ class LikesAuthEvents {
   Stream<AuthState>? get changes {
     try {
       return Supabase.instance.client.auth.onAuthStateChange;
-    } catch (_) {
+    } on Error catch (_) {
+      // `Supabase.instance` asserts rather than throwing an exception when the
+      // singleton was never initialised.
       return null;
     }
   }
@@ -24,7 +26,7 @@ class LikesAuthEvents {
   String? get currentUserId {
     try {
       return Supabase.instance.client.auth.currentUser?.id;
-    } catch (_) {
+    } on Error catch (_) {
       return null;
     }
   }

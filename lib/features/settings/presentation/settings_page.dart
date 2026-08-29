@@ -53,7 +53,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _radiusKm = user.searchRadiusKm;
         _saving = false;
       });
-    } catch (error) {
+    } on Object catch (error) {
+      // Any failure means the same thing to the user: the radius did not
+      // save, so put the old one back and say so.
       debugPrint('Radius save failed: $error');
       if (!mounted) {
         return;

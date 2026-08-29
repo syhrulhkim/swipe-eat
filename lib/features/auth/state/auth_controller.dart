@@ -183,9 +183,11 @@ class AuthController extends ChangeNotifier {
       _status = _user == null
           ? AuthStatus.unauthenticated
           : AuthStatus.authenticated;
-    } catch (error) {
-      // A session that cannot load its profile (offline, RLS change) still
-      // counts as signed in; the profile retries on the next refresh.
+    } on Object catch (error) {
+      // Deliberately everything: the profile read can fail as a Postgrest
+      // error, a socket error or a timeout, and a session that cannot load its
+      // profile (offline, RLS change) still counts as signed in — the profile
+      // retries on the next refresh.
       _errorMessage = error.toString();
       _status = AuthStatus.authenticated;
     }
@@ -203,7 +205,10 @@ class AuthController extends ChangeNotifier {
     } on AuthFailure catch (error) {
       _errorMessage = error.message;
       return false;
-    } catch (error) {
+    } on Object catch (error) {
+      // Anything the repository did not translate into an [AuthFailure] still
+      // has to reach the form; a swallowed error would leave the button spinning
+      // with no explanation.
       _errorMessage = error.toString();
       return false;
     } finally {

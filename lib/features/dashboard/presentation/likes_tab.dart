@@ -108,7 +108,7 @@ class _LikesTabState extends State<LikesTab> with UserPositionState {
 
   void _openRestaurant(Restaurant restaurant) {
     context.push(
-      '/restaurant',
+      '/restaurant/${restaurant.id}',
       extra: RestaurantCard.fromRestaurant(restaurant).toDetailPayload(),
     );
   }

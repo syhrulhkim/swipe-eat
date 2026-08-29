@@ -44,6 +44,27 @@ class RestaurantRepository {
     return rows.map(Restaurant.fromJson).toList();
   }
 
+  /// One restaurant by id, for the detail page opened from a link rather than
+  /// from a card that already carries its data.
+  ///
+  /// Null means "no such restaurant for this user" — either it is gone or the
+  /// catalog policy hides it — which the page shows as not found rather than
+  /// as a failure to retry.
+  Future<Restaurant?> fetchById(int id) async {
+    final rows = await _client
+        .from('restaurants')
+        .select(_deckColumns)
+        .eq('id', id)
+        .limit(1)
+        .timeout(_timeout);
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    return Restaurant.fromJson(rows.first);
+  }
+
   /// The Like tab: newest like first, straight from the swipes table.
   Future<List<Restaurant>> likedRestaurants({int limit = 200}) async {
     final rows = await _client

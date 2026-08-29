@@ -138,8 +138,11 @@ class OAuthProviderClient {
   Future<void> signOut() async {
     try {
       await GoogleSignIn.instance.signOut();
-    } catch (_) {
-      // Never block sign-out on a provider-side failure.
+    } on GoogleSignInException catch (error) {
+      // Never block sign-out on a provider-side failure: the Supabase session
+      // is already gone, and the only cost is the account picker being skipped
+      // next time.
+      debugPrint('Google sign-out failed: $error');
     }
   }
 }

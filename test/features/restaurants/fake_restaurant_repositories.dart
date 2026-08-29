@@ -27,9 +27,13 @@ class FakeRestaurantRepository implements RestaurantRepository {
   List<Restaurant> likedRows = const [];
   List<Restaurant> searchRows = const [];
 
+  /// Rows the detail route can open by id.
+  List<Restaurant> catalogRows = const [];
+
   bool failDeck = false;
   bool failLiked = false;
   bool failSearch = false;
+  bool failFetchById = false;
 
   int likedFetches = 0;
 
@@ -43,6 +47,19 @@ class FakeRestaurantRepository implements RestaurantRepository {
       throw Exception('deck unavailable');
     }
     return deckRows;
+  }
+
+  @override
+  Future<Restaurant?> fetchById(int id) async {
+    if (failFetchById) {
+      throw Exception('restaurant unavailable');
+    }
+    for (final restaurant in catalogRows) {
+      if (restaurant.id == id) {
+        return restaurant;
+      }
+    }
+    return null;
   }
 
   @override

@@ -47,7 +47,9 @@ Future<bool> migrateDeviceLikes({SwipeRepository? swipes}) async {
     await prefs.remove(legacyLikesKey);
     await prefs.remove(legacySeenKey);
     return ids.isNotEmpty;
-  } catch (error, stackTrace) {
+  } on Object catch (error, stackTrace) {
+    // Best-effort by design: the flag stays unset, so whatever failed — the
+    // preferences read, a swipe write — is retried on the next launch.
     debugPrint('Likes migration failed (will retry): $error\n$stackTrace');
     return false;
   }
