@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/ui/app_spacing.dart';
 import '../state/auth_controller.dart';
+import 'social_sign_in_buttons.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({
@@ -42,7 +43,6 @@ class _RegisterPageState extends State<RegisterPage> {
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      passwordConfirmation: _passwordConfirmationController.text,
     );
 
     if (!mounted) {
@@ -50,7 +50,12 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     if (success) {
-      context.go('/dashboard');
+      // Email confirmation is enabled on the project, so sign-up does not
+      // issue a session: the account only works after the emailed link is
+      // opened. Send the user to the login page, which surfaces the notice.
+      if (widget.authController.notice != null) {
+        context.go('/login');
+      }
       return;
     }
 
@@ -61,6 +66,10 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
       ),
     );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -78,7 +87,10 @@ class _RegisterPageState extends State<RegisterPage> {
                       const BoxConstraints(maxWidth: AppSpacing.cardMaxWidth),
                   child: FCard(
                     title: const Text('Create account'),
-                    subtitle: const Text('Register to get started.'),
+                    subtitle: const Text(
+                      'We will email you a confirmation link before your first '
+                      'sign-in.',
+                    ),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -159,6 +171,10 @@ class _RegisterPageState extends State<RegisterPage> {
                                   ? 'Creating...'
                                   : 'Create account',
                             ),
+                          ),
+                          SocialSignInButtons(
+                            authController: widget.authController,
+                            onError: _showMessage,
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           TextButton(
