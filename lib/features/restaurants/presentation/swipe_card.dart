@@ -1,12 +1,11 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-
 import '../../../core/location/open_directions.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/glass_ui.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
+import '../data/tiktok_player_factory.dart';
 import '../models/restaurant_card.dart';
 import 'review_carousel.dart';
 import 'tiktok_player.dart';
@@ -24,6 +23,7 @@ class SwipeCard extends StatefulWidget {
     required this.onInfoTap,
     required this.onReviewInteractionChanged,
     this.tiktokPlayerFuture,
+    this.videoHiddenForFullscreen = false,
     this.onPass,
     this.onLike,
     this.isBehind = false,
@@ -38,7 +38,12 @@ class SwipeCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onInfoTap;
   final ValueChanged<bool> onReviewInteractionChanged;
-  final Future<WebViewController>? tiktokPlayerFuture;
+  final Future<TikTokPlayerHandle>? tiktokPlayerFuture;
+
+  /// True while the fullscreen route holds this card's player. One controller
+  /// cannot be mounted in two WebViews at once, so the card gives it up and
+  /// falls back to its photos until the route closes.
+  final bool videoHiddenForFullscreen;
 
   /// Absent on the card behind: it must never act on the deck while the top
   /// card is the one being dragged.
@@ -91,8 +96,10 @@ class _SwipeCardState extends State<SwipeCard> {
   Widget build(BuildContext context) {
     const bottomRadius = Radius.circular(kRadiusCard);
     final cardVideoUrl = widget.data.videoUrl;
-    final showsPhotos =
-        widget.isBehind || cardVideoUrl == null || cardVideoUrl.isEmpty;
+    final showsPhotos = widget.isBehind ||
+        widget.videoHiddenForFullscreen ||
+        cardVideoUrl == null ||
+        cardVideoUrl.isEmpty;
     final hasMultipleImages = showsPhotos && widget.data.imageUrls.length > 1;
 
     return Material(
@@ -215,17 +222,21 @@ class _SwipeCardState extends State<SwipeCard> {
   ///
   /// The card behind never gets a player: two WebViews on screen would fight
   /// over audio and cost a second platform view for a card the user cannot
-  /// even read yet.
+  /// even read yet. The fullscreen route takes the player away for the same
+  /// reason.
   Widget _buildMedia() {
     return LayoutBuilder(
       builder: (context, constraints) {
         final videoUrl = widget.data.videoUrl;
-        if (!widget.isBehind && videoUrl != null && videoUrl.isNotEmpty) {
+        if (!widget.isBehind &&
+            !widget.videoHiddenForFullscreen &&
+            videoUrl != null &&
+            videoUrl.isNotEmpty) {
           return IgnorePointer(
             child: TikTokPlayerView(
               key: ValueKey(videoUrl),
               videoUrl: videoUrl,
-              controllerFuture: widget.tiktokPlayerFuture,
+              playerFuture: widget.tiktokPlayerFuture,
             ),
           );
         }

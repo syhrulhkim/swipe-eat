@@ -45,6 +45,10 @@ class _SwipeDeckState extends State<SwipeDeck>
 
   Offset _dragOffset = Offset.zero;
   bool _infoExpanded = false;
+
+  /// The clip the fullscreen route is currently showing, if any. The card
+  /// underneath must not mount the same controller at the same time.
+  String? _fullscreenVideoUrl;
   bool _reviewInteractionActive = false;
   Offset _animationStartOffset = Offset.zero;
   Offset _animationEndOffset = Offset.zero;
@@ -141,29 +145,44 @@ class _SwipeDeckState extends State<SwipeDeck>
       return;
     }
 
-    await Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        opaque: true,
-        barrierDismissible: false,
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return TikTokPlayerScreen(
-            videoUrl: videoUrl,
-            // The same warmed controller the card is using: a second one would
-            // play the same clip a second time, audible behind the first.
-            controllerFuture: _deck.players.warm(videoUrl),
-          );
-        },
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            ),
-            child: child,
-          );
-        },
-      ),
-    );
+    // The card hands its player over rather than letting the route build a
+    // second one: two controllers on the same clip means the same audio twice,
+    // and one controller cannot be mounted in two WebViews at once.
+    setState(() {
+      _fullscreenVideoUrl = videoUrl;
+    });
+
+    try {
+      await Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          opaque: true,
+          barrierDismissible: false,
+          pageBuilder: (context, animation, secondaryAnimation) {
+            return TikTokPlayerScreen(
+              videoUrl: videoUrl,
+              playerFuture: _deck.players.warm(videoUrl),
+            );
+          },
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+              child: child,
+            );
+          },
+        ),
+      );
+    } finally {
+      // Whatever closed the route — the button, a back gesture, a failure on
+      // the way in — the card takes its player back.
+      if (mounted) {
+        setState(() {
+          _fullscreenVideoUrl = null;
+        });
+      }
+    }
   }
 
   /// Card pose for the frame being painted.
@@ -424,6 +443,8 @@ class _SwipeDeckState extends State<SwipeDeck>
           distanceText: _deck.distanceLabelFor(current),
           onTap: () => unawaited(_openVideoPlayer(current)),
           tiktokPlayerFuture: _deck.players.warm(current.videoUrl),
+          videoHiddenForFullscreen: _fullscreenVideoUrl != null &&
+              _fullscreenVideoUrl == current.videoUrl,
           onInfoTap: () {
             setState(() {
               _infoExpanded = !_infoExpanded;

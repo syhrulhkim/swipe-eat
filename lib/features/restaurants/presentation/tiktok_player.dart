@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -6,14 +8,14 @@ import '../data/tiktok_player_factory.dart';
 
 /// TikTok's player filling its slot, with the card's framing on top.
 ///
-/// [controllerFuture] lets the deck hand over a warmed controller; without one
-/// the view builds its own, which is what the fullscreen route does.
+/// [playerFuture] lets the deck hand over a warmed player; without one the
+/// view builds its own.
 class TikTokPlayerView extends StatefulWidget {
   const TikTokPlayerView({
     super.key,
     required this.videoUrl,
     this.applyCardFraming = true,
-    this.controllerFuture,
+    this.playerFuture,
   });
 
   final String videoUrl;
@@ -22,48 +24,48 @@ class TikTokPlayerView extends StatefulWidget {
   /// title block. The fullscreen route turns it off.
   final bool applyCardFraming;
 
-  final Future<WebViewController>? controllerFuture;
+  final Future<TikTokPlayerHandle>? playerFuture;
 
   @override
   State<TikTokPlayerView> createState() => _TikTokPlayerViewState();
 }
 
 class _TikTokPlayerViewState extends State<TikTokPlayerView> {
-  late Future<WebViewController> _controllerFuture;
+  late Future<TikTokPlayerHandle> _playerFuture;
 
   @override
   void initState() {
     super.initState();
-    _controllerFuture = widget.controllerFuture ??
-        createTikTokPlayerController(widget.videoUrl);
+    _playerFuture = widget.playerFuture ?? createTikTokPlayer(widget.videoUrl);
   }
 
   @override
   void didUpdateWidget(TikTokPlayerView oldWidget) {
     super.didUpdateWidget(oldWidget);
     // The deck reuses this state across cards when the key allows it, so a new
-    // video or a newly warmed controller has to replace the old future rather
-    // than leave the previous clip on screen.
+    // video or a newly warmed player has to replace the old future rather than
+    // leave the previous clip on screen.
     if (oldWidget.videoUrl != widget.videoUrl ||
-        oldWidget.controllerFuture != widget.controllerFuture) {
-      _controllerFuture = widget.controllerFuture ??
-          createTikTokPlayerController(widget.videoUrl);
+        oldWidget.playerFuture != widget.playerFuture) {
+      _playerFuture =
+          widget.playerFuture ?? createTikTokPlayer(widget.videoUrl);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<WebViewController>(
-      future: _controllerFuture,
+    return FutureBuilder<TikTokPlayerHandle>(
+      future: _playerFuture,
       builder: (context, snapshot) {
+        final handle = snapshot.data;
+
         return LayoutBuilder(
           builder: (context, constraints) {
             return Stack(
               fit: StackFit.expand,
               children: [
                 const ColoredBox(color: Colors.black),
-                if (snapshot.connectionState == ConnectionState.done &&
-                    snapshot.hasData)
+                if (handle != null)
                   ClipRect(
                     child: widget.applyCardFraming
                         ? Transform.translate(
@@ -73,15 +75,13 @@ class _TikTokPlayerViewState extends State<TikTokPlayerView> {
                               alignment: Alignment.center,
                               child: SizedBox.expand(
                                 child: WebViewWidget(
-                                  controller: snapshot.data!,
+                                  controller: handle.controller,
                                 ),
                               ),
                             ),
                           )
                         : SizedBox.expand(
-                            child: WebViewWidget(
-                              controller: snapshot.data!,
-                            ),
+                            child: WebViewWidget(controller: handle.controller),
                           ),
                   ),
                 if (widget.applyCardFraming)
@@ -113,17 +113,16 @@ class _TikTokPlayerViewState extends State<TikTokPlayerView> {
                   const Center(
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                else if (snapshot.hasError)
-                  // The spinner is gone but no WebView arrived, so without
-                  // this the card would sit on a bare black rectangle.
-                  Center(
-                    child: Text(
-                      'Video unavailable',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                    ),
-                  ),
+                else if (handle == null)
+                  // The player could not even be built — no WebView is coming,
+                  // so without this the card would sit on a bare black
+                  // rectangle.
+                  const _PlayerUnavailable()
+                else
+                  // Built, but the page can still fail underneath it: no
+                  // network, or a clip TikTok has pulled. The handle reports
+                  // that after the future is long done.
+                  _PlayerStatusOverlay(handle: handle),
               ],
             );
           },
@@ -133,19 +132,79 @@ class _TikTokPlayerViewState extends State<TikTokPlayerView> {
   }
 }
 
+/// Covers the player while its page is failing, and offers another go.
+class _PlayerStatusOverlay extends StatelessWidget {
+  const _PlayerStatusOverlay({required this.handle});
+
+  final TikTokPlayerHandle handle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TikTokPlayerStatus>(
+      valueListenable: handle.status,
+      builder: (context, status, _) {
+        if (status != TikTokPlayerStatus.failed) {
+          return const SizedBox.shrink();
+        }
+
+        return ColoredBox(
+          color: Colors.black,
+          child: _PlayerUnavailable(
+            onRetry: () => unawaited(handle.load()),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PlayerUnavailable extends StatelessWidget {
+  const _PlayerUnavailable({this.onRetry});
+
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final onRetry = this.onRetry;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Video unavailable',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(foregroundColor: kAccentLime),
+              child: const Text('Try again'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// The clip on its own, filling the screen.
 class TikTokPlayerScreen extends StatelessWidget {
   const TikTokPlayerScreen({
     super.key,
     required this.videoUrl,
-    this.controllerFuture,
+    this.playerFuture,
   });
 
   final String videoUrl;
 
-  /// The deck's warmed controller, so opening fullscreen does not start a
-  /// second copy of the same video playing behind the first.
-  final Future<WebViewController>? controllerFuture;
+  /// The deck's warmed player, so opening fullscreen does not start a second
+  /// copy of the same video playing behind the first. The card hides its own
+  /// WebView while this route is up: one controller cannot be mounted twice.
+  final Future<TikTokPlayerHandle>? playerFuture;
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +219,7 @@ class TikTokPlayerScreen extends StatelessWidget {
               key: ValueKey(videoUrl),
               videoUrl: videoUrl,
               applyCardFraming: false,
-              controllerFuture: controllerFuture,
+              playerFuture: playerFuture,
             ),
             SafeArea(
               child: Padding(
