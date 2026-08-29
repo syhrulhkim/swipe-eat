@@ -1,63 +1,111 @@
-# Swipe Eat Mobile Starter
+# Swipe Eat
 
-This repo now contains a Flutter starter app with:
+A Flutter app for finding places to eat by swiping through restaurant cards,
+backed by Supabase.
 
-- Forui as the main UI system
-- Login, register, and dashboard screens
-- Laravel-friendly auth plumbing using bearer tokens
-- Auth persistence with `flutter_secure_storage`
+- **UI**: forui components over a custom dark glassmorphic design system
+  (`lib/core/ui/glass_ui.dart`), Inter throughout.
+- **Backend**: Supabase — Postgres with Row Level Security, Supabase Auth
+  (email, Google, Apple), Storage for cached thumbnails, and edge functions.
+- **Routing**: go_router, with redirects driven by `AuthController`.
+- **Video**: TikTok clips embedded through TikTok's own player in a WebView.
 
 ## Setup
 
-1. Use the bundled Flutter SDK in `./flutter-sdk`.
-2. If you want to use that SDK from this shell session, run:
+1. Install Flutter 3.47.1 or newer, or use the checkout bundled in
+   `./flutter-sdk` (untracked):
+
+   ```bash
+   export PATH="$PWD/flutter-sdk/bin:$PATH"
+   ```
+
+2. Fetch dependencies:
+
+   ```bash
+   flutter pub get
+   ```
+
+3. Run:
+
+   ```bash
+   flutter run
+   ```
+
+The Supabase URL and publishable key are compiled in with defaults, so the app
+runs against the shared project with no configuration. The publishable key is
+meant to ship — Row Level Security, not key secrecy, is the security boundary.
+
+## Configuration
+
+Everything configurable lives in `lib/core/config/app_config.dart` and is
+supplied with `--dart-define`:
+
+| Define | Default | Purpose |
+| --- | --- | --- |
+| `SUPABASE_URL` | the shared project | Point at a different Supabase project |
+| `SUPABASE_KEY` | that project's publishable key | Matching publishable key |
+| `APP_NAME` | `Swipe Eat` | Window and task-switcher title |
+| `GOOGLE_WEB_CLIENT_ID` | none | Audience Supabase validates Google tokens against |
+| `GOOGLE_IOS_CLIENT_ID` | none | Identifies the app to the iOS Google sheet |
+
+Both Google ids are required for native Google sign-in; with them unset the
+Google button is hidden rather than failing at tap time. See
+`docs/auth-setup.md` for how to obtain them and how Apple sign-in is wired.
 
 ```bash
-export PATH="$PWD/flutter-sdk/bin:$PATH"
+flutter run \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=... \
+  --dart-define=GOOGLE_IOS_CLIENT_ID=...
 ```
 
-3. Run `flutter pub get`.
-4. Start the app with a Laravel API URL:
+## Layout
+
+```
+lib/
+  app/          MaterialApp, theme, router
+  core/         config, location, Supabase helpers, design system
+  features/     auth, onboarding, dashboard, restaurants, quiz, profile, settings
+  dev/          standalone demo entrypoints, not shipped
+supabase/
+  migrations/   schema, RLS policies, RPCs — mirrors the remote project
+  functions/    edge functions
+  seed.sql      idempotent catalogue seed
+docs/           backend plan, auth setup, dashboard spec, improvement plan
+scripts/        TikTok metadata scraping helpers
+```
+
+Each feature follows the same shape: `data/` repositories, `models/`,
+`state/` controllers, `presentation/` widgets.
+
+## Tests
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
+flutter analyze
+flutter test
 ```
 
-## Laravel contract
+Repositories and controllers are covered by unit tests with hand-written fakes
+(`test/features/**/fake_*.dart`); several screens have widget tests. CI runs
+both commands on every pull request.
 
-The app is ready for a Laravel API that exposes these endpoints:
+## Database
 
-- `POST /api/login`
-- `POST /api/register`
-- `GET /api/user`
-- `POST /api/logout`
+Migrations under `supabase/migrations/` mirror the remote project. Apply them
+with the Supabase CLI:
 
-Expected auth response shape:
-
-```json
-{
-  "token": "your-bearer-token",
-  "user": {
-    "id": 1,
-    "name": "Jane Doe",
-    "email": "jane@example.com"
-  }
-}
+```bash
+supabase db push
 ```
 
-The app also accepts `access_token` as the token key and will fall back to `GET /api/user` if the user object is not included in the login or register response.
+`supabase/seed.sql` is idempotent and safe to re-run. See
+`docs/backend-plan.md` for the schema's design and `supabase/README.md` for
+operational notes.
 
-## Demo account
+## Standalone demos
 
-If you want to get into the dashboard immediately without a backend, use:
+`lib/dev/` holds entrypoints that are not part of the app, for looking at
+components in isolation:
 
-- Email: `demo@swipeeat.test`
-- Password: `password`
-
-This demo account is handled locally in the app and does not require Laravel.
-
-## Notes
-
-- The default API base URL is `http://10.0.2.2:8000/api`, which is convenient for the Android emulator talking to a Laravel app running on your machine.
-- If you are testing on a physical device, point `API_BASE_URL` to your machine's LAN IP instead.
-- The code is structured so you can extend the dashboard with real task data later without changing the auth flow.
+```bash
+flutter run -t lib/dev/lunar_gallery.dart
+```

@@ -1,6 +1,9 @@
 # Miscellaneous
 *.class
 *.lock
+# An app, unlike a package, pins its dependencies: without the lockfile, CI and
+# a teammate's machine can resolve different versions than the ones tested.
+!pubspec.lock
 *.log
 *.pyc
 *.swp
@@ -110,6 +113,10 @@ coverage/
 
 # Symbols
 app.*.symbols
+
+# Vendored Flutter SDK checkout. Convenient locally, but it is a full clone of
+# the framework and has no business in this repo's history.
+/flutter-sdk/
 
 # Exceptions to above rules.
 !**/ios/**/default.mode1v3
