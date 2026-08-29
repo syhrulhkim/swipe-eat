@@ -1,0 +1,7 @@
+project_id = "swipe-eat"
+
+# Clients never call this function; it authenticates via the x-refresh-key
+# header (see supabase/README.md). Keep verify_jwt off or `supabase functions
+# deploy` will reset it to true and silently break the pg_cron caller.
+[functions.refresh-thumbnails]
+verify_jwt = false
