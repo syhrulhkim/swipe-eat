@@ -47,10 +47,24 @@ supplied with `--dart-define`:
 | `APP_NAME` | `Swipe Eat` | Window and task-switcher title |
 | `GOOGLE_WEB_CLIENT_ID` | none | Audience Supabase validates Google tokens against |
 | `GOOGLE_IOS_CLIENT_ID` | none | Identifies the app to the iOS Google sheet |
+| `SENTRY_DSN` | none | Turns on crash reporting; unset means nothing is sent |
+| `SENTRY_ENVIRONMENT` | `development` | Which deployment a report came from |
 
 Both Google ids are required for native Google sign-in; with them unset the
 Google button is hidden rather than failing at tap time. See
 `docs/auth-setup.md` for how to obtain them and how Apple sign-in is wired.
+
+Crash reporting is off unless `SENTRY_DSN` is passed, so local runs and CI
+report nothing. Release builds should pass it along with the environment:
+
+```bash
+flutter build ipa \
+  --dart-define=SENTRY_DSN=https://...ingest.sentry.io/... \
+  --dart-define=SENTRY_ENVIRONMENT=production
+```
+
+The release name comes from `version` in `pubspec.yaml`, which sentry_flutter
+reads from the bundle — there is no second copy to keep in sync.
 
 ```bash
 flutter run \

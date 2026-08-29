@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../core/observability/crash_reporting.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/auth/presentation/register_page.dart';
 import '../features/auth/presentation/splash_page.dart';
@@ -14,6 +15,9 @@ GoRouter createRouter(AuthController authController) {
   return GoRouter(
     initialLocation: '/splash',
     refreshListenable: authController,
+    // Route changes become breadcrumbs on a crash report; empty list when no
+    // DSN was built in.
+    observers: crashReportingObservers(),
     redirect: (context, state) {
       final location = state.matchedLocation;
       final isOnAuthPage = location == '/login' || location == '/register';

@@ -27,4 +27,16 @@ class AppConfig {
       String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 
   static bool get hasGoogleSignIn => googleWebClientId.isNotEmpty;
+
+  /// Sentry's ingest URL for this project. Not defaulted: a build made without
+  /// it — every local run and every test — reports nothing at all rather than
+  /// filling a project with noise from developer machines.
+  static const String sentryDsn = String.fromEnvironment('SENTRY_DSN');
+
+  /// Which deployment the reports came from, so a staging crash is not read as
+  /// a production one.
+  static const String sentryEnvironment =
+      String.fromEnvironment('SENTRY_ENVIRONMENT', defaultValue: 'development');
+
+  static bool get hasCrashReporting => sentryDsn.isNotEmpty;
 }
