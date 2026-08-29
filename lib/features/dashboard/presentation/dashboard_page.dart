@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:forui/forui.dart';
 
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
@@ -27,29 +26,15 @@ class DashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: authController,
-      builder: (context, _) {
-        final scaffoldStyle = context.theme.scaffoldStyle.copyWith(
-          footerDecoration: const DecorationDelta.value(
-            BoxDecoration(color: Colors.transparent),
-          ),
-        );
-
-        return _DashboardShell(
-          scaffoldStyle: scaffoldStyle,
-          authController: authController,
-        );
-      },
+      builder: (context, _) =>
+          _DashboardShell(authController: authController),
     );
   }
 }
 
 class _DashboardShell extends StatefulWidget {
-  const _DashboardShell({
-    required this.scaffoldStyle,
-    required this.authController,
-  });
+  const _DashboardShell({required this.authController});
 
-  final FScaffoldStyle scaffoldStyle;
   final AuthController authController;
 
   @override
@@ -85,17 +70,16 @@ class _DashboardShellState extends State<_DashboardShell> {
 
   @override
   Widget build(BuildContext context) {
-    return FScaffold(
-      scaffoldStyle: widget.scaffoldStyle,
-      childPad: false,
-      footer: _DashboardBottomNav(
+    return Scaffold(
+      backgroundColor: kBackgroundDark,
+      bottomNavigationBar: _DashboardBottomNav(
         selectedIndex: _selectedIndex,
         onSelected: _setSelectedIndex,
       ),
       // An IndexedStack, not a swap: rebuilding a tab on every visit would
       // re-deal the deck and refetch the map each time the user glanced at
       // another tab.
-      child: IndexedStack(
+      body: IndexedStack(
         index: _selectedIndex,
         children: [
           SwipeDeck(authController: widget.authController),
@@ -109,6 +93,13 @@ class _DashboardShellState extends State<_DashboardShell> {
   }
 }
 
+/// The floating tab bar: a dark pill carrying the four secondary tabs, with
+/// the deck raised out of it as a centre disc.
+///
+/// The deck is the one thing the app is for, so it does not sit in the row as
+/// a peer of Quiz and Profile — it is the button you cannot miss, in the place
+/// a thumb already rests. The other four keep their [_kTabOrder] index into
+/// the shell's `IndexedStack`; only where they are drawn changes.
 class _DashboardBottomNav extends StatelessWidget {
   const _DashboardBottomNav({
     required this.selectedIndex,
@@ -118,12 +109,25 @@ class _DashboardBottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  static const _items = <({IconData icon, String label})>[
-    (icon: Icons.swipe_rounded, label: 'Swipe'),
-    (icon: Icons.explore_rounded, label: 'Explore'),
-    (icon: Icons.favorite_rounded, label: 'Like'),
-    (icon: Icons.quiz_rounded, label: 'Quiz'),
-    (icon: Icons.person_rounded, label: 'Profile'),
+  /// Height of the pill itself.
+  static const double _barHeight = 66;
+
+  /// Diameter of the centre disc.
+  static const double _discSize = 64;
+
+  /// How far the disc's top clears the pill's, which is also the extra height
+  /// the bar has to reserve so the raised half is not clipped away.
+  static const double _discRaise = 26;
+
+  static const _deckIndex = 0;
+
+  /// The tabs drawn in the pill, left to right, with the `IndexedStack` index
+  /// each one selects.
+  static const _tabs = <({IconData icon, String label, int index})>[
+    (icon: Icons.explore_rounded, label: 'Explore', index: 1),
+    (icon: Icons.favorite_rounded, label: 'Like', index: 2),
+    (icon: Icons.quiz_rounded, label: 'Quiz', index: 3),
+    (icon: Icons.person_rounded, label: 'Profile', index: 4),
   ];
 
   @override
@@ -131,31 +135,57 @@ class _DashboardBottomNav extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-        // No BackdropFilter here: FScaffold lays the footer out below the
-        // body, so there is nothing behind the pill to blur — an opaque-ish
-        // fill gives the same look without the wasted render pass.
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(kRadiusPill),
-          child: Container(
-            height: 74,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: kSurfaceDark.withValues(alpha: 0.94),
-              borderRadius: BorderRadius.circular(kRadiusPill),
-              border: Border.all(color: kHairline),
-            ),
-            child: Row(
-              children: [
-                for (var i = 0; i < _items.length; i++)
-                  _BottomNavItem(
-                    icon: _items[i].icon,
-                    label: _items[i].label,
-                    isSelected: selectedIndex == i,
-                    onTap: () => onSelected(i),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: SizedBox(
+          height: _barHeight + _discRaise,
+          child: Stack(
+            // The disc deliberately overhangs the pill; clipping the stack
+            // would slice its top off.
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: _barHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: kSurfaceDark,
+                    borderRadius: BorderRadius.circular(kRadiusPill),
+                    border: Border.all(color: kHairline),
                   ),
-              ],
-            ),
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < _tabs.length; i++) ...[
+                        // The gap the disc sits in, between tab two and three.
+                        if (i == 2) const SizedBox(width: _discSize + 16),
+                        Expanded(
+                          child: _BottomNavItem(
+                            icon: _tabs[i].icon,
+                            label: _tabs[i].label,
+                            isSelected: selectedIndex == _tabs[i].index,
+                            onTap: () => onSelected(_tabs[i].index),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: _discSize,
+                child: Center(
+                  child: _DeckDisc(
+                    isSelected: selectedIndex == _deckIndex,
+                    onTap: () => onSelected(_deckIndex),
+                    size: _discSize,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -163,7 +193,54 @@ class _DashboardBottomNav extends StatelessWidget {
   }
 }
 
-class _BottomNavItem extends StatefulWidget {
+/// The raised centre control that returns to the deck.
+class _DeckDisc extends StatelessWidget {
+  const _DeckDisc({
+    required this.isSelected,
+    required this.onTap,
+    required this.size,
+  });
+
+  final bool isSelected;
+  final VoidCallback onTap;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Swipe',
+      button: true,
+      selected: isSelected,
+      child: _PressScale(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            // Cream while the deck is up, matching the primary pill: the disc
+            // is the same "this is the action" signal in a different shape.
+            color: isSelected ? kAccentCream : kSurfacePanel,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isSelected ? Colors.transparent : kHairline,
+              width: 4,
+            ),
+          ),
+          child: Icon(
+            Icons.swipe_rounded,
+            size: 28,
+            color: isSelected ? kOnAccent : kTextOnPhoto,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One flat tab in the pill: icon over a small label, warm when selected.
+class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
     required this.icon,
     required this.label,
@@ -177,68 +254,77 @@ class _BottomNavItem extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_BottomNavItem> createState() => _BottomNavItemState();
+  Widget build(BuildContext context) {
+    final color = isSelected ? kAccentEmber : kTextOnPhotoMuted;
+
+    return Semantics(
+      label: label,
+      button: true,
+      selected: isSelected,
+      child: _PressScale(
+        onTap: onTap,
+        child: SizedBox(
+          height: _DashboardBottomNav._barHeight,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 22, color: color),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _BottomNavItemState extends State<_BottomNavItem> {
+/// Tap target that dips under the finger. Shared by the tabs and the disc so
+/// both answer a press the same way.
+class _PressScale extends StatefulWidget {
+  const _PressScale({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
   bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) {
+      return;
+    }
+    setState(() => _pressed = value);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Center(
-        child: Semantics(
-          label: widget.label,
-          button: true,
-          selected: widget.isSelected,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onTap,
-            onTapDown: (_) {
-              setState(() {
-                _pressed = true;
-              });
-              unawaited(HapticFeedback.selectionClick());
-            },
-            onTapCancel: () {
-              setState(() {
-                _pressed = false;
-              });
-            },
-            onTapUp: (_) {
-              setState(() {
-                _pressed = false;
-              });
-            },
-            child: AnimatedScale(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              scale: _pressed ? 0.92 : 1.0,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: widget.isSelected
-                      ? kAccentEmber
-                      : Colors.white.withValues(alpha: 0.07),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: widget.isSelected
-                        ? Colors.transparent
-                        : Colors.white.withValues(alpha: 0.08),
-                  ),
-                ),
-                child: Icon(
-                  widget.icon,
-                  size: 26,
-                  color: widget.isSelected ? kOnAccent : Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) {
+        _setPressed(true);
+        unawaited(HapticFeedback.selectionClick());
+      },
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        scale: _pressed ? 0.92 : 1.0,
+        child: widget.child,
       ),
     );
   }

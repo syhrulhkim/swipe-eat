@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../core/location/open_directions.dart';
 import '../../../core/location/place_name.dart';
 import '../../../core/location/user_position_state.dart';
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/rating_label.dart';
@@ -153,6 +154,18 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
     );
   }
 
+  /// The facts under the title. Rating is dropped rather than shown as a dash:
+  /// an empty column reads as a missing answer, and the title already carries
+  /// the rating when there is one.
+  List<AppStat> _heroStats() {
+    final rating = ratingLabel(widget.data.rating);
+
+    return [
+      AppStat(label: 'Distance', value: _distanceLabel()),
+      if (rating != '–') AppStat(label: 'Rating', value: rating),
+    ];
+  }
+
   Widget _heroPlaceholder() {
     return TikTokThumbnailPlaceholder(
       creatorHandle: tiktokCreatorHandle(widget.data.videoUrl),
@@ -217,8 +230,16 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
           child: Column(
+            // Left-aligned, not centred: the eyebrow, title and facts read as
+            // one stack down the left edge, the way the rest of the app now
+            // introduces a screen.
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Spacer(),
+              if (widget.data.tag.isNotEmpty) ...[
+                AppEyebrow(label: widget.data.tag),
+                const SizedBox(height: 8),
+              ],
               Text.rich(
                 TextSpan(
                   text: widget.data.title,
@@ -231,56 +252,27 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                       ),
                   ],
                 ),
-                textAlign: TextAlign.center,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.place_rounded,
-                    color: kTextOnPhotoSecondary,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      _distanceLabel(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: appPlaceStyle(context),
-                    ),
-                  ),
-                ],
-              ),
               const SizedBox(height: 16),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  if (ratingLabel(widget.data.rating) != '–')
-                    AppChip(
-                      icon: Icons.star_rounded,
-                      label: ratingLabel(widget.data.rating),
-                    ),
-                  if (widget.data.tag.isNotEmpty)
-                    AppChip(
-                      icon: Icons.local_dining_rounded,
-                      label: widget.data.tag,
-                    ),
-                  if (videoUrl != null && videoUrl.isNotEmpty)
-                    const AppChip(
-                      icon: Icons.music_note_rounded,
-                      label: 'TikTok Review',
-                    ),
-                ],
-              ),
+              // The facts as a label-above-value strip rather than a row of
+              // chips: distance and rating are answers to questions, and a
+              // chip gives a number no name.
+              AppStatStrip(stats: _heroStats()),
+              if (videoUrl != null && videoUrl.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppChip(
+                    icon: Icons.music_note_rounded,
+                    label: 'TikTok Review',
+                    tint: kAccentEmber,
+                  ),
+                ),
+              ],
               const SizedBox(height: 22),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   AppCircleButton(
                     icon: Icons.favorite_rounded,
@@ -288,16 +280,19 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                     semanticLabel: _liked ? 'Liked' : 'Like',
                     onTap: () => unawaited(_toggleLike()),
                   ),
+                  const SizedBox(width: 12),
                   AppCircleButton(
                     icon: Icons.chat_bubble_rounded,
                     semanticLabel: 'Reviews',
                     onTap: () => _scrollToSection(_reviewKey),
                   ),
+                  const SizedBox(width: 12),
                   AppCircleButton(
                     icon: Icons.route_rounded,
                     semanticLabel: 'Location',
                     onTap: () => _scrollToSection(_locationKey),
                   ),
+                  const SizedBox(width: 12),
                   AppCircleButton(
                     icon: Icons.close_rounded,
                     semanticLabel: 'Close',
@@ -425,7 +420,14 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
         ),
         if (hasFix) ...[
           const SizedBox(height: 12),
-          _DirectionsButton(onTap: () => unawaited(_openDirections())),
+          // The one cream pill on this screen: leaving for the restaurant is
+          // the only thing the page is asking you to do.
+          AppPrimaryButton(
+            label: 'Get directions',
+            icon: Icons.directions_rounded,
+            expand: true,
+            onPressed: () => unawaited(_openDirections()),
+          ),
         ],
       ],
     );
@@ -488,7 +490,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
               AppCircleButton(
                 icon: Icons.arrow_back_rounded,
                 size: kUtilityButtonSize,
-                background: Colors.black.withValues(alpha: 0.34),
+                background: kFillOnPhoto,
                 semanticLabel: 'Back',
                 onTap: () => unawaited(Navigator.of(context).maybePop()),
               ),
@@ -511,7 +513,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                 AppCircleButton(
                   icon: Icons.play_arrow_rounded,
                   size: kUtilityButtonSize,
-                  background: Colors.black.withValues(alpha: 0.34),
+                  background: kFillOnPhoto,
                   semanticLabel: 'Watch TikTok review',
                   onTap: () {
                     unawaited(
@@ -623,54 +625,6 @@ class HeroThumbnailStrip extends StatelessWidget {
             ],
           ),
         ),
-    );
-  }
-}
-
-class _DirectionsButton extends StatelessWidget {
-  const _DirectionsButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: Material(
-        color: kAccentEmber,
-        borderRadius: BorderRadius.circular(kRadiusPill),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(kRadiusPill),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.directions_rounded,
-                  size: 18,
-                  color: kOnAccent,
-                ),
-                const SizedBox(width: 8),
-                // Flexible, or a large accessibility text scale pushes the
-                // label past the button's edge instead of ellipsising.
-                Flexible(
-                  child: Text(
-                    'Get directions',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: kOnAccent,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

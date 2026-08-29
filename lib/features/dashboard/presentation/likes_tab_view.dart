@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/design_tokens.dart';
+import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../../restaurants/models/restaurant.dart';
 
-/// Like tab from the reference design: the most recent liked restaurant
-/// full-bleed, a frosted top strip of the other liked spots to switch
-/// between, big centred name with muted rating, location line, chips, and a
-/// row of frosted action circles.
+/// Like tab: the most recent liked restaurant full-bleed, a top strip of the
+/// other liked spots to switch between, then the same eyebrow / big name /
+/// facts-strip / action-row stack the detail page uses, so moving between the
+/// two reads as one screen scrolling rather than two designs.
 class LikesTabView extends StatefulWidget {
   const LikesTabView({
     super.key,
@@ -82,18 +84,25 @@ class _LikesTabViewState extends State<LikesTabView> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (widget.liked.length > 1)
-                  _LikedThumbnailStrip(
-                    liked: widget.liked,
-                    activeIndex: selectedIndex,
-                    onSelected: (index) {
-                      setState(() {
-                        _selectedId = widget.liked[index].id;
-                      });
-                    },
+                  Center(
+                    child: _LikedThumbnailStrip(
+                      liked: widget.liked,
+                      activeIndex: selectedIndex,
+                      onSelected: (index) {
+                        setState(() {
+                          _selectedId = widget.liked[index].id;
+                        });
+                      },
+                    ),
                   ),
                 const Spacer(),
+                if (restaurant.tag.isNotEmpty) ...[
+                  AppEyebrow(label: restaurant.tag),
+                  const SizedBox(height: 8),
+                ],
                 Text.rich(
                   TextSpan(
                     text: restaurant.name,
@@ -106,54 +115,31 @@ class _LikesTabViewState extends State<LikesTabView> {
                         ),
                     ],
                   ),
-                  textAlign: TextAlign.center,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.place_rounded,
-                      color: kTextOnPhotoSecondary,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        widget.distanceLabel(restaurant),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: appPlaceStyle(context),
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 16),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (restaurant.tag.isNotEmpty)
-                      AppChip(
-                        icon: Icons.local_dining_rounded,
-                        label: restaurant.tag,
-                      ),
+                AppStatStrip(
+                  stats: [
+                    AppStat(
+                      label: 'Distance',
+                      value: widget.distanceLabel(restaurant),
+                    ),
                     if (rating != '–')
-                      AppChip(icon: Icons.star_rounded, label: rating),
-                    if (restaurant.videoUrl != null &&
-                        restaurant.videoUrl!.isNotEmpty)
-                      const AppChip(
-                        icon: Icons.music_note_rounded,
-                        label: 'TikTok Review',
-                      ),
+                      AppStat(label: 'Rating', value: rating),
                   ],
                 ),
+                if (restaurant.videoUrl != null &&
+                    restaurant.videoUrl!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const AppChip(
+                    icon: Icons.music_note_rounded,
+                    label: 'TikTok Review',
+                    tint: kAccentEmber,
+                  ),
+                ],
                 const SizedBox(height: 22),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     AppCircleButton(
                       icon: Icons.favorite_rounded,
@@ -162,6 +148,7 @@ class _LikesTabViewState extends State<LikesTabView> {
                       semanticLabel: 'Liked',
                       onTap: () => widget.onUnlike(restaurant),
                     ),
+                    const SizedBox(width: 12),
                     AppCircleButton(
                       icon: Icons.chat_bubble_rounded,
                       size: kActionButtonSize,
@@ -169,12 +156,14 @@ class _LikesTabViewState extends State<LikesTabView> {
                       semanticLabel: 'Reviews',
                       onTap: () => widget.onOpenRestaurant(restaurant),
                     ),
+                    const SizedBox(width: 12),
                     AppCircleButton(
                       icon: Icons.route_rounded,
                       size: kActionButtonSize,
                       semanticLabel: 'Details',
                       onTap: () => widget.onOpenRestaurant(restaurant),
                     ),
+                    const SizedBox(width: 12),
                     AppCircleButton(
                       icon: Icons.close_rounded,
                       size: kActionButtonSize,
@@ -219,9 +208,9 @@ class _LikedThumbnailStrip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.34),
+          color: kFillOnPhoto,
           borderRadius: BorderRadius.circular(kRadiusPill),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          border: Border.all(color: kHairline),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -300,46 +289,12 @@ class _EmptyLikes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.07),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-              ),
-              child: const Icon(
-                Icons.favorite_rounded,
-                color: Colors.white38,
-                size: 30,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'No likes yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Swipe right on restaurants you love and they will show up here.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    height: 1.4,
-                  ),
-            ),
-          ],
-        ),
-      ),
+    return const AppEmptyState(
+      eyebrow: 'Nothing saved',
+      title: 'No likes yet',
+      message:
+          'Swipe right on restaurants you love and they will show up here.',
+      art: Icon(Icons.favorite_rounded, color: kTextOnPhotoMuted, size: 40),
     );
   }
 }

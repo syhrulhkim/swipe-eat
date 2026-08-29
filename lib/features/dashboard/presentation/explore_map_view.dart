@@ -3,15 +3,15 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../restaurants/models/restaurant.dart';
 
-/// Map-style Explore screen from the reference design: a stylised isometric
-/// "city" canvas with the nearest restaurants as tappable photo pins, a lime
-/// route from the user's marker to the selected pin, and a frosted info card
-/// for the selection. The full catalog stays reachable through the top-right
-/// browse button.
+/// Map-style Explore screen: a stylised isometric "city" canvas with the
+/// nearest restaurants as tappable photo pins, an accent route from the user's
+/// marker to the selected pin, and an info card for the selection. The full
+/// catalog stays reachable through the top-right browse button.
 class ExploreMapView extends StatefulWidget {
   const ExploreMapView({
     super.key,
@@ -235,7 +235,7 @@ class _ExploreMapViewState extends State<ExploreMapView> {
                       AppCircleButton(
                         icon: Icons.my_location_rounded,
                         size: kUtilityButtonSize,
-                        background: Colors.black.withValues(alpha: 0.34),
+                        background: kFillOnPhoto,
                         semanticLabel: 'Nearest restaurant',
                         onTap: () {
                           setState(() {
@@ -246,7 +246,7 @@ class _ExploreMapViewState extends State<ExploreMapView> {
                       AppCircleButton(
                         icon: Icons.more_horiz_rounded,
                         size: kUtilityButtonSize,
-                        background: Colors.black.withValues(alpha: 0.34),
+                        background: kFillOnPhoto,
                         semanticLabel: 'Browse all restaurants',
                         onTap: _showAllRestaurants,
                       ),
@@ -455,8 +455,8 @@ class _YouMarker extends StatelessWidget {
   }
 }
 
-/// Frosted info card for the selected pin, matching the reference: avatar,
-/// name with muted rating, location line, chat button, and a chip row.
+/// Info card for the selected pin: avatar, eyebrow, name with muted rating,
+/// location line, chat button, and a chip row of the remaining facts.
 class _SelectedRestaurantCard extends StatelessWidget {
   const _SelectedRestaurantCard({
     required this.restaurant,
@@ -477,9 +477,11 @@ class _SelectedRestaurantCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: kSurfaceDark.withValues(alpha: 0.82),
+          // Opaque: the card sits over the map, and a translucent sheet let
+          // pins show through the text.
+          color: kSurfaceDark,
           borderRadius: BorderRadius.circular(kRadiusSheet),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+          border: Border.all(color: kHairline),
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
@@ -496,6 +498,10 @@ class _SelectedRestaurantCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (restaurant.tag.isNotEmpty) ...[
+                          AppEyebrow(label: restaurant.tag),
+                          const SizedBox(height: 4),
+                        ],
                         Text.rich(
                           TextSpan(
                             text: restaurant.name,
@@ -557,8 +563,9 @@ class _SelectedRestaurantCard extends StatelessWidget {
                   AppCircleButton(
                     icon: Icons.chat_bubble_rounded,
                     size: kUtilityButtonSize,
-                    // The info card behind it is a near-opaque fill, so there
-                    // is nothing to blur — skip the render pass.
+                    // Inside the card, not on the map: the translucent
+                    // on-photo fill would show the card rather than the map
+                    // and read as a smudge.
                     onPhoto: false,
                     semanticLabel: 'Open ${restaurant.name}',
                     onTap: onOpen,
@@ -568,8 +575,8 @@ class _SelectedRestaurantCard extends StatelessWidget {
               const SizedBox(height: 12),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                // onPhoto: false throughout — these sit on the card's
-                // near-opaque fill, so each BackdropFilter would blur nothing.
+                // onPhoto: false throughout — these sit on the card's own
+                // fill, not on the map.
                 child: Row(
                   children: [
                     AppChip(
@@ -577,14 +584,6 @@ class _SelectedRestaurantCard extends StatelessWidget {
                       label: distanceLabel,
                       onPhoto: false,
                     ),
-                    if (restaurant.tag.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      AppChip(
-                        icon: Icons.local_dining_rounded,
-                        label: restaurant.tag,
-                        onPhoto: false,
-                      ),
-                    ],
                     if (rating != '–') ...[
                       const SizedBox(width: 8),
                       AppChip(
@@ -686,7 +685,7 @@ class _IsoCityPainter extends CustomPainter {
   bool shouldRepaint(_IsoCityPainter oldDelegate) => false;
 }
 
-/// Lime zigzag route from the user's marker to the selected pin.
+/// Accent zigzag route from the user's marker to the selected pin.
 class _RoutePainter extends CustomPainter {
   const _RoutePainter({required this.start, required this.end});
 

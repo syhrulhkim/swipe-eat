@@ -9,7 +9,7 @@ import 'review_carousel.dart';
 import 'tiktok_player.dart';
 
 /// One restaurant as a full-bleed card: its clip or photos behind, its name,
-/// rating and distance in a glass panel at the bottom.
+/// rating and distance in a panel at the bottom.
 class SwipeCard extends StatefulWidget {
   const SwipeCard({
     super.key,
@@ -191,14 +191,17 @@ class _SwipeCardState extends State<SwipeCard> {
                             AppCircleButton(
                               icon: Icons.close_rounded,
                               size: kActionButtonSize,
-                              background: Colors.black.withValues(alpha: 0.30),
                               semanticLabel: 'Pass',
                               onTap: widget.onPass!,
                             ),
+                            // Cream, like every other primary action: liking
+                            // is what the deck is asking for, and passing is
+                            // the way out of it.
                             AppCircleButton(
                               icon: Icons.favorite_rounded,
                               size: kActionButtonSize,
-                              background: Colors.white.withValues(alpha: 0.22),
+                              background: kAccentCream,
+                              iconColor: kOnAccent,
                               semanticLabel: 'Like',
                               onTap: widget.onLike!,
                             ),
@@ -314,8 +317,8 @@ class _SwipeCardState extends State<SwipeCard> {
   }
 }
 
-/// The glass panel at the bottom of a card: category, name, rating, distance,
-/// and — once expanded — the description and reviews.
+/// The panel at the bottom of a card: category, name, rating, distance, and —
+/// once expanded — the description and reviews.
 class RestaurantInfoPanel extends StatefulWidget {
   const RestaurantInfoPanel({
     super.key,

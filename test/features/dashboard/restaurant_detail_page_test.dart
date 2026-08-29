@@ -241,16 +241,19 @@ void main() {
 
       expect(find.text('Warung Ayam Bakar  4.5'), findsOneWidget);
       expect(find.text('Warung Ayam Bakar'), findsNothing);
-      // ...and the rating also shows as its own chip.
+      // ...and the rating also shows as its own column in the facts strip.
+      expect(find.text('Rating'), findsOneWidget);
       expect(find.text('4.5'), findsOneWidget);
-      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
     });
 
-    testWidgets('hides the rating chip when the rating is 0', (tester) async {
+    testWidgets('drops the rating stat when the rating is 0', (tester) async {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData(rating: 0));
 
-      expect(find.byIcon(Icons.star_rounded), findsNothing);
+      // An empty column would read as a missing answer rather than as a place
+      // nobody has rated yet.
+      expect(find.text('Rating'), findsNothing);
+      expect(find.text('Distance'), findsOneWidget);
     });
   });
 
@@ -330,7 +333,7 @@ void main() {
       );
     });
 
-    testWidgets('rings only the active thumbnail with the lime accent',
+    testWidgets('rings only the active thumbnail with the accent',
         (tester) async {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData(imageUrls: _images(4)));
@@ -362,7 +365,7 @@ void main() {
   });
 
   group('RestaurantDetailPage actions', () {
-    testWidgets('the like button toggles to the lime accent', (tester) async {
+    testWidgets('the like button toggles to the accent', (tester) async {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
@@ -447,7 +450,7 @@ void main() {
       expect(heartColor(tester), Colors.white);
     });
 
-    testWidgets('starts lime when the backend already holds the like',
+    testWidgets('starts lit when the backend already holds the like',
         (tester) async {
       _seedLikes([_detailRestaurantId]);
       useViewport(tester, const Size(390, 844));

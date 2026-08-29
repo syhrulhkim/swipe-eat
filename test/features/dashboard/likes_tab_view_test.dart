@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swipe_eat/core/ui/app_buttons.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/ui/tiktok_thumbnail_placeholder.dart';
 import 'package:swipe_eat/features/dashboard/presentation/likes_tab_view.dart';
@@ -143,7 +144,7 @@ void main() {
       expect(_hero(liked.first), findsOneWidget);
     });
 
-    testWidgets('shows the distance label, the chips and four actions',
+    testWidgets('shows the facts strip, the video chip and four actions',
         (tester) async {
       await _pumpLikesTab(
         tester,
@@ -156,12 +157,15 @@ void main() {
         ],
       );
 
+      // Distance and rating are columns of the facts strip; the tag is the
+      // eyebrow above the name, so only the video is still a chip.
+      expect(find.text('Distance'), findsOneWidget);
       expect(find.text(_distanceLabel), findsOneWidget);
-      expect(find.byIcon(Icons.place_rounded), findsOneWidget);
-
-      expect(find.byType(AppChip), findsNWidgets(3));
-      expect(find.text('Grilled chicken'), findsOneWidget);
+      expect(find.text('Rating'), findsOneWidget);
       expect(find.text('4.5'), findsOneWidget);
+      expect(find.text('GRILLED CHICKEN'), findsOneWidget);
+
+      expect(find.byType(AppChip), findsOneWidget);
       expect(find.text('TikTok Review'), findsOneWidget);
 
       expect(find.byType(AppCircleButton), findsNWidgets(4));
@@ -175,15 +179,17 @@ void main() {
       }
     });
 
-    testWidgets('omits the tag chip when the restaurant has no tag',
+    testWidgets('omits the eyebrow when the restaurant has no tag',
         (tester) async {
       await _pumpLikesTab(
         tester,
         liked: [_restaurant(id: 1, tag: '')],
       );
 
-      expect(find.byIcon(Icons.local_dining_rounded), findsNothing);
-      expect(find.byType(AppChip), findsOneWidget);
+      expect(find.byType(AppEyebrow), findsNothing);
+      // Nothing takes its place: this restaurant also has no video, and the
+      // only remaining chip is the video one.
+      expect(find.byType(AppChip), findsNothing);
     });
 
     testWidgets('falls back to the TikTok placeholder without a photo',
@@ -230,19 +236,18 @@ void main() {
   });
 
   group('LikesTabView unrated restaurant', () {
-    testWidgets('renders neither a trailing dash nor a star chip',
+    testWidgets('renders neither a trailing dash nor a rating stat',
         (tester) async {
       await _pumpLikesTab(
         tester,
         liked: [_restaurant(id: 1, name: 'Warung Baru', rating: 0)],
       );
 
-      // ratingLabel(0) is '–'; it must not leak into the heading or the chips.
+      // ratingLabel(0) is '–'; it must not leak into the heading or the facts.
       expect(find.text('Warung Baru'), findsOneWidget);
       expect(find.textContaining('–'), findsNothing);
-      expect(find.byIcon(Icons.star_rounded), findsNothing);
-      // Only the tag chip is left.
-      expect(find.byType(AppChip), findsOneWidget);
+      expect(find.text('Rating'), findsNothing);
+      expect(find.text('Distance'), findsOneWidget);
     });
   });
 
@@ -282,7 +287,7 @@ void main() {
       expect(_hero(liked.first), findsNothing);
     });
 
-    testWidgets('rings only the active thumbnail with the lime accent',
+    testWidgets('rings only the active thumbnail with the accent',
         (tester) async {
       await _pumpLikesTab(tester, liked: _restaurants(3));
 

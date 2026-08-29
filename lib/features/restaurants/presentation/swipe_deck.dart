@@ -2,12 +2,10 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/ui/app_buttons.dart';
-import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
+import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../auth/state/auth_controller.dart';
 import '../models/restaurant_card.dart';
@@ -247,24 +245,18 @@ class _SwipeDeckState extends State<SwipeDeck>
   }
 
   Widget _messageCard({
+    required String eyebrow,
     required String title,
     required String subtitle,
     required String actionLabel,
   }) {
     return _deckMessage(
-      Padding(
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
-        child: FCard(
-          title: Text(title),
-          subtitle: Text(subtitle),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: AppPrimaryButton(
-              label: actionLabel,
-              onPressed: () => unawaited(_deck.load()),
-            ),
-          ),
-        ),
+      AppEmptyState(
+        eyebrow: eyebrow,
+        title: title,
+        message: subtitle,
+        actionLabel: actionLabel,
+        onAction: () => unawaited(_deck.load()),
       ),
     );
   }
@@ -285,6 +277,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     final deckError = _deck.error;
     if (deckError != null) {
       return _messageCard(
+        eyebrow: 'Deck stalled',
         title: 'Something went wrong',
         subtitle: deckError,
         actionLabel: 'Try again',
@@ -293,6 +286,7 @@ class _SwipeDeckState extends State<SwipeDeck>
 
     if (_deck.cards.isEmpty) {
       return _messageCard(
+        eyebrow: 'Nothing dealt',
         title: 'No restaurants yet',
         subtitle: 'Check back soon.',
         actionLabel: 'Reload',
@@ -306,6 +300,7 @@ class _SwipeDeckState extends State<SwipeDeck>
       // reload lets the backend deal fresh rows — or resurface old passes via
       // its 3-day exhaustion fallback.
       return _messageCard(
+        eyebrow: 'That is everyone',
         title: 'No more cards',
         subtitle: 'Reload to keep swiping.',
         actionLabel: 'Reload deck',

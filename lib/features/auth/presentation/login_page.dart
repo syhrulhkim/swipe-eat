@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../state/auth_controller.dart';
+import 'auth_scaffold.dart';
 import 'social_sign_in_buttons.dart';
 
 class LoginPage extends StatefulWidget {
@@ -48,7 +48,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _submit() async {
@@ -101,89 +102,75 @@ class _LoginPageState extends State<LoginPage> {
       builder: (context, _) {
         final busy = widget.authController.isBusy;
 
-        return FScaffold(
-          child: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                child: ConstrainedBox(
-                  constraints:
-                      const BoxConstraints(maxWidth: AppSpacing.cardMaxWidth),
-                  child: FCard(
-                    title: const Text('Sign in'),
-                    subtitle: const Text(
-                      'Your picks, preferences and location live in your '
-                      'account, so they follow you to any device.',
-                    ),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            autofillHints: const [AutofillHints.email],
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              hintText: 'you@example.com',
-                            ),
-                            validator: (value) {
-                              final text = value?.trim() ?? '';
-                              if (text.isEmpty) {
-                                return 'Enter your email.';
-                              }
-                              if (!text.contains('@')) {
-                                return 'Enter a valid email.';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            autofillHints: const [AutofillHints.password],
-                            onFieldSubmitted: (_) => busy ? null : _submit(),
-                            decoration: const InputDecoration(
-                              labelText: 'Password',
-                              hintText: 'Password',
-                            ),
-                            validator: (value) {
-                              if ((value ?? '').isEmpty) {
-                                return 'Enter your password.';
-                              }
-                              return null;
-                            },
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: busy ? null : _resetPassword,
-                              child: const Text('Forgot password?'),
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          AppPrimaryButton(
-                            label: busy ? 'Signing in...' : 'Sign in',
-                            expand: true,
-                            onPressed: busy ? null : _submit,
-                          ),
-                          SocialSignInButtons(
-                            authController: widget.authController,
-                            onError: _showMessage,
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          TextButton(
-                            onPressed: busy ? null : () => context.go('/register'),
-                            child: const Text('Create account'),
-                          ),
-                        ],
-                      ),
-                    ),
+        return AuthScaffold(
+          eyebrow: 'Welcome back',
+          title: 'Sign in',
+          subtitle: 'Your picks, preferences and location live in your '
+              'account, so they follow you to any device.',
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    hintText: 'you@example.com',
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+                    if (text.isEmpty) {
+                      return 'Enter your email.';
+                    }
+                    if (!text.contains('@')) {
+                      return 'Enter a valid email.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  autofillHints: const [AutofillHints.password],
+                  onFieldSubmitted: (_) => busy ? null : _submit(),
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    hintText: 'Password',
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').isEmpty) {
+                      return 'Enter your password.';
+                    }
+                    return null;
+                  },
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: busy ? null : _resetPassword,
+                    child: const Text('Forgot password?'),
                   ),
                 ),
-              ),
+                const SizedBox(height: AppSpacing.sm),
+                AppPrimaryButton(
+                  label: busy ? 'Signing in...' : 'Sign in',
+                  expand: true,
+                  onPressed: busy ? null : _submit,
+                ),
+                SocialSignInButtons(
+                  authController: widget.authController,
+                  onError: _showMessage,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextButton(
+                  onPressed: busy ? null : () => context.go('/register'),
+                  child: const Text('Create account'),
+                ),
+              ],
             ),
           ),
         );

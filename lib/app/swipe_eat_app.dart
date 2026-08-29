@@ -37,6 +37,36 @@ TextTheme _applyAppFonts(TextTheme base) {
       );
 }
 
+/// Text fields, styled once for the whole app.
+///
+/// Left to the forui-derived approximation the fields kept forui's own
+/// neutrals and an underline, which read as a different app from the flat
+/// panels around them. Filled panels with a hairline and a warm focus ring
+/// match the rest of the surface vocabulary.
+InputDecorationTheme _inputDecorationTheme(TextTheme text) {
+  OutlineInputBorder border(Color color, double width) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(kRadiusPanel),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
+
+  return InputDecorationTheme(
+    filled: true,
+    fillColor: kSurfacePanel,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    border: border(kHairline, 1),
+    enabledBorder: border(kHairline, 1),
+    focusedBorder: border(kAccentEmber, 1.5),
+    errorBorder: border(kTintSpice, 1),
+    focusedErrorBorder: border(kTintSpice, 1.5),
+    labelStyle: text.bodyMedium?.copyWith(color: kTextOnPhotoMuted),
+    floatingLabelStyle: text.bodySmall?.copyWith(color: kAccentEmber),
+    hintStyle: text.bodyMedium?.copyWith(color: kTextOnPhotoMuted),
+    errorStyle: text.bodySmall?.copyWith(color: kTintSpice),
+  );
+}
+
 class SwipeEatApp extends StatefulWidget {
   const SwipeEatApp({
     super.key,
@@ -66,11 +96,24 @@ class _SwipeEatAppState extends State<SwipeEatApp> {
     // Theme.of(context).textTheme inherits the app's faces and near-black
     // canvas rather than forui's own neutrals and the platform font.
     final baseMaterialTheme = theme.toApproximateMaterialTheme();
+    final textTheme = _applyAppFonts(baseMaterialTheme.textTheme);
     final materialTheme = baseMaterialTheme.copyWith(
       scaffoldBackgroundColor: kBackgroundDark,
       canvasColor: kBackgroundDark,
-      textTheme: _applyAppFonts(baseMaterialTheme.textTheme),
+      textTheme: textTheme,
       primaryTextTheme: _applyAppFonts(baseMaterialTheme.primaryTextTheme),
+      inputDecorationTheme: _inputDecorationTheme(textTheme),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: kAccentEmber),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: kSurfacePanel,
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: kTextOnPhoto),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusPanel),
+        ),
+      ),
       colorScheme: baseMaterialTheme.colorScheme.copyWith(
         primary: kAccentEmber,
         onPrimary: kOnAccent,
