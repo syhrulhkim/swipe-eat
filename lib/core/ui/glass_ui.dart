@@ -231,7 +231,7 @@ class GlassCircleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget button = Material(
       color: background ?? kGlassFill,
-      shape: const CircleBorder(side: const BorderSide(color: kGlassBorder)),
+      shape: const CircleBorder(side: BorderSide(color: kGlassBorder)),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: () {

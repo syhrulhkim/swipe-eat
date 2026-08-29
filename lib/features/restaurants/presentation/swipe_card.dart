@@ -1,0 +1,512 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+
+import '../../../core/location/open_directions.dart';
+import '../../../core/ui/app_spacing.dart';
+import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
+import '../models/restaurant_card.dart';
+import 'review_carousel.dart';
+import 'tiktok_player.dart';
+
+/// One restaurant as a full-bleed card: its clip or photos behind, its name,
+/// rating and distance in a glass panel at the bottom.
+class SwipeCard extends StatefulWidget {
+  const SwipeCard({
+    super.key,
+    required this.data,
+    required this.infoExpanded,
+    required this.ratingText,
+    required this.distanceText,
+    required this.onTap,
+    required this.onInfoTap,
+    required this.onReviewInteractionChanged,
+    this.tiktokPlayerFuture,
+    this.onPass,
+    this.onLike,
+    this.isBehind = false,
+    this.likeOpacity = 0,
+    this.nopeOpacity = 0,
+  });
+
+  final RestaurantCard data;
+  final bool infoExpanded;
+  final String ratingText;
+  final String distanceText;
+  final VoidCallback onTap;
+  final VoidCallback onInfoTap;
+  final ValueChanged<bool> onReviewInteractionChanged;
+  final Future<WebViewController>? tiktokPlayerFuture;
+
+  /// Absent on the card behind: it must never act on the deck while the top
+  /// card is the one being dragged.
+  final VoidCallback? onPass;
+  final VoidCallback? onLike;
+
+  final bool isBehind;
+  final double likeOpacity;
+  final double nopeOpacity;
+
+  @override
+  State<SwipeCard> createState() => _SwipeCardState();
+}
+
+class _SwipeCardState extends State<SwipeCard> {
+  int _imageIndex = 0;
+  Offset? _imagePointerStart;
+  bool _imagePointerMoved = false;
+
+  @override
+  void didUpdateWidget(covariant SwipeCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data.id != widget.data.id) {
+      _imageIndex = 0;
+    }
+  }
+
+  void _changeImage(int delta) {
+    final nextIndex =
+        (_imageIndex + delta).clamp(0, widget.data.imageUrls.length - 1);
+    if (nextIndex == _imageIndex) {
+      return;
+    }
+
+    setState(() {
+      _imageIndex = nextIndex;
+    });
+  }
+
+  void _handleImageTap(Offset localPosition, double width) {
+    if (widget.data.imageUrls.length <= 1) {
+      return;
+    }
+
+    final isLeftSide = localPosition.dx < width / 2;
+    _changeImage(isLeftSide ? -1 : 1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const bottomRadius = Radius.circular(kRadiusCard);
+    final cardVideoUrl = widget.data.videoUrl;
+    final showsPhotos =
+        widget.isBehind || cardVideoUrl == null || cardVideoUrl.isEmpty;
+    final hasMultipleImages = showsPhotos && widget.data.imageUrls.length > 1;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.only(
+            bottomLeft: bottomRadius,
+            bottomRight: bottomRadius,
+          ),
+          child: Container(
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.only(
+                bottomLeft: bottomRadius,
+                bottomRight: bottomRadius,
+              ),
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Square at the top (the card runs under the status-bar
+                // scrim); only the outer bottom corners are rounded.
+                Positioned.fill(
+                  child: ClipRect(child: _buildMedia()),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 140,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 1.00),
+                            Colors.black.withValues(alpha: 1.00),
+                            Colors.black.withValues(alpha: 0.96),
+                            Colors.black.withValues(alpha: 0.84),
+                            Colors.black.withValues(alpha: 0.56),
+                            Colors.black.withValues(alpha: 0.22),
+                            Colors.black.withValues(alpha: 0.00),
+                          ],
+                          stops: const [0.0, 0.14, 0.28, 0.46, 0.70, 0.90, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const PhotoBottomScrim(height: 360),
+                if (hasMultipleImages)
+                  Positioned(
+                    top: 150,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: ProgressDots(
+                          count: widget.data.imageUrls.length,
+                          activeIndex: _imageIndex,
+                          style: ProgressDotsStyle.photo,
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: AppSpacing.screenPadding + 2,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      RestaurantInfoPanel(
+                        data: widget.data,
+                        expanded: widget.infoExpanded,
+                        ratingText: widget.ratingText,
+                        distanceText: widget.distanceText,
+                        onTap: widget.onInfoTap,
+                        onReviewInteractionChanged:
+                            widget.onReviewInteractionChanged,
+                      ),
+                      if (widget.onPass != null && widget.onLike != null) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            GlassCircleButton(
+                              icon: Icons.close_rounded,
+                              size: kActionButtonSize,
+                              background: Colors.black.withValues(alpha: 0.30),
+                              semanticLabel: 'Pass',
+                              onTap: widget.onPass!,
+                            ),
+                            GlassCircleButton(
+                              icon: Icons.favorite_rounded,
+                              size: kActionButtonSize,
+                              background: Colors.white.withValues(alpha: 0.22),
+                              semanticLabel: 'Like',
+                              onTap: widget.onLike!,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The clip when the card has one and is on top, its photos otherwise.
+  ///
+  /// The card behind never gets a player: two WebViews on screen would fight
+  /// over audio and cost a second platform view for a card the user cannot
+  /// even read yet.
+  Widget _buildMedia() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final videoUrl = widget.data.videoUrl;
+        if (!widget.isBehind && videoUrl != null && videoUrl.isNotEmpty) {
+          return IgnorePointer(
+            child: TikTokPlayerView(
+              key: ValueKey(videoUrl),
+              videoUrl: videoUrl,
+              controllerFuture: widget.tiktokPlayerFuture,
+            ),
+          );
+        }
+
+        if (widget.data.imageUrls.isEmpty) {
+          return TikTokThumbnailPlaceholder(
+            creatorHandle: tiktokCreatorHandle(widget.data.videoUrl),
+          );
+        }
+
+        return Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (event) {
+            _imagePointerStart = event.localPosition;
+            _imagePointerMoved = false;
+          },
+          onPointerMove: (event) {
+            final start = _imagePointerStart;
+            if (start == null || _imagePointerMoved) {
+              return;
+            }
+
+            if ((event.localPosition - start).distance > 12) {
+              _imagePointerMoved = true;
+            }
+          },
+          onPointerUp: (event) {
+            final start = _imagePointerStart;
+            final moved = _imagePointerMoved;
+            _imagePointerStart = null;
+            _imagePointerMoved = false;
+
+            if (start == null || moved) {
+              return;
+            }
+
+            _handleImageTap(event.localPosition, constraints.maxWidth);
+          },
+          onPointerCancel: (_) {
+            _imagePointerStart = null;
+            _imagePointerMoved = false;
+          },
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: SizedBox.expand(
+              key: ValueKey(widget.data.imageUrls[_imageIndex]),
+              child: Image.network(
+                widget.data.imageUrls[_imageIndex],
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) {
+                    return child;
+                  }
+
+                  return const SizedBox.expand(
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return SizedBox.expand(
+                    child: TikTokThumbnailPlaceholder(
+                      creatorHandle: tiktokCreatorHandle(widget.data.videoUrl),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The glass panel at the bottom of a card: category, name, rating, distance,
+/// and — once expanded — the description and reviews.
+class RestaurantInfoPanel extends StatefulWidget {
+  const RestaurantInfoPanel({
+    super.key,
+    required this.data,
+    required this.expanded,
+    required this.ratingText,
+    required this.distanceText,
+    required this.onTap,
+    required this.onReviewInteractionChanged,
+  });
+
+  final RestaurantCard data;
+  final bool expanded;
+  final String ratingText;
+  final String distanceText;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onReviewInteractionChanged;
+
+  @override
+  State<RestaurantInfoPanel> createState() => _RestaurantInfoPanelState();
+}
+
+class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
+  Future<void> _openDirections() async {
+    final opened = await openDirections(
+      latitude: widget.data.latitude,
+      longitude: widget.data.longitude,
+      label: widget.data.title,
+    );
+    if (opened || !mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open maps for this place.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(kRadiusPanel),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.bottomCenter,
+              child: widget.expanded
+                  ? _buildExpandedDetails(context)
+                  : const SizedBox.shrink(),
+            ),
+            Row(
+              children: [
+                _CategoryBadge(
+                  label: widget.data.tag,
+                  accent: widget.data.color,
+                ),
+                const Spacer(),
+                AnimatedRotation(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  turns: widget.expanded ? 0.5 : 0,
+                  child: Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    color: Colors.white.withValues(alpha: 0.65),
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text.rich(
+              TextSpan(
+                text: widget.data.title,
+                style: glassTitleStyle(context),
+                children: [
+                  // Unrated restaurants render ratingLabel's '–', which reads
+                  // as a stray dash after the name — show real ratings only.
+                  if (widget.ratingText.trim() != '–')
+                    TextSpan(
+                      text: '  ${widget.ratingText}',
+                      style: glassTitleMutedStyle(context),
+                    ),
+                ],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(
+                  Icons.place_rounded,
+                  color: kTextOnPhotoSecondary,
+                  size: 16,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    widget.distanceText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: glassPlaceStyle(context),
+                  ),
+                ),
+                if (hasMapFix(widget.data.latitude, widget.data.longitude)) ...[
+                  const SizedBox(width: 8),
+                  // Its own tap target: the surrounding InkWell expands the
+                  // panel, and leaving directions to that gesture would open
+                  // maps every time the user peeked at the reviews.
+                  GestureDetector(
+                    onTap: _openDirections,
+                    behavior: HitTestBehavior.opaque,
+                    child: const GlassChip(
+                      label: 'Directions',
+                      icon: Icons.directions_rounded,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandedDetails(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(kRadiusPanel),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: kGlassBlurSigma,
+            sigmaY: kGlassBlurSigma,
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.32),
+              borderRadius: BorderRadius.circular(kRadiusPanel),
+              border: Border.all(color: kGlassBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.data.details,
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        height: 1.35,
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                ),
+                const SizedBox(height: 10),
+                ReviewCarousel(
+                  reviews: widget.data.reviews,
+                  onInteractionChanged: widget.onReviewInteractionChanged,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({
+    required this.label,
+    required this.accent,
+  });
+
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(kRadiusPill),
+        border: Border.all(
+          color: accent.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: glassOverlineStyle(context),
+      ),
+    );
+  }
+}

@@ -7,6 +7,8 @@ import '../features/auth/presentation/splash_page.dart';
 import '../features/auth/state/auth_controller.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
+import '../features/restaurants/models/restaurant_detail_data.dart';
+import '../features/restaurants/presentation/restaurant_detail_page.dart';
 import '../features/settings/presentation/settings_page.dart';
 
 GoRouter createRouter(AuthController authController) {

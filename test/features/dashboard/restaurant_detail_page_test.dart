@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
 import 'package:swipe_eat/core/ui/tiktok_thumbnail_placeholder.dart';
-import 'package:swipe_eat/features/dashboard/presentation/dashboard_page.dart';
+import 'package:swipe_eat/features/restaurants/models/restaurant_detail_data.dart';
+import 'package:swipe_eat/features/restaurants/presentation/restaurant_detail_page.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
 
 import '../../support/widget_test_support.dart';

@@ -3,10 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/quiz_question.dart';
 
 class QuizRepository {
-  QuizRepository({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  QuizRepository({SupabaseClient? client}) : _injected = client;
 
-  final SupabaseClient _client;
+  final SupabaseClient? _injected;
+
+  /// Lazy for the same reason as [RestaurantRepository]: construction must not
+  /// assert on an uninitialised `Supabase.instance`.
+  SupabaseClient get _client => _injected ?? Supabase.instance.client;
 
   Future<QuizQuestion?> fetchActiveQuestion() async {
     // Order by position with id as a deterministic tie-breaker; time out so a

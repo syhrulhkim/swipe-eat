@@ -22,9 +22,15 @@ void main() {
       expect(() => QuizRepository(client: client), returnsNormally);
     });
 
-    test('falls back to the uninitialised singleton when no client is given',
-        () {
-      expect(QuizRepository.new, throwsA(isA<Error>()));
+    test('constructs without a client and defers to the singleton on use', () {
+      // Construction must stay side-effect free: the quiz tab builds this
+      // repository while the widget tree mounts, so an eager
+      // `Supabase.instance.client` would break any host that has not
+      // initialised the singleton yet. The singleton is only touched once a
+      // request is actually made.
+      final repository = QuizRepository();
+
+      expect(repository.fetchActiveQuestion, throwsA(isA<Error>()));
     });
 
     group('fetchActiveQuestion', () {
