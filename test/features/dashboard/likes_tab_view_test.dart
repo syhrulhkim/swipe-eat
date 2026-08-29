@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:swipe_eat/core/ui/glass_ui.dart';
+import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/ui/tiktok_thumbnail_placeholder.dart';
 import 'package:swipe_eat/features/dashboard/presentation/likes_tab_view.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
@@ -125,7 +125,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.byType(GlassCircleButton), findsNothing);
+      expect(find.byType(AppCircleButton), findsNothing);
     });
   });
 
@@ -159,12 +159,12 @@ void main() {
       expect(find.text(_distanceLabel), findsOneWidget);
       expect(find.byIcon(Icons.place_rounded), findsOneWidget);
 
-      expect(find.byType(GlassChip), findsNWidgets(3));
+      expect(find.byType(AppChip), findsNWidgets(3));
       expect(find.text('Grilled chicken'), findsOneWidget);
       expect(find.text('4.5'), findsOneWidget);
       expect(find.text('TikTok Review'), findsOneWidget);
 
-      expect(find.byType(GlassCircleButton), findsNWidgets(4));
+      expect(find.byType(AppCircleButton), findsNWidgets(4));
       for (final icon in const [
         Icons.favorite_rounded,
         Icons.chat_bubble_rounded,
@@ -183,7 +183,7 @@ void main() {
       );
 
       expect(find.byIcon(Icons.local_dining_rounded), findsNothing);
-      expect(find.byType(GlassChip), findsOneWidget);
+      expect(find.byType(AppChip), findsOneWidget);
     });
 
     testWidgets('falls back to the TikTok placeholder without a photo',
@@ -242,7 +242,7 @@ void main() {
       expect(find.textContaining('–'), findsNothing);
       expect(find.byIcon(Icons.star_rounded), findsNothing);
       // Only the tag chip is left.
-      expect(find.byType(GlassChip), findsOneWidget);
+      expect(find.byType(AppChip), findsOneWidget);
     });
   });
 
@@ -300,14 +300,14 @@ void main() {
             .color;
       }
 
-      expect(ringColor(0), kAccentLime);
+      expect(ringColor(0), kAccentEmber);
       expect(ringColor(1), Colors.transparent);
 
       await tester.tap(_stripThumbnails().at(1));
       await tester.pumpAndSettle();
 
       expect(ringColor(0), Colors.transparent);
-      expect(ringColor(1), kAccentLime);
+      expect(ringColor(1), kAccentEmber);
     });
   });
 

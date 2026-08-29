@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../data/restaurant_repository.dart';
 import '../models/restaurant_detail_data.dart';
 import 'restaurant_detail_page.dart';
@@ -135,7 +135,7 @@ class _DetailPlaceholder extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.screenPadding),
               child: Align(
                 alignment: Alignment.topLeft,
-                child: GlassCircleButton(
+                child: AppCircleButton(
                   icon: Icons.arrow_back_rounded,
                   size: kUtilityButtonSize,
                   semanticLabel: 'Back',
@@ -195,7 +195,7 @@ class _DetailMessage extends StatelessWidget {
               const SizedBox(height: 14),
               TextButton(
                 onPressed: onAction,
-                style: TextButton.styleFrom(foregroundColor: kAccentLime),
+                style: TextButton.styleFrom(foregroundColor: kAccentEmber),
                 child: Text(actionLabel),
               ),
             ],

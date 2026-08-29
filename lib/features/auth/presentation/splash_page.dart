@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 
 /// Shown while the persisted session and its profile are being restored.
 ///

@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../models/restaurant_card.dart';
 
 /// The review snippets on an expanded card, one page each.
@@ -117,7 +117,7 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
               children: [
                 Text(
                   'Swipe for more reviews',
-                  style: glassOverlineStyle(context).copyWith(
+                  style: appEyebrowStyle(context).copyWith(
                     color: Colors.white.withValues(alpha: 0.65),
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0,

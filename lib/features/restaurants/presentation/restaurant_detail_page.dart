@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -8,7 +6,7 @@ import '../../../core/location/open_directions.dart';
 import '../../../core/location/place_name.dart';
 import '../../../core/location/user_position_state.dart';
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../models/restaurant_detail_data.dart';
@@ -224,12 +222,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
               Text.rich(
                 TextSpan(
                   text: widget.data.title,
-                  style: glassTitleStyle(context),
+                  style: appTitleStyle(context),
                   children: [
                     if (ratingLabel(widget.data.rating) != '–')
                       TextSpan(
                         text: '  ${ratingLabel(widget.data.rating)}',
-                        style: glassTitleMutedStyle(context),
+                        style: appTitleMutedStyle(context),
                       ),
                   ],
                 ),
@@ -252,7 +250,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                       _distanceLabel(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: glassPlaceStyle(context),
+                      style: appPlaceStyle(context),
                     ),
                   ),
                 ],
@@ -264,17 +262,17 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                 runSpacing: 8,
                 children: [
                   if (ratingLabel(widget.data.rating) != '–')
-                    GlassChip(
+                    AppChip(
                       icon: Icons.star_rounded,
                       label: ratingLabel(widget.data.rating),
                     ),
                   if (widget.data.tag.isNotEmpty)
-                    GlassChip(
+                    AppChip(
                       icon: Icons.local_dining_rounded,
                       label: widget.data.tag,
                     ),
                   if (videoUrl != null && videoUrl.isNotEmpty)
-                    const GlassChip(
+                    const AppChip(
                       icon: Icons.music_note_rounded,
                       label: 'TikTok Review',
                     ),
@@ -284,23 +282,23 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  GlassCircleButton(
+                  AppCircleButton(
                     icon: Icons.favorite_rounded,
-                    iconColor: _liked ? kAccentLime : kTextOnPhoto,
+                    iconColor: _liked ? kAccentEmber : kTextOnPhoto,
                     semanticLabel: _liked ? 'Liked' : 'Like',
                     onTap: () => unawaited(_toggleLike()),
                   ),
-                  GlassCircleButton(
+                  AppCircleButton(
                     icon: Icons.chat_bubble_rounded,
                     semanticLabel: 'Reviews',
                     onTap: () => _scrollToSection(_reviewKey),
                   ),
-                  GlassCircleButton(
+                  AppCircleButton(
                     icon: Icons.route_rounded,
                     semanticLabel: 'Location',
                     onTap: () => _scrollToSection(_locationKey),
                   ),
-                  GlassCircleButton(
+                  AppCircleButton(
                     icon: Icons.close_rounded,
                     semanticLabel: 'Close',
                     onTap: () => unawaited(Navigator.of(context).maybePop()),
@@ -487,7 +485,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: Row(
             children: [
-              GlassCircleButton(
+              AppCircleButton(
                 icon: Icons.arrow_back_rounded,
                 size: kUtilityButtonSize,
                 background: Colors.black.withValues(alpha: 0.34),
@@ -497,7 +495,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
               Expanded(
                 child: imageUrls.length > 1
                     ? Center(
-                        child: _HeroThumbnailStrip(
+                        child: HeroThumbnailStrip(
                           imageUrls: imageUrls,
                           activeIndex: heroIndex,
                           onSelected: (index) {
@@ -510,7 +508,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                     : const SizedBox.shrink(),
               ),
               if (videoUrl != null && videoUrl.isNotEmpty)
-                GlassCircleButton(
+                AppCircleButton(
                   icon: Icons.play_arrow_rounded,
                   size: kUtilityButtonSize,
                   background: Colors.black.withValues(alpha: 0.34),
@@ -536,10 +534,14 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
   }
 }
 
-/// Top-center photo switcher from the reference design: a frosted pill of
-/// mini thumbnails; the active one gets an accent ring.
-class _HeroThumbnailStrip extends StatelessWidget {
-  const _HeroThumbnailStrip({
+/// Top-center photo switcher: a pill of mini thumbnails over the hero image;
+/// the active one gets an accent ring.
+///
+/// Public only so widget tests have a stable handle on the strip. Nothing
+/// outside this file builds one.
+class HeroThumbnailStrip extends StatelessWidget {
+  const HeroThumbnailStrip({
+    super.key,
     required this.imageUrls,
     required this.activeIndex,
     required this.onSelected,
@@ -565,19 +567,14 @@ class _HeroThumbnailStrip extends StatelessWidget {
   Widget _pill(List<String> visible) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(kRadiusPill),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: kGlassBlurSigma,
-          sigmaY: kGlassBlurSigma,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: kFillOnPhoto,
+          borderRadius: BorderRadius.circular(kRadiusPill),
+          border: Border.all(color: kHairline),
         ),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.34),
-            borderRadius: BorderRadius.circular(kRadiusPill),
-            border: Border.all(color: kGlassBorder),
-          ),
-          child: Row(
+        child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               for (var i = 0; i < visible.length; i++)
@@ -598,7 +595,7 @@ class _HeroThumbnailStrip extends StatelessWidget {
                           borderRadius: BorderRadius.circular(kRadiusPill),
                           border: Border.all(
                             color: i == activeIndex
-                                ? kAccentLime
+                                ? kAccentEmber
                                 : Colors.transparent,
                             width: 2,
                           ),
@@ -609,7 +606,7 @@ class _HeroThumbnailStrip extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return const ColoredBox(
-                                color: kGlassFill,
+                                color: kFillOnPhoto,
                                 child: Icon(
                                   Icons.image_not_supported_rounded,
                                   color: Colors.white54,
@@ -626,7 +623,6 @@ class _HeroThumbnailStrip extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 }
@@ -641,7 +637,7 @@ class _DirectionsButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: Material(
-        color: kAccentLime,
+        color: kAccentEmber,
         borderRadius: BorderRadius.circular(kRadiusPill),
         child: InkWell(
           onTap: onTap,
@@ -654,7 +650,7 @@ class _DirectionsButton extends StatelessWidget {
                 const Icon(
                   Icons.directions_rounded,
                   size: 18,
-                  color: kOnAccentLime,
+                  color: kOnAccent,
                 ),
                 const SizedBox(width: 8),
                 // Flexible, or a large accessibility text scale pushes the
@@ -665,7 +661,7 @@ class _DirectionsButton extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: kOnAccentLime,
+                          color: kOnAccent,
                           fontWeight: FontWeight.w700,
                         ),
                   ),
@@ -701,7 +697,7 @@ class _DetailCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: glassPanelTitleStyle(context)),
+          Text(title, style: appPanelTitleStyle(context)),
           const SizedBox(height: 10),
           child,
         ],

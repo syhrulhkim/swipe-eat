@@ -4,7 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../core/location/place_name.dart';
 import '../../../core/location/user_location.dart';
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
 import '../data/onboarding_repository.dart';
 import '../models/onboarding_draft.dart';
@@ -295,8 +295,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
             FilledButton(
               onPressed: _canAdvance && !_saving && !_locating ? _next : null,
               style: FilledButton.styleFrom(
-                backgroundColor: kAccentLime,
-                foregroundColor: kOnAccentLime,
+                backgroundColor: kAccentEmber,
+                foregroundColor: kOnAccent,
                 disabledBackgroundColor: kSurfacePanel,
                 minimumSize: const Size(140, 48),
               ),
@@ -329,7 +329,7 @@ class _StepProgress extends StatelessWidget {
                 height: 4,
                 decoration: BoxDecoration(
                   color: index <= step
-                      ? kAccentLime
+                      ? kAccentEmber
                       : Colors.white.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(kRadiusPill),
                 ),
@@ -366,8 +366,8 @@ class _LoadFailure extends StatelessWidget {
           FilledButton(
             onPressed: onRetry,
             style: FilledButton.styleFrom(
-              backgroundColor: kAccentLime,
-              foregroundColor: kOnAccentLime,
+              backgroundColor: kAccentEmber,
+              foregroundColor: kOnAccent,
             ),
             child: const Text('Try again'),
           ),

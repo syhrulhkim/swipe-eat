@@ -1,58 +1,68 @@
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 // ---------------------------------------------------------------------------
-// Design tokens — single source of truth for the glassmorphic reference
-// design. Every screen (deck, explore, likes, detail, nav) reads from here so
-// colors, radii, blur strength and control sizes stay consistent.
+// Design tokens — single source of truth for the app's look. Every screen
+// (deck, explore, likes, detail, nav) reads from here so colors, radii, type
+// and control sizes stay consistent.
+//
+// The look is a near-black canvas with flat, opaque surfaces, one warm ember
+// accent for anything live or selected, and a cream fill reserved for the
+// single primary action on a screen. Surfaces used to be frosted glass; the
+// blur is gone, because flat dark panels read better behind video and cost no
+// render passes.
 // ---------------------------------------------------------------------------
 
-/// Lime accent from the reference design: active/selected states.
-const Color kAccentLime = Color(0xFFB4E33D);
+/// Warm accent: active tabs, selected states, live indicators, eyebrow labels.
+const Color kAccentEmber = Color(0xFFFF7A33);
 
-/// Ink used on top of the lime accent (dark, near-black).
-const Color kOnAccentLime = Color(0xFF10141B);
+/// Ink used on top of [kAccentEmber] and [kAccentCream].
+const Color kOnAccent = Color(0xFF0B0B0B);
+
+/// Cream fill, reserved for the one primary action on a screen (Cook, Continue,
+/// Get directions). Deliberately scarce: two cream buttons on a screen and
+/// neither reads as primary.
+const Color kAccentCream = Color(0xFFF3E3C3);
 
 /// App background behind full-bleed content (deck, likes, detail below-fold).
-const Color kBackgroundDark = Color(0xFF0C0F14);
+const Color kBackgroundDark = Color(0xFF0B0B0B);
 
 /// Deepest background, used behind the explore map.
-const Color kBackgroundDeep = Color(0xFF07090D);
+const Color kBackgroundDeep = Color(0xFF050505);
 
-/// Base tint of frosted panels/cards before the white glass fill.
-const Color kSurfaceDark = Color(0xFF12161D);
+/// Base surface: cards sitting directly on the background.
+const Color kSurfaceDark = Color(0xFF141414);
 
-/// Opaque card/panel surface used below the fold and on non-photo screens.
-const Color kSurfacePanel = Color(0xFF141922);
+/// Raised surface: panels, list rows, anything that must separate from
+/// [kSurfaceDark] without a border.
+const Color kSurfacePanel = Color(0xFF1C1C1C);
 
-/// White fill painted over the blur inside glass surfaces.
+/// Fill for controls that sit on top of a photo or video, where an opaque
+/// surface would punch a hole in the image.
 /// Written as a literal alpha so the value can be `const` at call sites.
-const Color kGlassFill = Color(0x1FFFFFFF);
+const Color kFillOnPhoto = Color(0x59000000);
 
-/// Hairline border on every glass surface.
-const Color kGlassBorder = Color(0x1FFFFFFF);
-
-/// Blur strength for frosted surfaces.
-const double kGlassBlurSigma = 16;
+/// Hairline border. Barely visible by design — it separates two dark surfaces
+/// rather than drawing a frame.
+const Color kHairline = Color(0x14FFFFFF);
 
 /// Fully rounded corners (pills, circles-as-rects).
 const double kRadiusPill = 999;
 
 /// Corner radius for the large full-bleed cards (swipe deck bottom corners).
-const double kRadiusCard = 40;
+const double kRadiusCard = 32;
 
 /// Corner radius for the large bottom sheets (explore info card, browse-all).
 const double kRadiusSheet = 28;
 
-/// Corner radius for glass panels and cards (info panel, review/detail cards).
-const double kRadiusPanel = 20;
+/// Corner radius for panels and cards (info panel, review/detail cards).
+const double kRadiusPanel = 18;
 
 /// Corner radius for small image tiles (gallery thumbs, hero strip).
-const double kRadiusThumb = 14;
+const double kRadiusThumb = 12;
 
-/// Diameter of the primary frosted action circles (like/pass/chat/route…).
+/// Diameter of the primary action circles (like/pass/chat/route…).
 const double kActionButtonSize = 58;
 
 /// Diameter of small utility circles (settings, back, more).
@@ -63,53 +73,77 @@ const Color kTextOnPhoto = Colors.white;
 const Color kTextOnPhotoMuted = Color(0x8CFFFFFF);
 const Color kTextOnPhotoSecondary = Color(0xE6FFFFFF);
 
-/// Font size for the small uppercase badges (category pills, overlines).
+/// Font size for the small uppercase badges (category pills, eyebrows).
 const double kOverlineFontSize = 10;
+
+/// Display face — headlines and anything that carries a screen. Tight, slightly
+/// quirky grotesk; used at 20 px and above, never for body copy.
+const String kDisplayFontFamily = 'BricolageGrotesque';
+
+/// Text face — body copy, labels, chips, form fields.
+const String kTextFontFamily = 'InstrumentSans';
 
 /// The large overlaid restaurant name, identical on the deck, the Like tab and
 /// the detail page so the three screens read as one design.
 ///
 /// These helpers read the Material text theme, which is never null under a
 /// [MaterialApp] — `!` rather than a dead fallback style.
-TextStyle glassTitleStyle(BuildContext context) {
+TextStyle appTitleStyle(BuildContext context) {
   return Theme.of(context).textTheme.headlineMedium!.copyWith(
+        fontFamily: kDisplayFontFamily,
         color: kTextOnPhoto,
         fontWeight: FontWeight.w700,
-        height: 1.08,
+        height: 1.04,
+        letterSpacing: -0.6,
       );
 }
 
-/// The muted rating that trails [glassTitleStyle].
-TextStyle glassTitleMutedStyle(BuildContext context) {
-  return glassTitleStyle(context).copyWith(
+/// The muted rating that trails [appTitleStyle].
+TextStyle appTitleMutedStyle(BuildContext context) {
+  return appTitleStyle(context).copyWith(
     color: kTextOnPhotoMuted,
     fontWeight: FontWeight.w500,
   );
 }
 
 /// The location/distance line under a title.
-TextStyle glassPlaceStyle(BuildContext context) {
+TextStyle appPlaceStyle(BuildContext context) {
   return Theme.of(context).textTheme.bodyMedium!.copyWith(
         color: kTextOnPhotoSecondary,
         fontWeight: FontWeight.w600,
       );
 }
 
-/// Heading of a glass panel or card ("Location", "Top review", …).
-TextStyle glassPanelTitleStyle(BuildContext context) {
+/// Heading of a panel or card ("Location", "Top review", …).
+TextStyle appPanelTitleStyle(BuildContext context) {
   return Theme.of(context).textTheme.titleMedium!.copyWith(
+        fontFamily: kDisplayFontFamily,
         color: kTextOnPhoto,
         fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       );
 }
 
-/// Small uppercase badge/overline text.
-TextStyle glassOverlineStyle(BuildContext context) {
+/// Small uppercase badge/eyebrow text. Warm by default: it is the line that
+/// labels what a card is ("CRISPY", "OPEN NOW") and reads as an accent, not as
+/// body copy.
+TextStyle appEyebrowStyle(BuildContext context, {Color color = kAccentEmber}) {
   return Theme.of(context).textTheme.labelSmall!.copyWith(
-        color: const Color(0xF2FFFFFF),
+        color: color,
         fontWeight: FontWeight.w700,
-        letterSpacing: 0.6,
+        letterSpacing: 1.1,
         fontSize: kOverlineFontSize,
+      );
+}
+
+/// A section title above a list ("Nearby", "Your likes"). Display face at a
+/// size where the text face would look plain.
+TextStyle appSectionTitleStyle(BuildContext context) {
+  return Theme.of(context).textTheme.titleLarge!.copyWith(
+        fontFamily: kDisplayFontFamily,
+        color: kTextOnPhoto,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.4,
       );
 }
 
@@ -199,9 +233,10 @@ class PhotoTopScrim extends StatelessWidget {
   }
 }
 
-/// Frosted circular icon button from the reference design.
-class GlassCircleButton extends StatelessWidget {
-  const GlassCircleButton({
+/// Circular icon button — the like/pass/route controls and every small
+/// utility circle (back, settings, more).
+class AppCircleButton extends StatelessWidget {
+  const AppCircleButton({
     super.key,
     required this.icon,
     required this.onTap,
@@ -211,7 +246,7 @@ class GlassCircleButton extends StatelessWidget {
     this.background,
     this.semanticLabel,
     this.badgeCount,
-    this.frosted = true,
+    this.onPhoto = true,
   });
 
   final IconData icon;
@@ -223,15 +258,17 @@ class GlassCircleButton extends StatelessWidget {
   final String? semanticLabel;
   final int? badgeCount;
 
-  /// Set to false to skip the [BackdropFilter] where the blur cannot be seen
-  /// (e.g. buttons above another blurred surface) — it costs a render pass.
-  final bool frosted;
+  /// Whether the button sits directly on a photo or video. On a photo it uses
+  /// the translucent [kFillOnPhoto] so the image reads through it; set false
+  /// inside an opaque panel, where a translucent fill would show the panel
+  /// rather than the image and look like a smudge.
+  final bool onPhoto;
 
   @override
   Widget build(BuildContext context) {
-    Widget button = Material(
-      color: background ?? kGlassFill,
-      shape: const CircleBorder(side: BorderSide(color: kGlassBorder)),
+    final button = Material(
+      color: background ?? (onPhoto ? kFillOnPhoto : kSurfacePanel),
+      shape: const CircleBorder(side: BorderSide(color: kHairline)),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: () {
@@ -250,23 +287,14 @@ class GlassCircleButton extends StatelessWidget {
       ),
     );
 
-    if (frosted) {
-      button = BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: kGlassBlurSigma,
-          sigmaY: kGlassBlurSigma,
-        ),
-        child: button,
-      );
-    }
-    button = ClipOval(child: button);
+    Widget result = ClipOval(child: button);
 
     final count = badgeCount;
     if (count != null && count > 0) {
-      button = Stack(
+      result = Stack(
         clipBehavior: Clip.none,
         children: [
-          button,
+          result,
           Positioned(
             top: -2,
             right: -2,
@@ -299,44 +327,51 @@ class GlassCircleButton extends StatelessWidget {
       return Semantics(
         label: semanticLabel,
         button: true,
-        child: button,
+        child: result,
       );
     }
 
-    return button;
+    return result;
   }
 }
 
-/// Frosted pill chip with a leading icon, as on the reference info cards.
-class GlassChip extends StatelessWidget {
-  const GlassChip({
+/// Pill chip with a leading icon: tags, ratings, the location marker.
+class AppChip extends StatelessWidget {
+  const AppChip({
     super.key,
     required this.label,
     this.icon,
-    this.frosted = true,
+    this.onPhoto = true,
+    this.tint,
   });
 
   final String label;
   final IconData? icon;
 
-  /// Set to false inside an opaque panel, where there is no photo behind the
-  /// chip to blur and the [BackdropFilter] is a wasted render pass.
-  final bool frosted;
+  /// Whether the chip sits on a photo or video. See [AppCircleButton.onPhoto].
+  final bool onPhoto;
+
+  /// Colours the icon and label. Null leaves both white, which is the default
+  /// for descriptive chips; pass [kAccentEmber] for a chip that reports state
+  /// (offline, open now, live).
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
-    Widget body = Container(
+    final foreground = tint ?? kTextOnPhoto;
+
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: kGlassFill,
+        color: onPhoto ? kFillOnPhoto : kSurfacePanel,
         borderRadius: BorderRadius.circular(kRadiusPill),
-        border: Border.all(color: kGlassBorder),
+        border: Border.all(color: kHairline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 15, color: kTextOnPhoto),
+            Icon(icon, size: 15, color: foreground),
             const SizedBox(width: 6),
           ],
           // Flexible, or the Row hands the label unbounded width and the
@@ -347,28 +382,13 @@ class GlassChip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: kTextOnPhoto,
-                    fontWeight: FontWeight.w700,
+                    color: foreground,
+                    fontWeight: FontWeight.w600,
                   ),
             ),
           ),
         ],
       ),
-    );
-
-    if (frosted) {
-      body = BackdropFilter(
-        filter: ui.ImageFilter.blur(
-          sigmaX: kGlassBlurSigma,
-          sigmaY: kGlassBlurSigma,
-        ),
-        child: body,
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(kRadiusPill),
-      child: body,
     );
   }
 }

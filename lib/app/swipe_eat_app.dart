@@ -4,13 +4,38 @@ import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/config/app_config.dart';
+import '../core/ui/design_tokens.dart';
 import '../features/auth/state/auth_controller.dart';
 import 'app_router.dart';
 
-/// The reference design's neo-grotesque sans. forui already bundles the full
-/// Inter family (100-900) as a package font, so there is nothing to download
-/// and nothing to declare in pubspec assets.
-const String kAppFontFamily = 'packages/forui/Inter';
+/// Applies the app's two faces to a Material text theme: the display face on
+/// everything from `titleLarge` up, the text face on the rest.
+///
+/// Split here rather than per-widget so a screen that reaches for
+/// `textTheme.headlineSmall` gets the display face without knowing it exists.
+TextTheme _applyAppFonts(TextTheme base) {
+  final display = base
+      .copyWith(
+        displayLarge: base.displayLarge,
+        displayMedium: base.displayMedium,
+        displaySmall: base.displaySmall,
+        headlineLarge: base.headlineLarge,
+        headlineMedium: base.headlineMedium,
+        headlineSmall: base.headlineSmall,
+        titleLarge: base.titleLarge,
+      )
+      .apply(fontFamily: kDisplayFontFamily);
+
+  return base.apply(fontFamily: kTextFontFamily).copyWith(
+        displayLarge: display.displayLarge,
+        displayMedium: display.displayMedium,
+        displaySmall: display.displaySmall,
+        headlineLarge: display.headlineLarge,
+        headlineMedium: display.headlineMedium,
+        headlineSmall: display.headlineSmall,
+        titleLarge: display.titleLarge,
+      );
+}
 
 class SwipeEatApp extends StatefulWidget {
   const SwipeEatApp({
@@ -38,12 +63,21 @@ class _SwipeEatAppState extends State<SwipeEatApp> {
         : FThemes.neutral.dark.desktop;
 
     // Applied over the forui-derived Material theme so every screen that reads
-    // Theme.of(context).textTheme inherits Inter, not the platform font.
+    // Theme.of(context).textTheme inherits the app's faces and near-black
+    // canvas rather than forui's own neutrals and the platform font.
     final baseMaterialTheme = theme.toApproximateMaterialTheme();
     final materialTheme = baseMaterialTheme.copyWith(
-      textTheme: baseMaterialTheme.textTheme.apply(fontFamily: kAppFontFamily),
-      primaryTextTheme:
-          baseMaterialTheme.primaryTextTheme.apply(fontFamily: kAppFontFamily),
+      scaffoldBackgroundColor: kBackgroundDark,
+      canvasColor: kBackgroundDark,
+      textTheme: _applyAppFonts(baseMaterialTheme.textTheme),
+      primaryTextTheme: _applyAppFonts(baseMaterialTheme.primaryTextTheme),
+      colorScheme: baseMaterialTheme.colorScheme.copyWith(
+        primary: kAccentEmber,
+        onPrimary: kOnAccent,
+        secondary: kAccentCream,
+        onSecondary: kOnAccent,
+        surface: kSurfaceDark,
+      ),
     );
 
     return MaterialApp.router(

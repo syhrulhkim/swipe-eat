@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../restaurants/models/restaurant.dart';
 
@@ -232,7 +232,7 @@ class _ExploreMapViewState extends State<ExploreMapView> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      GlassCircleButton(
+                      AppCircleButton(
                         icon: Icons.my_location_rounded,
                         size: kUtilityButtonSize,
                         background: Colors.black.withValues(alpha: 0.34),
@@ -243,7 +243,7 @@ class _ExploreMapViewState extends State<ExploreMapView> {
                           });
                         },
                       ),
-                      GlassCircleButton(
+                      AppCircleButton(
                         icon: Icons.more_horiz_rounded,
                         size: kUtilityButtonSize,
                         background: Colors.black.withValues(alpha: 0.34),
@@ -328,7 +328,7 @@ class _RestaurantPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ringColor = selected ? kAccentLime : const Color(0xFF262C36);
+    final ringColor = selected ? kAccentEmber : const Color(0xFF262C36);
 
     return Semantics(
       label: restaurant.name,
@@ -436,7 +436,7 @@ class _YouMarker extends StatelessWidget {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: kAccentLime.withValues(alpha: 0.14),
+              color: kAccentEmber.withValues(alpha: 0.14),
               shape: BoxShape.circle,
             ),
           ),
@@ -445,8 +445,8 @@ class _YouMarker extends StatelessWidget {
             height: 22,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: kOnAccentLime,
-              border: Border.all(color: kAccentLime, width: 3),
+              color: kOnAccent,
+              border: Border.all(color: kAccentEmber, width: 3),
             ),
           ),
         ],
@@ -499,7 +499,7 @@ class _SelectedRestaurantCard extends StatelessWidget {
                         Text.rich(
                           TextSpan(
                             text: restaurant.name,
-                            // One step down from glassTitleStyle: this card is
+                            // One step down from appTitleStyle: this card is
                             // a compact preview, not a hero.
                             style: Theme.of(context)
                                 .textTheme
@@ -554,12 +554,12 @@ class _SelectedRestaurantCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  GlassCircleButton(
+                  AppCircleButton(
                     icon: Icons.chat_bubble_rounded,
                     size: kUtilityButtonSize,
                     // The info card behind it is a near-opaque fill, so there
                     // is nothing to blur — skip the render pass.
-                    frosted: false,
+                    onPhoto: false,
                     semanticLabel: 'Open ${restaurant.name}',
                     onTap: onOpen,
                   ),
@@ -568,38 +568,38 @@ class _SelectedRestaurantCard extends StatelessWidget {
               const SizedBox(height: 12),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                // frosted: false throughout — these sit on the card's
+                // onPhoto: false throughout — these sit on the card's
                 // near-opaque fill, so each BackdropFilter would blur nothing.
                 child: Row(
                   children: [
-                    GlassChip(
+                    AppChip(
                       icon: Icons.route_rounded,
                       label: distanceLabel,
-                      frosted: false,
+                      onPhoto: false,
                     ),
                     if (restaurant.tag.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      GlassChip(
+                      AppChip(
                         icon: Icons.local_dining_rounded,
                         label: restaurant.tag,
-                        frosted: false,
+                        onPhoto: false,
                       ),
                     ],
                     if (rating != '–') ...[
                       const SizedBox(width: 8),
-                      GlassChip(
+                      AppChip(
                         icon: Icons.star_rounded,
                         label: rating,
-                        frosted: false,
+                        onPhoto: false,
                       ),
                     ],
                     if (restaurant.videoUrl != null &&
                         restaurant.videoUrl!.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      const GlassChip(
+                      const AppChip(
                         icon: Icons.music_note_rounded,
                         label: 'TikTok',
-                        frosted: false,
+                        onPhoto: false,
                       ),
                     ],
                   ],
@@ -714,7 +714,7 @@ class _RoutePainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = kAccentLime.withValues(alpha: 0.35)
+        ..color = kAccentEmber.withValues(alpha: 0.35)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 7
         ..strokeJoin = StrokeJoin.round
@@ -723,7 +723,7 @@ class _RoutePainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = kAccentLime
+        ..color = kAccentEmber
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
         ..strokeJoin = StrokeJoin.round

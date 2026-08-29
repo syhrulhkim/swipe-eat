@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'glass_ui.dart';
+import 'design_tokens.dart';
 
 /// Opaque panel with a tinted hairline border — the card behind every
 /// preference tile.
-class GlassPanel extends StatelessWidget {
-  const GlassPanel({
+class AppPanel extends StatelessWidget {
+  const AppPanel({
     super.key,
     required this.child,
     this.accent,
@@ -68,7 +68,7 @@ class PreferenceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final interactive = onTap != null;
 
-    return GlassPanel(
+    return AppPanel(
       accent: tint,
       child: ListTile(
         onTap: onTap,
@@ -81,7 +81,7 @@ class PreferenceTile extends StatelessWidget {
           ),
           child: Icon(icon, color: tint),
         ),
-        title: Text(title, style: glassPanelTitleStyle(context)),
+        title: Text(title, style: appPanelTitleStyle(context)),
         subtitle: Text(
           subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(

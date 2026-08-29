@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
 import '../../auth/models/app_user.dart';
 import '../../dashboard/presentation/dashboard_widgets.dart';
@@ -92,7 +92,7 @@ class _ProfileHeaderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: glassPanelTitleStyle(context)),
+                  Text(name, style: appPanelTitleStyle(context)),
                   const SizedBox(height: 4),
                   Text(
                     email,

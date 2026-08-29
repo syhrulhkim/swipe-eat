@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 
 /// The frame every non-deck tab sits in: a title, then the tab's content.
 class DashboardTabShell extends StatelessWidget {
@@ -54,7 +54,7 @@ class DashboardTabShell extends StatelessWidget {
   }
 }
 
-/// A plain panel: the flat cousin of [GlassPanel], for content that sits on
+/// A plain panel: the flat cousin of [AppPanel], for content that sits on
 /// the dark background rather than over a photo.
 class SimpleCard extends StatelessWidget {
   const SimpleCard({super.key, required this.child});
@@ -103,7 +103,7 @@ class EmptyTabMessage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: glassPanelTitleStyle(context)),
+            Text(title, style: appPanelTitleStyle(context)),
             const SizedBox(height: 6),
             Text(
               subtitle,

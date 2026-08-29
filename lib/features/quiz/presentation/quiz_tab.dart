@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
 import '../../dashboard/presentation/dashboard_widgets.dart';
 import '../state/quiz_controller.dart';
@@ -222,7 +222,7 @@ class _QuizResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassPanel(
+    return AppPanel(
       accent: accent,
       child: Padding(
         padding: const EdgeInsets.all(16),

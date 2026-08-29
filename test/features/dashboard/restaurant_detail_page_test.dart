@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
+import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/ui/tiktok_thumbnail_placeholder.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant_detail_data.dart';
 import 'package:swipe_eat/features/restaurants/presentation/restaurant_detail_page.dart';
@@ -12,8 +13,8 @@ import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
 import '../../support/widget_test_support.dart';
 import '../restaurants/fake_restaurant_repositories.dart';
 
-/// Lime accent used for active/selected state in the redesign.
-const Color _kAccent = Color(0xFFB4E33D);
+/// The accent used for active/selected state.
+const Color _kAccent = kAccentEmber;
 
 /// Peserai, Batu Pahat — the same origin the production fallback uses, so a
 /// restaurant placed on these coordinates is "0 m away".
@@ -124,12 +125,10 @@ Future<void> _pumpDetailPage(
   await tester.pumpAndSettle();
 }
 
-/// The thumbnails inside the frosted photo-switcher pill. Only the strip nests
-/// [Image] widgets inside a [BackdropFilter] — the glass circle buttons hold
-/// icons — so this isolates the strip without reaching into private widgets.
+/// The thumbnails inside the photo-switcher pill.
 Finder _stripThumbnails() {
   return find.descendant(
-    of: find.byType(BackdropFilter),
+    of: find.byType(HeroThumbnailStrip),
     matching: find.byType(Image),
   );
 }

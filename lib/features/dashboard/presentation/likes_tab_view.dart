@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../../restaurants/models/restaurant.dart';
@@ -97,12 +97,12 @@ class _LikesTabViewState extends State<LikesTabView> {
                 Text.rich(
                   TextSpan(
                     text: restaurant.name,
-                    style: glassTitleStyle(context),
+                    style: appTitleStyle(context),
                     children: [
                       if (rating != '–')
                         TextSpan(
                           text: '  $rating',
-                          style: glassTitleMutedStyle(context),
+                          style: appTitleMutedStyle(context),
                         ),
                     ],
                   ),
@@ -125,7 +125,7 @@ class _LikesTabViewState extends State<LikesTabView> {
                         widget.distanceLabel(restaurant),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: glassPlaceStyle(context),
+                        style: appPlaceStyle(context),
                       ),
                     ),
                   ],
@@ -137,15 +137,15 @@ class _LikesTabViewState extends State<LikesTabView> {
                   runSpacing: 8,
                   children: [
                     if (restaurant.tag.isNotEmpty)
-                      GlassChip(
+                      AppChip(
                         icon: Icons.local_dining_rounded,
                         label: restaurant.tag,
                       ),
                     if (rating != '–')
-                      GlassChip(icon: Icons.star_rounded, label: rating),
+                      AppChip(icon: Icons.star_rounded, label: rating),
                     if (restaurant.videoUrl != null &&
                         restaurant.videoUrl!.isNotEmpty)
-                      const GlassChip(
+                      const AppChip(
                         icon: Icons.music_note_rounded,
                         label: 'TikTok Review',
                       ),
@@ -155,27 +155,27 @@ class _LikesTabViewState extends State<LikesTabView> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    GlassCircleButton(
+                    AppCircleButton(
                       icon: Icons.favorite_rounded,
                       size: kActionButtonSize,
-                      iconColor: kAccentLime,
+                      iconColor: kAccentEmber,
                       semanticLabel: 'Liked',
                       onTap: () => widget.onUnlike(restaurant),
                     ),
-                    GlassCircleButton(
+                    AppCircleButton(
                       icon: Icons.chat_bubble_rounded,
                       size: kActionButtonSize,
                       badgeCount: restaurant.reviews.length,
                       semanticLabel: 'Reviews',
                       onTap: () => widget.onOpenRestaurant(restaurant),
                     ),
-                    GlassCircleButton(
+                    AppCircleButton(
                       icon: Icons.route_rounded,
                       size: kActionButtonSize,
                       semanticLabel: 'Details',
                       onTap: () => widget.onOpenRestaurant(restaurant),
                     ),
-                    GlassCircleButton(
+                    AppCircleButton(
                       icon: Icons.close_rounded,
                       size: kActionButtonSize,
                       semanticLabel: 'Remove from likes',
@@ -276,7 +276,7 @@ class _StripThumb extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: active ? kAccentLime : Colors.transparent,
+              color: active ? kAccentEmber : Colors.transparent,
               width: 2,
             ),
           ),

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../data/tiktok_player_factory.dart';
 
 /// TikTok's player filling its slot, with the card's framing on top.
@@ -181,7 +181,7 @@ class _PlayerUnavailable extends StatelessWidget {
             const SizedBox(height: 10),
             TextButton(
               onPressed: onRetry,
-              style: TextButton.styleFrom(foregroundColor: kAccentLime),
+              style: TextButton.styleFrom(foregroundColor: kAccentEmber),
               child: const Text('Try again'),
             ),
           ],
@@ -226,13 +226,13 @@ class TikTokPlayerScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Align(
                   alignment: Alignment.topRight,
-                  child: GlassCircleButton(
+                  child: AppCircleButton(
                     icon: Icons.close_rounded,
                     size: kUtilityButtonSize,
                     background: Colors.black.withValues(alpha: 0.48),
                     // A WebView platform view cannot be blurred by a
                     // BackdropFilter, so don't pay for one.
-                    frosted: false,
+                    onPhoto: false,
                     semanticLabel: 'Close player',
                     onTap: () => Navigator.of(context).pop(),
                   ),

@@ -38,7 +38,33 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Inter (the reference design's typeface) needs no asset entry here: forui
-  # already ships the full 100-900 family as a package font, so the app uses
-  # 'packages/forui/Inter' — bundled, so no runtime download and no
-  # first-frame flash of the platform fallback.
+
+  # Both families are bundled rather than fetched at runtime: the app now
+  # serves a cached deck with no connection, and a first offline launch that
+  # falls back to the platform font would undo half the redesign.
+  #
+  # Upstream ships these as variable fonts. The files here are static
+  # instances cut from those (Bricolage at opsz 36, both at wdth 100), because
+  # Flutter picks a face by the weights declared below and cannot instance a
+  # variable axis from a `fontWeight` alone. Licences sit next to them.
+  fonts:
+    # Display face: headlines, restaurant names, screen titles.
+    - family: BricolageGrotesque
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque-600.ttf
+          weight: 600
+        - asset: assets/fonts/BricolageGrotesque-700.ttf
+          weight: 700
+        - asset: assets/fonts/BricolageGrotesque-800.ttf
+          weight: 800
+    # Text face: body copy, labels, chips, form fields.
+    - family: InstrumentSans
+      fonts:
+        - asset: assets/fonts/InstrumentSans-400.ttf
+          weight: 400
+        - asset: assets/fonts/InstrumentSans-500.ttf
+          weight: 500
+        - asset: assets/fonts/InstrumentSans-600.ttf
+          weight: 600
+        - asset: assets/fonts/InstrumentSans-700.ttf
+          weight: 700

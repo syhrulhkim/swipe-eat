@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/location/user_position_state.dart';
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../restaurants/models/restaurant.dart';
 import '../../restaurants/models/restaurant_card.dart';

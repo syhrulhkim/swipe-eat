@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
 import '../../../core/ui/radius_options.dart';
 import '../models/onboarding_draft.dart';
@@ -95,7 +95,7 @@ class OnboardingTasteStep extends StatelessWidget {
           },
         ),
         const SizedBox(height: AppOnboardingGaps.section),
-        Text('Anything we should avoid?', style: glassPanelTitleStyle(context)),
+        Text('Anything we should avoid?', style: appPanelTitleStyle(context)),
         const SizedBox(height: 4),
         Text(
           'Optional. We use this to nudge the order, never to hide places — '
@@ -178,7 +178,7 @@ class OnboardingHabitsStep extends StatelessWidget {
           },
         ),
         const SizedBox(height: AppOnboardingGaps.section),
-        GlassPanel(
+        AppPanel(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
             child: Column(
@@ -189,13 +189,13 @@ class OnboardingHabitsStep extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Search radius',
-                        style: glassPanelTitleStyle(context),
+                        style: appPanelTitleStyle(context),
                       ),
                     ),
                     Text(
                       radiusLabel(draft.radiusKm),
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: kAccentLime,
+                            color: kAccentEmber,
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -215,7 +215,7 @@ class OnboardingHabitsStep extends StatelessWidget {
                   max: (kRadiusStops.length - 1).toDouble(),
                   divisions: kRadiusStops.length - 1,
                   label: radiusLabel(draft.radiusKm),
-                  activeColor: kAccentLime,
+                  activeColor: kAccentEmber,
                   onChanged: (value) {
                     draft.radiusKm = kRadiusStops[value.round()];
                     onChanged();
@@ -260,15 +260,15 @@ class OnboardingLocationStep extends StatelessWidget {
               'never keep a trail.',
         ),
         const SizedBox(height: AppOnboardingGaps.section),
-        GlassPanel(
-          accent: located ? kAccentLime : null,
+        AppPanel(
+          accent: located ? kAccentEmber : null,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 Icon(
                   located ? Icons.check_circle_rounded : Icons.my_location_rounded,
-                  color: located ? kAccentLime : kTextOnPhotoMuted,
+                  color: located ? kAccentEmber : kTextOnPhotoMuted,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -299,8 +299,8 @@ class OnboardingLocationStep extends StatelessWidget {
               : const Icon(Icons.near_me_rounded),
           label: Text(isLocating ? 'Finding you...' : 'Use my location'),
           style: FilledButton.styleFrom(
-            backgroundColor: kAccentLime,
-            foregroundColor: kOnAccentLime,
+            backgroundColor: kAccentEmber,
+            foregroundColor: kOnAccent,
             minimumSize: const Size.fromHeight(48),
           ),
         ),
@@ -365,16 +365,16 @@ class _TasteChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? kAccentLime : kSurfacePanel,
+            color: selected ? kAccentEmber : kSurfacePanel,
             borderRadius: BorderRadius.circular(kRadiusPill),
             border: Border.all(
-              color: selected ? kAccentLime : kGlassBorder,
+              color: selected ? kAccentEmber : kHairline,
             ),
           ),
           child: Text(
             emoji == null ? option.label : '$emoji  ${option.label}',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected ? kOnAccentLime : kTextOnPhotoSecondary,
+                  color: selected ? kOnAccent : kTextOnPhotoSecondary,
                   fontWeight: FontWeight.w700,
                 ),
           ),
@@ -395,7 +395,7 @@ class _StepHeading extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: glassTitleStyle(context)),
+        Text(title, style: appTitleStyle(context)),
         const SizedBox(height: 8),
         Text(
           subtitle,

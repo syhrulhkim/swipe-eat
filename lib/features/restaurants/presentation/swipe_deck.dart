@@ -6,7 +6,7 @@ import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../auth/state/auth_controller.dart';
 import '../models/restaurant_card.dart';
@@ -527,11 +527,11 @@ class DeckHeader extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GlassChip(
+                      AppChip(
                         icon: Icons.place_rounded,
                         label: locationLabel,
                       ),
-                      GlassCircleButton(
+                      AppCircleButton(
                         icon: Icons.settings_rounded,
                         size: kUtilityButtonSize,
                         iconSize: 20,
@@ -543,7 +543,7 @@ class DeckHeader extends StatelessWidget {
                   ),
                   if (stalenessLabel != null) ...[
                     const SizedBox(height: 10),
-                    GlassChip(
+                    AppChip(
                       icon: Icons.cloud_off_rounded,
                       label: stalenessLabel!,
                     ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:swipe_eat/core/ui/glass_ui.dart';
+import 'package:swipe_eat/core/ui/design_tokens.dart';
 
 import '../../support/widget_test_support.dart';
 
@@ -49,7 +49,7 @@ Future<void> _pumpStack(WidgetTester tester, List<Widget> children) async {
   );
 }
 
-/// Matches the [Semantics] wrapper [GlassCircleButton] adds for an
+/// Matches the [Semantics] wrapper [AppCircleButton] adds for an
 /// icon-only control. `button: true` is what tells a screen reader this is
 /// tappable; [Material]/[InkWell] never set that flag themselves, so a hit
 /// here can only come from the widget under test.
@@ -63,28 +63,49 @@ Finder _buttonSemantics({String? label}) {
   );
 }
 
-Finder _backdropsIn(Type widgetType) {
-  return find.descendant(
-    of: find.byType(widgetType),
-    matching: find.byType(BackdropFilter),
+/// The fill the button paints, which is what [AppCircleButton.onPhoto]
+/// chooses between.
+Color? _circleButtonFill(WidgetTester tester) {
+  return tester
+      .widget<Material>(
+        find
+            .descendant(
+              of: find.byType(AppCircleButton),
+              matching: find.byType(Material),
+            )
+            .first,
+      )
+      .color;
+}
+
+/// The same, for a chip — which paints through a [BoxDecoration] instead.
+Color? _chipFill(WidgetTester tester) {
+  final container = tester.widget<Container>(
+    find
+        .descendant(
+          of: find.byType(AppChip),
+          matching: find.byType(Container),
+        )
+        .first,
   );
+  return (container.decoration! as BoxDecoration).color;
 }
 
 void main() {
-  group('GlassCircleButton', () {
+  group('AppCircleButton', () {
     testWidgets('renders the requested icon', (tester) async {
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.favorite_rounded,
-            iconColor: kAccentLime,
+            iconColor: kAccentEmber,
             onTap: () {},
           ),
         ),
       );
 
       final icon = tester.widget<Icon>(find.byIcon(Icons.favorite_rounded));
-      expect(icon.color, kAccentLime);
+      expect(icon.color, kAccentEmber);
       // Default icon size is derived from the circle diameter.
       expect(icon.size, kActionButtonSize * 0.44);
     });
@@ -93,14 +114,14 @@ void main() {
       var taps = 0;
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.route_rounded,
             onTap: () => taps++,
           ),
         ),
       );
 
-      await tester.tap(find.byType(GlassCircleButton));
+      await tester.tap(find.byType(AppCircleButton));
       await tester.pump();
 
       expect(taps, 1);
@@ -109,7 +130,7 @@ void main() {
     testWidgets('sizes the tap target to the given diameter', (tester) async {
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.settings_rounded,
             size: kUtilityButtonSize,
             onTap: () {},
@@ -118,45 +139,60 @@ void main() {
       );
 
       expect(
-        tester.getSize(find.byType(GlassCircleButton)),
+        tester.getSize(find.byType(AppCircleButton)),
         const Size(kUtilityButtonSize, kUtilityButtonSize),
       );
     });
 
-    testWidgets('frosted: true wraps the button in exactly one BackdropFilter',
+    testWidgets('onPhoto: true paints the translucent on-photo fill',
         (tester) async {
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.close_rounded,
             onTap: () {},
           ),
         ),
       );
 
-      expect(_backdropsIn(GlassCircleButton), findsOneWidget);
+      expect(_circleButtonFill(tester), kFillOnPhoto);
     });
 
-    testWidgets('frosted: false omits the BackdropFilter', (tester) async {
+    testWidgets('onPhoto: false paints the opaque panel surface',
+        (tester) async {
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.close_rounded,
-            frosted: false,
+            onPhoto: false,
             onTap: () {},
           ),
         ),
       );
 
-      expect(_backdropsIn(GlassCircleButton), findsNothing);
+      expect(_circleButtonFill(tester), kSurfacePanel);
       // ...and the button still works.
       expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+    });
+
+    testWidgets('an explicit background wins over both', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          AppCircleButton(
+            icon: Icons.close_rounded,
+            background: kAccentCream,
+            onTap: () {},
+          ),
+        ),
+      );
+
+      expect(_circleButtonFill(tester), kAccentCream);
     });
 
     testWidgets('renders the badge count when it is above 0', (tester) async {
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.chat_bubble_rounded,
             badgeCount: 3,
             onTap: () {},
@@ -172,7 +208,7 @@ void main() {
       for (final count in <int?>[null, 0, -1]) {
         await tester.pumpWidget(
           _host(
-            GlassCircleButton(
+            AppCircleButton(
               icon: Icons.chat_bubble_rounded,
               badgeCount: count,
               onTap: () {},
@@ -184,7 +220,7 @@ void main() {
         // a [RichText] — so no Text at all means no badge.
         expect(
           find.descendant(
-            of: find.byType(GlassCircleButton),
+            of: find.byType(AppCircleButton),
             matching: find.byType(Text),
           ),
           findsNothing,
@@ -198,7 +234,7 @@ void main() {
       var taps = 0;
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.chat_bubble_rounded,
             badgeCount: 12,
             onTap: () => taps++,
@@ -228,7 +264,7 @@ void main() {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.favorite_rounded,
             semanticLabel: 'Like',
             onTap: () {},
@@ -247,7 +283,7 @@ void main() {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(
         _host(
-          GlassCircleButton(
+          AppCircleButton(
             icon: Icons.favorite_rounded,
             onTap: () {},
           ),
@@ -260,9 +296,9 @@ void main() {
     });
   });
 
-  group('GlassChip', () {
+  group('AppChip', () {
     testWidgets('renders the label on its own', (tester) async {
-      await tester.pumpWidget(_host(const GlassChip(label: 'TikTok Review')));
+      await tester.pumpWidget(_host(const AppChip(label: 'TikTok Review')));
 
       expect(find.text('TikTok Review'), findsOneWidget);
       expect(find.byType(Icon), findsNothing);
@@ -271,7 +307,7 @@ void main() {
     testWidgets('renders a leading icon when one is given', (tester) async {
       await tester.pumpWidget(
         _host(
-          const GlassChip(icon: Icons.star_rounded, label: '4.5'),
+          const AppChip(icon: Icons.star_rounded, label: '4.5'),
         ),
       );
 
@@ -279,10 +315,40 @@ void main() {
       expect(find.byIcon(Icons.star_rounded), findsOneWidget);
     });
 
-    testWidgets('is frosted', (tester) async {
-      await tester.pumpWidget(_host(const GlassChip(label: 'Grilled')));
+    testWidgets('sits on a photo by default', (tester) async {
+      await tester.pumpWidget(_host(const AppChip(label: 'Grilled')));
 
-      expect(_backdropsIn(GlassChip), findsOneWidget);
+      expect(_chipFill(tester), kFillOnPhoto);
+    });
+
+    testWidgets('onPhoto: false paints the opaque panel surface',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(const AppChip(label: 'Grilled', onPhoto: false)),
+      );
+
+      expect(_chipFill(tester), kSurfacePanel);
+    });
+
+    testWidgets('a tint colours the icon and the label', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const AppChip(
+            icon: Icons.cloud_off_rounded,
+            label: 'Offline',
+            tint: kAccentEmber,
+          ),
+        ),
+      );
+
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.cloud_off_rounded)).color,
+        kAccentEmber,
+      );
+      expect(
+        tester.widget<Text>(find.text('Offline')).style?.color,
+        kAccentEmber,
+      );
     });
 
     testWidgets('ellipsises a label wider than the available space',
@@ -292,7 +358,7 @@ void main() {
         _host(
           const SizedBox(
             width: _chipHostWidth,
-            child: GlassChip(
+            child: AppChip(
               icon: Icons.local_dining_rounded,
               label: _longLabel,
             ),
@@ -307,7 +373,7 @@ void main() {
       expect(tester.takeException(), isNull);
       // The chip stays inside the box it was given instead of overflowing.
       expect(
-        tester.getSize(find.byType(GlassChip)).width,
+        tester.getSize(find.byType(AppChip)).width,
         lessThanOrEqualTo(_chipHostWidth),
       );
     });
@@ -382,7 +448,7 @@ void main() {
         await _pumpStack(tester, [
           Positioned.fill(
             child: Center(
-              child: GlassCircleButton(
+              child: AppCircleButton(
                 icon: Icons.favorite_rounded,
                 onTap: () => taps++,
               ),

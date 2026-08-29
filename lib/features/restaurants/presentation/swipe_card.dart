@@ -1,9 +1,7 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import '../../../core/location/open_directions.dart';
 import '../../../core/ui/app_spacing.dart';
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../data/tiktok_player_factory.dart';
 import '../models/restaurant_card.dart';
@@ -190,14 +188,14 @@ class _SwipeCardState extends State<SwipeCard> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            GlassCircleButton(
+                            AppCircleButton(
                               icon: Icons.close_rounded,
                               size: kActionButtonSize,
                               background: Colors.black.withValues(alpha: 0.30),
                               semanticLabel: 'Pass',
                               onTap: widget.onPass!,
                             ),
-                            GlassCircleButton(
+                            AppCircleButton(
                               icon: Icons.favorite_rounded,
                               size: kActionButtonSize,
                               background: Colors.white.withValues(alpha: 0.22),
@@ -397,14 +395,14 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
             Text.rich(
               TextSpan(
                 text: widget.data.title,
-                style: glassTitleStyle(context),
+                style: appTitleStyle(context),
                 children: [
                   // Unrated restaurants render ratingLabel's '–', which reads
                   // as a stray dash after the name — show real ratings only.
                   if (widget.ratingText.trim() != '–')
                     TextSpan(
                       text: '  ${widget.ratingText}',
-                      style: glassTitleMutedStyle(context),
+                      style: appTitleMutedStyle(context),
                     ),
                 ],
               ),
@@ -425,7 +423,7 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
                     widget.distanceText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: glassPlaceStyle(context),
+                    style: appPlaceStyle(context),
                   ),
                 ),
                 if (hasMapFix(widget.data.latitude, widget.data.longitude)) ...[
@@ -436,7 +434,7 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
                   GestureDetector(
                     onTap: _openDirections,
                     behavior: HitTestBehavior.opaque,
-                    child: const GlassChip(
+                    child: const AppChip(
                       label: 'Directions',
                       icon: Icons.directions_rounded,
                     ),
@@ -455,38 +453,35 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
       padding: const EdgeInsets.only(bottom: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(kRadiusPanel),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(
-            sigmaX: kGlassBlurSigma,
-            sigmaY: kGlassBlurSigma,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            // Opaque rather than translucent: this panel carries paragraphs of
+            // text over a moving video, and only a solid ground keeps them
+            // readable frame to frame.
+            color: kSurfaceDark,
+            borderRadius: BorderRadius.circular(kRadiusPanel),
+            border: Border.all(color: kHairline),
           ),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.32),
-              borderRadius: BorderRadius.circular(kRadiusPanel),
-              border: Border.all(color: kGlassBorder),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.data.details,
-                  maxLines: 5,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        height: 1.35,
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
-                ),
-                const SizedBox(height: 10),
-                ReviewCarousel(
-                  reviews: widget.data.reviews,
-                  onInteractionChanged: widget.onReviewInteractionChanged,
-                ),
-              ],
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.data.details,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      height: 1.35,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+              ),
+              const SizedBox(height: 10),
+              ReviewCarousel(
+                reviews: widget.data.reviews,
+                onInteractionChanged: widget.onReviewInteractionChanged,
+              ),
+            ],
           ),
         ),
       ),
@@ -516,7 +511,7 @@ class _CategoryBadge extends StatelessWidget {
       ),
       child: Text(
         label.toUpperCase(),
-        style: glassOverlineStyle(context),
+        style: appEyebrowStyle(context),
       ),
     );
   }

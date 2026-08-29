@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:forui/forui.dart';
 
-import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../profile/presentation/profile_tab.dart';
 import '../../quiz/presentation/quiz_tab.dart';
@@ -143,7 +143,7 @@ class _DashboardBottomNav extends StatelessWidget {
             decoration: BoxDecoration(
               color: kSurfaceDark.withValues(alpha: 0.94),
               borderRadius: BorderRadius.circular(kRadiusPill),
-              border: Border.all(color: kGlassBorder),
+              border: Border.all(color: kHairline),
             ),
             child: Row(
               children: [
@@ -221,7 +221,7 @@ class _BottomNavItemState extends State<_BottomNavItem> {
                 height: 56,
                 decoration: BoxDecoration(
                   color: widget.isSelected
-                      ? kAccentLime
+                      ? kAccentEmber
                       : Colors.white.withValues(alpha: 0.07),
                   shape: BoxShape.circle,
                   border: Border.all(
@@ -233,7 +233,7 @@ class _BottomNavItemState extends State<_BottomNavItem> {
                 child: Icon(
                   widget.icon,
                   size: 26,
-                  color: widget.isSelected ? kOnAccentLime : Colors.white,
+                  color: widget.isSelected ? kOnAccent : Colors.white,
                 ),
               ),
             ),
