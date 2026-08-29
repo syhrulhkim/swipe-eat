@@ -1,5 +1,6 @@
 // ignore_for_file: unused_element_parameter
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -9,26 +10,69 @@ import 'package:forui/forui.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
+import '../../../core/location/open_directions.dart';
+import '../../../core/location/place_name.dart';
+import '../../../core/location/user_location.dart';
 import '../../../core/ui/app_spacing.dart';
+import '../../../core/ui/glass_ui.dart';
+import '../../../core/ui/preference_tile.dart';
+import '../../../core/ui/rating_label.dart';
+import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../auth/models/app_user.dart';
+import '../../profile/data/profile_repository.dart';
+import '../../quiz/data/quiz_repository.dart';
+import '../../quiz/models/quiz_question.dart';
+import '../../restaurants/data/likes_migration.dart';
+import '../../restaurants/data/restaurant_repository.dart';
+import '../../restaurants/data/swipe_repository.dart';
+import '../../restaurants/models/restaurant.dart';
+import '../../restaurants/state/likes_controller.dart';
+import 'explore_map_view.dart';
+import 'likes_tab_view.dart';
 
-Position _dummyUserPosition() {
-  return Position(
-    longitude: 102.933333,
-    latitude: 1.850000,
-    timestamp: DateTime.fromMillisecondsSinceEpoch(0),
-    accuracy: 0,
-    altitude: 0,
-    altitudeAccuracy: 0,
-    heading: 0,
-    headingAccuracy: 0,
-    speed: 0,
-    speedAccuracy: 0,
-    isMocked: true,
+_SwipeCardData _swipeCardDataFromRestaurant(Restaurant restaurant) {
+  final reviews = restaurant.reviews
+      .where((review) => review.text.trim().isNotEmpty)
+      .map(
+        (review) => _ReviewSnippet(author: review.author, text: review.text),
+      )
+      .toList();
+
+  return _SwipeCardData(
+    id: restaurant.id,
+    title: restaurant.name,
+    tag: restaurant.tag,
+    details: restaurant.details,
+    color: restaurant.brandColor,
+    rating: restaurant.rating,
+    latitude: restaurant.latitude,
+    longitude: restaurant.longitude,
+    reviewName: reviews.isNotEmpty ? reviews.first.author : '',
+    reviewText: reviews.isNotEmpty ? reviews.first.text : '',
+    reviews: reviews,
+    imageUrls: restaurant.imageUrls,
+    videoUrl: restaurant.videoUrl,
   );
+}
+
+mixin _UserPositionState<T extends StatefulWidget> on State<T> {
+  Position? _userPosition;
+
+  void _resolveUserPosition() {
+    resolveUserPosition().then((position) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _userPosition = position;
+      });
+    });
+  }
 }
 
 class DashboardPage extends StatelessWidget {
@@ -75,6 +119,20 @@ class _DashboardShell extends StatefulWidget {
 class _DashboardShellState extends State<_DashboardShell> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    // One-time move of pre-auth device likes into the swipes table. Never
+    // blocks the dashboard; a failed run retries on the next launch.
+    unawaited(migrateDeviceLikes().then((migrated) {
+      if (migrated) {
+        LikesController.instance.refresh().catchError((Object error) {
+          debugPrint('Post-migration likes refresh failed: $error');
+        });
+      }
+    }));
+  }
+
   void _setSelectedIndex(int index) {
     if (_selectedIndex == index) {
       return;
@@ -97,8 +155,8 @@ class _DashboardShellState extends State<_DashboardShell> {
       child: IndexedStack(
         index: _selectedIndex,
         children: [
-          _SwipeDeck(),
-          const _ExploreTab(),
+          _SwipeDeck(authController: widget.authController),
+          _ExploreTab(authController: widget.authController),
           const _LikesTab(),
           const _QuizTab(),
           _ProfileTab(
@@ -124,49 +182,54 @@ class _DashboardBottomNav extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-        child: Container(
-          height: 68,
-          decoration: BoxDecoration(
-            color: const Color(0xFF12161D),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.10),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        // No BackdropFilter here: FScaffold lays the footer out below the
+        // body, so there is nothing behind the pill to blur — an opaque-ish
+        // fill gives the same look without the wasted render pass.
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(kRadiusPill),
+          child: Container(
+            height: 74,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: kSurfaceDark.withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(kRadiusPill),
+              border: Border.all(color: kGlassBorder),
             ),
-          ),
-          child: Row(
-            children: [
-              _BottomNavItem(
-                icon: Icons.swipe_rounded,
-                label: 'Swipe',
-                isSelected: selectedIndex == 0,
-                onTap: () => onSelected(0),
-              ),
-              _BottomNavItem(
-                icon: Icons.explore_rounded,
-                label: 'Explore',
-                isSelected: selectedIndex == 1,
-                onTap: () => onSelected(1),
-              ),
-              _BottomNavItem(
-                icon: Icons.favorite_rounded,
-                label: 'Like',
-                isSelected: selectedIndex == 2,
-                onTap: () => onSelected(2),
-              ),
-              _BottomNavItem(
-                icon: Icons.quiz_rounded,
-                label: 'Quiz',
-                isSelected: selectedIndex == 3,
-                onTap: () => onSelected(3),
-              ),
-              _BottomNavItem(
-                icon: Icons.person_rounded,
-                label: 'Profile',
-                isSelected: selectedIndex == 4,
-                onTap: () => onSelected(4),
-              ),
-            ],
+            child: Row(
+              children: [
+                _BottomNavItem(
+                  icon: Icons.swipe_rounded,
+                  label: 'Swipe',
+                  isSelected: selectedIndex == 0,
+                  onTap: () => onSelected(0),
+                ),
+                _BottomNavItem(
+                  icon: Icons.explore_rounded,
+                  label: 'Explore',
+                  isSelected: selectedIndex == 1,
+                  onTap: () => onSelected(1),
+                ),
+                _BottomNavItem(
+                  icon: Icons.favorite_rounded,
+                  label: 'Like',
+                  isSelected: selectedIndex == 2,
+                  onTap: () => onSelected(2),
+                ),
+                _BottomNavItem(
+                  icon: Icons.quiz_rounded,
+                  label: 'Quiz',
+                  isSelected: selectedIndex == 3,
+                  onTap: () => onSelected(3),
+                ),
+                _BottomNavItem(
+                  icon: Icons.person_rounded,
+                  label: 'Profile',
+                  isSelected: selectedIndex == 4,
+                  onTap: () => onSelected(4),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -196,85 +259,55 @@ class _BottomNavItemState extends State<_BottomNavItem> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedColor = Colors.white;
-    final unselectedColor = Colors.white.withValues(alpha: 0.62);
-
     return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          onTapDown: (_) {
-            setState(() {
-              _pressed = true;
-            });
-            HapticFeedback.selectionClick();
-          },
-          onTapCancel: () {
-            setState(() {
-              _pressed = false;
-            });
-          },
-          onTapUp: (_) {
-            setState(() {
-              _pressed = false;
-            });
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-            child: SizedBox.expand(
+      child: Center(
+        child: Semantics(
+          label: widget.label,
+          button: true,
+          selected: widget.isSelected,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            onTapDown: (_) {
+              setState(() {
+                _pressed = true;
+              });
+              HapticFeedback.selectionClick();
+            },
+            onTapCancel: () {
+              setState(() {
+                _pressed = false;
+              });
+            },
+            onTapUp: (_) {
+              setState(() {
+                _pressed = false;
+              });
+            },
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              scale: _pressed ? 0.92 : 1.0,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 1),
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
                   color: widget.isSelected
-                      ? Colors.white.withValues(alpha: 0.10)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(999),
+                      ? kAccentLime
+                      : Colors.white.withValues(alpha: 0.07),
+                  shape: BoxShape.circle,
                   border: Border.all(
                     color: widget.isSelected
-                        ? Colors.white.withValues(alpha: 0.14)
-                        : Colors.transparent,
+                        ? Colors.transparent
+                        : Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AnimatedScale(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      scale: _pressed ? 0.94 : 1.0,
-                      child: AnimatedScale(
-                        duration: const Duration(milliseconds: 160),
-                        curve: Curves.easeOutCubic,
-                        scale: widget.isSelected ? 1.0 : 0.96,
-                        child: Icon(
-                          widget.icon,
-                          size: 28,
-                          color: widget.isSelected
-                              ? selectedColor
-                              : unselectedColor,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      widget.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            fontSize: 10,
-                            color: widget.isSelected
-                                ? selectedColor
-                                : unselectedColor,
-                            fontWeight: widget.isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            height: 1.0,
-                          ),
-                    ),
-                  ],
+                child: Icon(
+                  widget.icon,
+                  size: 26,
+                  color: widget.isSelected ? kOnAccentLime : Colors.white,
                 ),
               ),
             ),
@@ -286,164 +319,127 @@ class _BottomNavItemState extends State<_BottomNavItem> {
 }
 
 class _ExploreTab extends StatefulWidget {
-  const _ExploreTab();
+  const _ExploreTab({required this.authController});
+
+  final AuthController authController;
 
   @override
   State<_ExploreTab> createState() => _ExploreTabState();
 }
 
-class _ExploreTabState extends State<_ExploreTab> {
-  Position? _userPosition;
-  String? _distanceStatus;
+class _ExploreTabState extends State<_ExploreTab> with _UserPositionState {
+  List<Restaurant> _restaurants = const [];
+  bool _loading = true;
+  String? _error;
 
-  final List<_SwipeCardData> _spotCards = const [
-    _SwipeCardData(
-      title: 'Mak Limah Asam Pedas',
-      tag: 'Must Try',
-      details:
-          'A bold, comfort-first local favorite with a rich asam pedas profile.',
-      color: Color(0xFFF6D365),
-      rating: 4.3,
-      latitude: 1.8522138,
-      longitude: 102.9253991,
-      reviewName: 'Explore pick',
-      reviewText: 'Rich, spicy, and very comforting.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Local foodie', text: 'Rich, spicy, and very comforting.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/Mak-Limah-Asam-Pedas.jpg',
-      ],
-    ),
-    _SwipeCardData(
-      title: 'Warung Wak Jaferi',
-      tag: 'Morning',
-      details: 'Relaxed breakfast plates with a calm, homely local feel.',
-      color: Color(0xFFB7E4C7),
-      rating: 4.4,
-      latitude: 1.8406831,
-      longitude: 102.9430163,
-      reviewName: 'Explore pick',
-      reviewText: 'Calm breakfast spot with traditional dishes.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Local foodie',
-            text: 'Calm breakfast spot with traditional dishes.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Wak-Jaferi.jpg',
-      ],
-    ),
-    _SwipeCardData(
-      title: 'Selera Izzati',
-      tag: 'Easygoing',
-      details:
-          'Simple, satisfying breakfast with a clean and approachable vibe.',
-      color: Color(0xFFF4A261),
-      rating: 4.1,
-      latitude: 1.8471209,
-      longitude: 102.9334028,
-      reviewName: 'Explore pick',
-      reviewText: 'Simple, satisfying Malay breakfast.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Local foodie',
-            text: 'Simple, satisfying Malay breakfast.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Selera-Izzati.jpg',
-      ],
-    ),
-  ];
+  /// The radius the rows on screen were fetched under. The tabs live in an
+  /// IndexedStack that never re-inits, so a Settings change must be listened
+  /// for — the radius is a server-side filter, and stale rows would break
+  /// its promise that out-of-range places are not shown.
+  late int? _appliedRadiusKm = widget.authController.user?.searchRadiusKm;
 
   @override
   void initState() {
     super.initState();
-    _userPosition = _dummyUserPosition();
+    widget.authController.addListener(_onAuthChanged);
+    _resolveUserPosition();
+    _loadSpots();
   }
 
-  String _distanceLabelFor(_SwipeCardData data) {
-    final userPosition = _userPosition;
-    if (userPosition == null) {
-      return _distanceStatus ?? 'Distance loading';
-    }
+  @override
+  void dispose() {
+    widget.authController.removeListener(_onAuthChanged);
+    super.dispose();
+  }
 
-    final meters = Geolocator.distanceBetween(
-      userPosition.latitude,
-      userPosition.longitude,
-      data.latitude,
-      data.longitude,
+  void _onAuthChanged() {
+    final radius = widget.authController.user?.searchRadiusKm;
+    if (radius == _appliedRadiusKm) {
+      return;
+    }
+    _appliedRadiusKm = radius;
+    _loadSpots();
+  }
+
+  Future<void> _loadSpots() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      // The radius rule lives server-side: what the deck may not serve,
+      // Explore may not show. A fallback fix is not a real location — passing
+      // null lets the RPC measure from the profile's stored coordinates.
+      final position = await resolveUserPosition();
+      final hasRealPosition = !isFallbackUserPosition(position);
+      final restaurants = await RestaurantRepository().search(
+        latitude: hasRealPosition ? position.latitude : null,
+        longitude: hasRealPosition ? position.longitude : null,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _restaurants = restaurants;
+        _loading = false;
+      });
+    } catch (error) {
+      debugPrint('Explore load failed: $error');
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _loading = false;
+        _error = 'Could not load restaurants.';
+      });
+    }
+  }
+
+  void _openRestaurant(Restaurant restaurant) {
+    context.push(
+      '/restaurant',
+      extra: _swipeCardDataFromRestaurant(restaurant).toDetailPayload(),
     );
-
-    if (meters >= 100000) {
-      return '100km +';
-    }
-
-    if (meters >= 1000) {
-      return '${(meters / 1000).toStringAsFixed(1)} km away';
-    }
-
-    return '${meters.toStringAsFixed(0)} m away';
   }
 
   @override
   Widget build(BuildContext context) {
-    return _DashboardTabShell(
-      title: 'Explore',
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding,
-          14,
-          AppSpacing.screenPadding,
-          24,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF141922),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
-              ),
-              child: Row(
+    if (_loading || _error != null || _restaurants.isEmpty) {
+      return _DashboardTabShell(
+        title: 'Explore',
+        child: _loading
+            ? const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
-                  Icon(Icons.search_rounded,
-                      color: Colors.white.withValues(alpha: 0.70)),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Search foods or stalls',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.48),
+                  _error != null
+                      ? _EmptyTabMessage(
+                          title: 'Something went wrong',
+                          subtitle: _error!,
+                          actionLabel: 'Try again',
+                          onAction: _loadSpots,
+                        )
+                      : const _EmptyTabMessage(
+                          title: 'No restaurants yet',
+                          subtitle: 'Check back soon.',
                         ),
-                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            ..._spotCards.map((card) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _SpotPreviewCard(
-                  data: card,
-                  distanceText: _distanceLabelFor(card),
-                  layout: _SpotPreviewLayout.compact,
-                  compactStats: false,
-                  showActionStrip: false,
-                  onTap: () => context.push(
-                    '/restaurant',
-                    extra: card.toDetailPayload(),
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: kBackgroundDeep),
+      child: ExploreMapView(
+        restaurants: _restaurants,
+        userPosition: _userPosition,
+        onOpenRestaurant: _openRestaurant,
       ),
     );
   }
@@ -456,72 +452,81 @@ class _LikesTab extends StatefulWidget {
   State<_LikesTab> createState() => _LikesTabState();
 }
 
-class _LikesTabState extends State<_LikesTab> {
-  Position? _userPosition;
-  String? _distanceStatus;
-
-  static const _savedPlaces = [
-    _SwipeCardData(
-      title: 'Warung Madu 3 Parit Besar',
-      tag: 'Saved',
-      details: 'Hearty breakfast with a warm, local atmosphere.',
-      color: Color(0xFFE76F51),
-      rating: 4.1,
-      latitude: 1.8683906,
-      longitude: 102.957791,
-      reviewName: 'Saved spot',
-      reviewText: 'Warm service and a breakfast spread that feels inviting.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'You',
-            text: 'Warm service and a breakfast spread that feels inviting.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Madu-3-Parit-Besar.jpg',
-      ],
-    ),
-    _SwipeCardData(
-      title: 'Warung Ahmad Nasi Lemak',
-      tag: 'Liked',
-      details: 'Fragrant nasi lemak with a dependable sambal kick.',
-      color: Color(0xFFEE9B00),
-      rating: 4.2,
-      latitude: 1.8740357,
-      longitude: 102.9415007,
-      reviewName: 'Saved spot',
-      reviewText: 'Fragrant nasi lemak, nice sambal, and a dependable stop.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'You',
-            text: 'Fragrant nasi lemak, nice sambal, and a dependable stop.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Ahmad-Nasi-Lemak.jpg',
-      ],
-    ),
-  ];
+class _LikesTabState extends State<_LikesTab> with _UserPositionState {
+  // The swipes table is the source of truth; LikesController caches it and
+  // notifies when a like lands anywhere in the app (deck, detail page).
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _userPosition = _dummyUserPosition();
+    _resolveUserPosition();
+    LikesController.instance.addListener(_onLikesChanged);
+    _loadLikes();
   }
 
-  String _distanceLabelFor(_SwipeCardData data) {
+  @override
+  void dispose() {
+    LikesController.instance.removeListener(_onLikesChanged);
+    super.dispose();
+  }
+
+  void _onLikesChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _loadLikes() async {
+    setState(() {
+      _error = null;
+    });
+
+    try {
+      await LikesController.instance.ensureLoaded();
+    } catch (error) {
+      debugPrint('Likes load failed: $error');
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _error = 'Could not load your likes.';
+      });
+    }
+  }
+
+  Future<void> _unlike(Restaurant restaurant) async {
+    try {
+      await LikesController.instance.unlike(restaurant.id);
+    } catch (error) {
+      debugPrint('Unlike failed: $error');
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not remove that like.')),
+      );
+    }
+  }
+
+  String _distanceLabel(Restaurant restaurant) {
     final userPosition = _userPosition;
-    if (userPosition == null) {
-      return _distanceStatus ?? 'Distance loading';
+    if (userPosition == null ||
+        (restaurant.latitude == 0 && restaurant.longitude == 0)) {
+      return 'Johor Bahru';
     }
 
     final meters = Geolocator.distanceBetween(
       userPosition.latitude,
       userPosition.longitude,
-      data.latitude,
-      data.longitude,
+      restaurant.latitude,
+      restaurant.longitude,
     );
 
     if (meters >= 100000) {
-      return '100km +';
+      return '100 km +';
     }
 
     if (meters >= 1000) {
@@ -531,39 +536,45 @@ class _LikesTabState extends State<_LikesTab> {
     return '${meters.toStringAsFixed(0)} m away';
   }
 
+  void _openRestaurant(Restaurant restaurant) {
+    context.push(
+      '/restaurant',
+      extra: _swipeCardDataFromRestaurant(restaurant).toDetailPayload(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _DashboardTabShell(
-      title: 'Like',
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding,
-          14,
-          AppSpacing.screenPadding,
-          24,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ..._savedPlaces.map(
-              (data) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _SpotPreviewCard(
-                  data: data,
-                  distanceText: _distanceLabelFor(data),
-                  layout: _SpotPreviewLayout.list,
-                  compactStats: false,
-                  showActionStrip: false,
-                  onTap: () => context.push(
-                    '/restaurant',
-                    extra: data.toDetailPayload(),
+    final likes = LikesController.instance;
+    if (!likes.isLoaded || _error != null) {
+      return _DashboardTabShell(
+        title: 'Like',
+        child: _error == null
+            ? const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                children: [
+                  _EmptyTabMessage(
+                    title: 'Something went wrong',
+                    subtitle: _error!,
+                    actionLabel: 'Try again',
+                    onAction: _loadLikes,
                   ),
-                ),
+                ],
               ),
-            ),
-          ],
-        ),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: kBackgroundDark),
+      child: LikesTabView(
+        liked: likes.liked,
+        distanceLabel: _distanceLabel,
+        onOpenRestaurant: _openRestaurant,
+        onUnlike: _unlike,
       ),
     );
   }
@@ -577,12 +588,57 @@ class _QuizTab extends StatefulWidget {
 }
 
 class _QuizTabState extends State<_QuizTab> {
-  int _selectedAnswer = -1;
-  bool _submitted = false;
+  QuizQuestion? _question;
+  bool _loading = true;
+  String? _error;
+  int _selectedOptionId = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQuiz();
+  }
+
+  Future<void> _loadQuiz() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final question = await QuizRepository().fetchActiveQuestion();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _question = question;
+        _loading = false;
+      });
+    } catch (error) {
+      debugPrint('Quiz load failed: $error');
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _loading = false;
+        _error = 'Could not load the quiz.';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isAnswered = _submitted && _selectedAnswer >= 0;
+    final question = _question;
+    QuizOption? selectedOption;
+    if (question != null) {
+      for (final option in question.options) {
+        if (option.id == _selectedOptionId) {
+          selectedOption = option;
+        }
+      }
+    }
 
     return _DashboardTabShell(
       title: 'Quiz',
@@ -597,47 +653,63 @@ class _QuizTabState extends State<_QuizTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Choose one answer to get a suggestion.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.64),
-                    height: 1.35,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            ...List.generate(_quizAnswers.length, (index) {
-              final answer = _quizAnswers[index];
-              final selected = _selectedAnswer == index;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _QuizAnswerTile(
-                  label: answer,
-                  selected: selected,
-                  onTap: () {
-                    setState(() {
-                      _selectedAnswer = index;
-                      _submitted = true;
-                    });
-                  },
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              );
-            }),
-            const SizedBox(height: 14),
-            const _QuizResultCard(
-              title: 'Best next bite',
-              subtitle: 'Warung Wak Jaferi',
-              body:
-                  'A calm breakfast stop with a familiar local feel and a gentle morning pace.',
-              accent: Color(0xFFB7E4C7),
-            ),
-            if (!isAnswered) ...[
-              const SizedBox(height: 10),
+              )
+            else if (_error != null)
+              _EmptyTabMessage(
+                title: 'Something went wrong',
+                subtitle: _error!,
+                actionLabel: 'Try again',
+                onAction: _loadQuiz,
+              )
+            else if (question == null || question.options.isEmpty)
+              const _EmptyTabMessage(
+                title: 'No quiz available',
+                subtitle: 'Check back soon.',
+              )
+            else ...[
               Text(
-                'Select an answer above to refresh the suggestion.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.60),
+                question.prompt,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.64),
+                      height: 1.35,
                     ),
               ),
+              const SizedBox(height: 12),
+              ...question.options.map((option) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _QuizAnswerTile(
+                    label: option.label,
+                    selected: option.id == _selectedOptionId,
+                    onTap: () {
+                      setState(() {
+                        _selectedOptionId = option.id;
+                      });
+                    },
+                  ),
+                );
+              }),
+              const SizedBox(height: 14),
+              if (selectedOption != null)
+                _QuizResultCard(
+                  title: selectedOption.resultTitle,
+                  subtitle: selectedOption.recommendedRestaurantName ?? 'None',
+                  body: selectedOption.resultBody,
+                  accent: selectedOption.resultAccent,
+                )
+              else
+                Text(
+                  'Select an answer above to get a suggestion.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.60),
+                      ),
+                ),
             ],
           ],
         ),
@@ -676,7 +748,7 @@ class _ProfileTab extends StatelessWidget {
               email: email,
             ),
             const SizedBox(height: 12),
-            const _PreferenceTile(
+            const PreferenceTile(
               icon: Icons.wb_sunny_rounded,
               title: 'Morning mode',
               subtitle: 'Show breakfast first',
@@ -684,7 +756,7 @@ class _ProfileTab extends StatelessWidget {
               tint: Color(0xFFF6D365),
             ),
             const SizedBox(height: 10),
-            const _PreferenceTile(
+            const PreferenceTile(
               icon: Icons.local_fire_department_rounded,
               title: 'Spice bias',
               subtitle: 'Prioritize bolder flavors',
@@ -692,7 +764,7 @@ class _ProfileTab extends StatelessWidget {
               tint: Color(0xFFE76F51),
             ),
             const SizedBox(height: 10),
-            const _PreferenceTile(
+            const PreferenceTile(
               icon: Icons.pin_drop_rounded,
               title: 'Nearby focus',
               subtitle: 'Favor shorter distances',
@@ -718,7 +790,7 @@ class _DashboardTabShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFF0C0F14)),
+      decoration: const BoxDecoration(color: kBackgroundDark),
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -769,33 +841,6 @@ class _TabTopBar extends StatelessWidget {
   }
 }
 
-class _GlassContainer extends StatelessWidget {
-  const _GlassContainer({
-    required this.child,
-    required this.accent,
-  });
-
-  final Widget child;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF141922),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: accent.withValues(alpha: 0.18),
-          ),
-        ),
-        child: child,
-      ),
-    );
-  }
-}
-
 class _SimpleCard extends StatelessWidget {
   const _SimpleCard({
     required this.child,
@@ -806,11 +851,11 @@ class _SimpleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(kRadiusPanel),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF141922),
-          borderRadius: BorderRadius.circular(20),
+          color: kSurfacePanel,
+          borderRadius: BorderRadius.circular(kRadiusPanel),
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.08),
           ),
@@ -853,10 +898,7 @@ class _SimpleProfileCard extends StatelessWidget {
                 children: [
                   Text(
                     name,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: glassPanelTitleStyle(context),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -870,245 +912,6 @@ class _SimpleProfileCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-enum _SpotPreviewLayout {
-  compact,
-  list,
-}
-
-class _SpotPreviewCard extends StatelessWidget {
-  const _SpotPreviewCard({
-    required this.data,
-    required this.distanceText,
-    required this.layout,
-    required this.compactStats,
-    required this.showActionStrip,
-    this.onTap,
-  });
-
-  final _SwipeCardData data;
-  final String distanceText;
-  final _SpotPreviewLayout layout;
-  final bool compactStats;
-  final bool showActionStrip;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isCompact = layout == _SpotPreviewLayout.compact;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: _GlassContainer(
-          accent: data.color,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(26),
-                  topRight: Radius.circular(26),
-                ),
-                child: AspectRatio(
-                  aspectRatio: isCompact ? 1.65 : 2.25,
-                  child: Image.network(
-                    data.imageUrls.first,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _TagPill(label: data.tag, accent: data.color),
-                        const Spacer(),
-                        if (compactStats)
-                          _MiniStat(
-                            icon: Icons.star_rounded,
-                            text: data.rating.toStringAsFixed(1),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      data.title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      data.details,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.72),
-                            height: 1.35,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        _InfoChip(
-                          icon: Icons.star_rounded,
-                          label: data.rating.toStringAsFixed(1),
-                        ),
-                        const SizedBox(width: 8),
-                        _InfoChip(
-                          icon: Icons.place_rounded,
-                          label: distanceText,
-                        ),
-                      ],
-                    ),
-                    if (showActionStrip) ...[
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _ActionChip(
-                              icon: Icons.close_rounded,
-                              label: 'Pass',
-                              tint: const Color(0xFFE25555),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _ActionChip(
-                              icon: Icons.favorite_rounded,
-                              label: 'Like',
-                              tint: const Color(0xFF1F9D55),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({
-    required this.icon,
-    required this.text,
-  });
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Colors.white),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Colors.white),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionChip extends StatelessWidget {
-  const _ActionChip({
-    required this.icon,
-    required this.label,
-    required this.tint,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color tint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: tint.withValues(alpha: 0.28)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 16, color: tint),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
       ),
     );
   }
@@ -1135,7 +938,7 @@ class _QuizAnswerTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(kRadiusPanel),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
@@ -1144,7 +947,7 @@ class _QuizAnswerTile extends StatelessWidget {
             color: selected
                 ? accent.withValues(alpha: 0.14)
                 : Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(kRadiusPanel),
             border: Border.all(
                 color: accent.withValues(alpha: selected ? 0.42 : 0.08)),
           ),
@@ -1200,7 +1003,7 @@ class _QuizResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GlassContainer(
+    return GlassPanel(
       accent: accent,
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1238,243 +1041,73 @@ class _QuizResultCard extends StatelessWidget {
   }
 }
 
-class _PreferenceTile extends StatelessWidget {
-  const _PreferenceTile({
-    required this.icon,
+class _EmptyTabMessage extends StatelessWidget {
+  const _EmptyTabMessage({
     required this.title,
     required this.subtitle,
-    required this.trailingLabel,
-    required this.tint,
+    this.actionLabel,
+    this.onAction,
   });
 
-  final IconData icon;
   final String title;
   final String subtitle;
-  final String trailingLabel;
-  final Color tint;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
-    return _GlassContainer(
-      accent: tint,
-      child: ListTile(
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: tint.withValues(alpha: 0.16),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: tint),
-        ),
-        title: Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+    return _SimpleCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: glassPanelTitleStyle(context),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.66),
+                    height: 1.35,
+                  ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 12),
+              FButton(
+                variant: FButtonVariant.outline,
+                onPress: onAction,
+                child: Text(actionLabel!),
               ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.66),
-              ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            trailingLabel,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
+            ],
+          ],
         ),
       ),
     );
   }
 }
 
-const List<String> _quizAnswers = [
-  'I want something comforting and familiar.',
-  'I want bold spice and bigger flavor.',
-  'I want a quick, easy breakfast stop.',
-];
-
 class _SwipeDeck extends StatefulWidget {
-  const _SwipeDeck();
+  const _SwipeDeck({required this.authController});
+
+  final AuthController authController;
 
   @override
   State<_SwipeDeck> createState() => _SwipeDeckState();
 }
 
 class _SwipeDeckState extends State<_SwipeDeck>
-    with SingleTickerProviderStateMixin {
-  final List<_SwipeCardData> _cards = const [
-    _SwipeCardData(
-      title: 'Mak Limah Asam Pedas',
-      tag: 'Asam Pedas',
-      details:
-          'A Batu Pahat asam pedas spot known for its rich, spicy, and tangy comfort food. The card uses the actual storefront photo from the Batu Pahat food guide.',
-      color: Color(0xFFF6D365),
-      rating: 4.3,
-      latitude: 1.8522138,
-      longitude: 102.9253991,
-      reviewName: 'Google Maps highlight',
-      reviewText:
-          'Rich, spicy, and very comforting. A must for asam pedas fans.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text:
-                'Rich, spicy, and very comforting. A must for asam pedas fans.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'Big flavor, balanced spice, and a really satisfying meal.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text:
-                'The sauce is bold and the dish feels comforting every time.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/Mak-Limah-Asam-Pedas.jpg',
-        'https://tempatcuti.my/wp-content/uploads/2023/12/Asam-Pedas-Generation-Tambak-Batu-Pahat.jpg',
-      ],
-      videoUrl: 'https://www.tiktok.com/@johorfoodie/video/7647473389518540053',
-    ),
-    _SwipeCardData(
-      title: 'Warung Wak Jaferi',
-      tag: 'Breakfast',
-      details:
-          'A Batu Pahat breakfast stop with a relaxed morning feel and traditional local dishes. The photo is pulled from the Batu Pahat dining guide for a more authentic look.',
-      color: Color(0xFFB7E4C7),
-      rating: 4.4,
-      latitude: 1.8406831,
-      longitude: 102.9430163,
-      reviewName: 'Google Maps highlight',
-      reviewText:
-          'Calm breakfast spot with traditional dishes that feel homely and fresh.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text:
-                'Calm breakfast spot with traditional dishes that feel homely and fresh.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text:
-                'Friendly atmosphere and a breakfast plate that feels easy to enjoy.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'Simple, comforting, and a nice place to start the day.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Wak-Jaferi.jpg',
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Zai-Kak-Zai-Nasi-Lemak.jpg',
-      ],
-      videoUrl: 'https://www.tiktok.com/@johorfoodie/video/7639688200797064469',
-    ),
-    _SwipeCardData(
-      title: 'Selera Izzati',
-      tag: 'Breakfast',
-      details:
-          'A Batu Pahat morning food spot that keeps the deck varied with another local breakfast option. The card uses the actual restaurant photo instead of a generic food image.',
-      color: Color(0xFFF4A261),
-      rating: 4.1,
-      latitude: 1.8471209,
-      longitude: 102.9334028,
-      reviewName: 'Google Maps highlight',
-      reviewText:
-          'Simple, satisfying Malay breakfast with a very easygoing vibe.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text:
-                'Simple, satisfying Malay breakfast with a very easygoing vibe.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'Good value, easy to eat, and a relaxed morning stop.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'A dependable breakfast place with familiar flavors.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Selera-Izzati.jpg',
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Gerai-Makan-Hidayah.jpg',
-      ],
-      videoUrl: 'https://www.tiktok.com/@johorfoodie/video/7636253229818350869',
-    ),
-    _SwipeCardData(
-      title: 'Warung Madu 3 Parit Besar',
-      tag: 'Breakfast',
-      details:
-          'A Batu Pahat breakfast spot with a warm, local feel and a photo that matches the actual restaurant frontage from the guide.',
-      color: Color(0xFFE76F51),
-      rating: 4.1,
-      latitude: 1.8683906,
-      longitude: 102.957791,
-      reviewName: 'Google Maps highlight',
-      reviewText:
-          'Warm service and a breakfast spread that feels hearty and inviting.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text:
-                'Warm service and a breakfast spread that feels hearty and inviting.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'Comforting food with a friendly, welcoming feel.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'Nice morning stop with a cozy local breakfast vibe.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Madu-3-Parit-Besar.jpg',
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Hans-Nasi-Lemak-Ayam-Kamung-Benteng-BP.jpg',
-      ],
-      videoUrl: 'https://www.tiktok.com/@johorfoodie/video/7631138703229930760',
-    ),
-    _SwipeCardData(
-      title: 'Warung Ahmad Nasi Lemak',
-      tag: 'Nasi Lemak',
-      details:
-          'A Batu Pahat nasi lemak stop with a familiar local breakfast vibe and an actual restaurant photo from the guide.',
-      color: Color(0xFFEE9B00),
-      rating: 4.2,
-      latitude: 1.8740357,
-      longitude: 102.9415007,
-      reviewName: 'Google Maps highlight',
-      reviewText:
-          'Fragrant nasi lemak, nice sambal, and a dependable breakfast stop.',
-      reviews: [
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text:
-                'Fragrant nasi lemak, nice sambal, and a dependable breakfast stop.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'Good sambal kick and a breakfast plate that hits the spot.'),
-        _ReviewSnippet(
-            author: 'Google Maps user',
-            text: 'A reliable nasi lemak stop with a familiar local feel.'),
-      ],
-      imageUrls: [
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Ahmad-Nasi-Lemak.jpg',
-        'https://tempatcuti.my/wp-content/uploads/2023/12/sarapan-pagi-di-Batu-Pahat-Warung-Zai-Kak-Zai-Nasi-Lemak.jpg',
-      ],
-    ),
-  ];
+    with SingleTickerProviderStateMixin, _UserPositionState {
+  List<_SwipeCardData> _cards = const [];
+  bool _deckLoading = true;
+  String? _deckError;
 
   int _index = 0;
   Offset _dragOffset = Offset.zero;
   bool _infoExpanded = false;
   bool _reviewInteractionActive = false;
-  Position? _userPosition;
-  String? _distanceStatus;
-
   Offset _animationStartOffset = Offset.zero;
   Offset _animationEndOffset = Offset.zero;
   _SwipeMotionType _motionType = _SwipeMotionType.idle;
@@ -1502,11 +1135,103 @@ class _SwipeDeckState extends State<_SwipeDeck>
     });
   final Map<String, Future<WebViewController>> _tiktokPlayerCache = {};
 
+  /// Guards against overlapping [_loadDeck] runs (init + retry buttons): only
+  /// the newest request may publish its result, so a stale slow response can
+  /// never overwrite a fresher deck.
+  int _deckLoadGeneration = 0;
+
+  /// The radius the current deck was dealt under — see the twin field on
+  /// [_ExploreTabState] for why a Settings change must reload from here.
+  late int? _appliedRadiusKm =
+      widget.authController.user?.searchRadiusKm;
+
   @override
   void initState() {
     super.initState();
-    _warmInitialTikTokPlayers();
-    _userPosition = _dummyUserPosition();
+    widget.authController.addListener(_onAuthChanged);
+    _resolveUserPosition();
+    _loadDeck();
+  }
+
+  void _onAuthChanged() {
+    final radius = widget.authController.user?.searchRadiusKm;
+    if (radius == _appliedRadiusKm) {
+      return;
+    }
+    _appliedRadiusKm = radius;
+    _loadDeck();
+  }
+
+  Future<void> _loadDeck() async {
+    final generation = ++_deckLoadGeneration;
+    setState(() {
+      _deckLoading = true;
+      _deckError = null;
+    });
+
+    try {
+      // The position is an input to the server-side ranking now, so it is
+      // resolved first. It is session-cached, so only the very first load
+      // pays for the permission dialog + GPS fix. The fallback position is
+      // not a real fix — passing null lets the RPC fall back to the profile's
+      // stored coordinates instead of ranking around a bogus origin.
+      final position = await resolveUserPosition();
+      final hasRealPosition = !isFallbackUserPosition(position);
+      if (hasRealPosition) {
+        // Fire-and-forget: the deck must not wait on reverse geocoding.
+        unawaited(_syncLocation(position));
+      }
+
+      // Ranked, radius-filtered and de-duplicated against past swipes by the
+      // get_deck RPC; the rows arrive in serve order.
+      final restaurants = await RestaurantRepository().fetchDeck(
+        latitude: hasRealPosition ? position.latitude : null,
+        longitude: hasRealPosition ? position.longitude : null,
+      );
+      if (!mounted || generation != _deckLoadGeneration) {
+        return;
+      }
+
+      setState(() {
+        _cards = restaurants.map(_swipeCardDataFromRestaurant).toList();
+        _index = 0;
+        _deckLoading = false;
+        _tiktokPlayerCache.clear();
+      });
+      _warmInitialTikTokPlayers();
+    } catch (error) {
+      debugPrint('Deck load failed: $error');
+      if (!mounted || generation != _deckLoadGeneration) {
+        return;
+      }
+
+      setState(() {
+        _deckLoading = false;
+        _deckError = 'Could not load restaurants. Check your connection.';
+      });
+    }
+  }
+
+  /// Pushes a real fix (and its reverse-geocoded name) onto the profile, so
+  /// the header chip and every server-side radius rule agree on where the
+  /// user is. The returned profile row feeds [AuthController.applyUser],
+  /// which is what swaps the chip from the stale name to the current one.
+  Future<void> _syncLocation(Position position) async {
+    try {
+      final placeName = await resolvePlaceName(position);
+      final user = await ProfileRepository().updateLocation(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        placeName: placeName,
+      );
+      if (!mounted) {
+        return;
+      }
+      widget.authController.applyUser(user);
+    } catch (error) {
+      // The chip keeps the last stored name; nothing else depends on this.
+      debugPrint('Location sync failed: $error');
+    }
   }
 
   void _warmInitialTikTokPlayers() {
@@ -1543,12 +1268,22 @@ class _SwipeDeckState extends State<_SwipeDeck>
 
     return _tiktokPlayerCache.putIfAbsent(
       videoUrl,
-      () => _createTikTokPlayerController(videoUrl),
+      () {
+        final future = _createTikTokPlayerController(videoUrl);
+        // A warmed player nobody has mounted yet has no listener, so a load
+        // failure would surface as an unhandled async error. The FutureBuilder
+        // that mounts later still sees the error through its own listener.
+        unawaited(future.then((_) {}, onError: (Object error) {
+          debugPrint('TikTok player load failed: $error');
+        }));
+        return future;
+      },
     );
   }
 
   @override
   void dispose() {
+    widget.authController.removeListener(_onAuthChanged);
     _motionController.dispose();
     super.dispose();
   }
@@ -1561,6 +1296,11 @@ class _SwipeDeckState extends State<_SwipeDeck>
       return;
     }
 
+    // Optimistic: the card flies out immediately, the write follows behind
+    // it. A failed write costs a toast and nothing else — the backend never
+    // saw the swipe, so the card simply resurfaces on a future deck.
+    unawaited(_recordSwipe(_cards[_index], liked));
+
     setState(() {
       _motionType = _SwipeMotionType.swipeOut;
       _animationStartOffset = _dragOffset;
@@ -1568,6 +1308,41 @@ class _SwipeDeckState extends State<_SwipeDeck>
     });
 
     _motionController.forward(from: 0);
+  }
+
+  Future<void> _recordSwipe(_SwipeCardData card, bool liked) async {
+    final position = _userPosition;
+    final hasRealPosition =
+        position != null && !isFallbackUserPosition(position);
+    final latitude = hasRealPosition ? position.latitude : null;
+    final longitude = hasRealPosition ? position.longitude : null;
+
+    try {
+      if (liked) {
+        // Through the controller so the Like tab and any open detail page
+        // update without their own round trip.
+        await LikesController.instance.like(
+          card.id,
+          latitude: latitude,
+          longitude: longitude,
+        );
+      } else {
+        await SwipeRepository().record(
+          restaurantId: card.id,
+          liked: false,
+          latitude: latitude,
+          longitude: longitude,
+        );
+      }
+    } catch (error) {
+      debugPrint('Swipe write failed: $error');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save that swipe.')),
+      );
+    }
   }
 
   void _triggerAction(bool liked) {
@@ -1611,13 +1386,19 @@ class _SwipeDeckState extends State<_SwipeDeck>
   }
 
   String _ratingText(_SwipeCardData data) {
-    return data.rating.toStringAsFixed(1);
+    return ratingLabel(data.rating);
   }
 
   String _distanceLabelFor(_SwipeCardData data) {
     final userPosition = _userPosition;
     if (userPosition == null) {
-      return _distanceStatus ?? 'Distance loading';
+      return 'Distance loading';
+    }
+
+    if (!hasMapFix(data.latitude, data.longitude)) {
+      // Measuring to the 0,0 sentinel reports the distance to Null Island,
+      // which reads as a real answer.
+      return 'Distance unknown';
     }
 
     final meters = Geolocator.distanceBetween(
@@ -1638,6 +1419,32 @@ class _SwipeDeckState extends State<_SwipeDeck>
     return '${km.toStringAsFixed(1)} km';
   }
 
+  /// Card pose for the frame being painted.
+  ///
+  /// [_motionController] ticks without calling `setState`, so these values MUST
+  /// be read inside an [AnimatedBuilder] listening to it. Deriving them once in
+  /// `build` freezes the card at its release pose for the whole 640 ms and then
+  /// teleports it.
+  _MotionFrame _motionFrame() {
+    final progress = Curves.easeInOutCubic.transform(_motionController.value);
+    final offset = _motionType == _SwipeMotionType.idle
+        ? _dragOffset
+        : ui.Offset.lerp(
+              _animationStartOffset,
+              _animationEndOffset,
+              progress,
+            ) ??
+            _dragOffset;
+    final dragPercentage = (offset.dx.abs() / 260).clamp(0.0, 1.0);
+
+    return _MotionFrame(
+      progress: progress,
+      offset: offset,
+      dragPercentage: dragPercentage,
+      lift: Curves.easeOutCubic.transform(dragPercentage),
+    );
+  }
+
   void _setReviewInteractionActive(bool active) {
     if (_reviewInteractionActive == active) {
       return;
@@ -1648,29 +1455,87 @@ class _SwipeDeckState extends State<_SwipeDeck>
     });
   }
 
+  /// What the header chip says. The reverse-geocoded name of the last stored
+  /// fix when there is one; 'Nearby' for accounts that have never granted
+  /// location. `DashboardPage` rebuilds on every AuthController notification,
+  /// so [_syncLocation]'s applyUser refreshes this without a listener here.
+  String get _locationLabel =>
+      widget.authController.user?.lastPlaceName ?? 'Nearby';
+
+  // Keeps the floating header visible around the loading/error/empty states
+  // so those states aren't a bare widget on an otherwise blank tab.
+  Widget _deckMessage(Widget child) {
+    return Stack(
+      children: [
+        Center(child: child),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: _FloatingHeader(locationLabel: _locationLabel),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_deckLoading) {
+      return _deckMessage(
+        const CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    final deckError = _deckError;
+    if (deckError != null) {
+      return _deckMessage(
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.screenPadding),
+          child: FCard(
+            title: const Text('Something went wrong'),
+            subtitle: Text(deckError),
+            child: FButton(
+              variant: FButtonVariant.outline,
+              onPress: _loadDeck,
+              child: const Text('Try again'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_cards.isEmpty) {
+      return _deckMessage(
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.screenPadding),
+          child: FCard(
+            title: const Text('No restaurants yet'),
+            subtitle: const Text('Check back soon.'),
+            child: FButton(
+              variant: FButtonVariant.outline,
+              onPress: _loadDeck,
+              child: const Text('Reload'),
+            ),
+          ),
+        ),
+      );
+    }
+
     if (_index >= _cards.length) {
-      return Center(
-        child: Padding(
+      // Not a local replay: every card in `_cards` is already swiped
+      // server-side, so replaying it would fight `get_deck`'s exclusion.
+      // A reload lets the backend deal fresh rows — or resurface old passes
+      // via its 3-day exhaustion fallback.
+      return _deckMessage(
+        Padding(
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
           child: FCard(
             title: const Text('No more cards'),
-            subtitle: const Text('Restart to keep swiping.'),
+            subtitle: const Text('Reload to keep swiping.'),
             child: FButton(
               variant: FButtonVariant.outline,
-              onPress: () {
-                setState(() {
-                  _index = 0;
-                  _dragOffset = Offset.zero;
-                  _infoExpanded = false;
-                  _motionType = _SwipeMotionType.idle;
-                  _animationStartOffset = Offset.zero;
-                  _animationEndOffset = Offset.zero;
-                  _motionController.reset();
-                });
-              },
-              child: const Text('Restart deck'),
+              onPress: _loadDeck,
+              child: const Text('Reload deck'),
             ),
           ),
         ),
@@ -1681,21 +1546,7 @@ class _SwipeDeckState extends State<_SwipeDeck>
     final next = _index + 1 < _cards.length ? _cards[_index + 1] : null;
     final currentPlayerFuture = _preloadTikTokPlayer(current.videoUrl);
     final nextPlayerFuture = _preloadTikTokPlayer(next?.videoUrl);
-    final motionProgress =
-        Curves.easeInOutCubic.transform(_motionController.value);
-    final currentOffset = _motionType == _SwipeMotionType.idle
-        ? _dragOffset
-        : ui.Offset.lerp(
-              _animationStartOffset,
-              _animationEndOffset,
-              motionProgress,
-            ) ??
-            _dragOffset;
-    final dragPercentage = (currentOffset.dx.abs() / 260).clamp(0.0, 1.0);
-    final rotation = currentOffset.dx / 900;
-    final showLike = currentOffset.dx > 20;
-    final showNope = currentOffset.dx < -20;
-    final transitionLift = Curves.easeOutCubic.transform(dragPercentage);
+    final motion = _motionFrame();
     final currentRating = _ratingText(current);
     final currentDistance = _distanceLabelFor(current);
 
@@ -1703,12 +1554,6 @@ class _SwipeDeckState extends State<_SwipeDeck>
       builder: (context, constraints) {
         return Stack(
           children: [
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _FloatingHeader(),
-            ),
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Stack(
@@ -1716,34 +1561,43 @@ class _SwipeDeckState extends State<_SwipeDeck>
                 children: [
                   if (next != null)
                     Positioned.fill(
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 120),
-                        opacity: 0.82 + (transitionLift * 0.18),
-                        child: Transform.translate(
-                          offset: Offset(0, 22 - (transitionLift * 22)),
-                          child: Transform.scale(
-                            scale: 0.92 + (transitionLift * 0.08),
-                            child: _SwipeCard(
-                              key: ValueKey(next.title),
-                              data: next,
-                              isBehind: true,
-                              infoExpanded: _infoExpanded,
-                              ratingText: _ratingText(next),
-                              distanceText: _distanceLabelFor(next),
-                              onTap: () => _openVideoPlayer(next),
-                              tiktokPlayerFuture: nextPlayerFuture,
-                              onInfoTap: () {
-                                setState(() {
-                                  _infoExpanded = !_infoExpanded;
-                                });
-                              },
-                              onReviewInteractionChanged:
-                                  _setReviewInteractionActive,
-                              onPass: () => _triggerAction(false),
-                              onLike: () => _triggerAction(true),
-                            ),
-                          ),
+                      child: AnimatedBuilder(
+                        animation: _motionController,
+                        // The card itself is passed as `child` so it is built
+                        // once, not on every tick — it can host a WebView.
+                        child: _SwipeCard(
+                          key: ValueKey(next.id),
+                          data: next,
+                          isBehind: true,
+                          infoExpanded: _infoExpanded,
+                          ratingText: _ratingText(next),
+                          distanceText: _distanceLabelFor(next),
+                          onTap: () => _openVideoPlayer(next),
+                          tiktokPlayerFuture: nextPlayerFuture,
+                          onInfoTap: () {
+                            setState(() {
+                              _infoExpanded = !_infoExpanded;
+                            });
+                          },
+                          onReviewInteractionChanged:
+                              _setReviewInteractionActive,
+                          // No onPass/onLike: the behind card must never
+                          // act on the deck while the top card is active.
                         ),
+                        builder: (context, child) {
+                          final lift = _motionFrame().lift;
+
+                          return Opacity(
+                            opacity: 0.82 + (lift * 0.18),
+                            child: Transform.translate(
+                              offset: Offset(0, 22 - (lift * 22)),
+                              child: Transform.scale(
+                                scale: 0.92 + (lift * 0.08),
+                                child: child,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   Positioned.fill(
@@ -1792,20 +1646,23 @@ class _SwipeDeckState extends State<_SwipeDeck>
                       child: AnimatedBuilder(
                         animation: _motionController,
                         builder: (context, child) {
+                          // Read live from the controller: values captured in
+                          // build() would hold still for the whole animation.
+                          final frame = _motionFrame();
                           final scale = _motionType == _SwipeMotionType.swipeOut
-                              ? ui.lerpDouble(1, 0.982, motionProgress) ?? 1
-                              : ui.lerpDouble(1, 0.995, motionProgress) ?? 1;
+                              ? ui.lerpDouble(1, 0.982, frame.progress) ?? 1
+                              : ui.lerpDouble(1, 0.995, frame.progress) ?? 1;
                           final opacity =
                               _motionType == _SwipeMotionType.swipeOut
-                                  ? ui.lerpDouble(1, 0.84, motionProgress) ?? 1
+                                  ? ui.lerpDouble(1, 0.84, frame.progress) ?? 1
                                   : 1.0;
 
                           return Opacity(
                             opacity: opacity,
                             child: Transform.translate(
-                              offset: currentOffset,
+                              offset: frame.offset,
                               child: Transform.rotate(
-                                angle: rotation,
+                                angle: frame.offset.dx / 900,
                                 child: Transform.scale(
                                   scale: scale,
                                   child: child,
@@ -1817,10 +1674,14 @@ class _SwipeDeckState extends State<_SwipeDeck>
                         child: Stack(
                           children: [
                             _SwipeCard(
-                              key: ValueKey(current.title),
+                              key: ValueKey(current.id),
                               data: current,
-                              likeOpacity: showLike ? dragPercentage : 0,
-                              nopeOpacity: showNope ? dragPercentage : 0,
+                              likeOpacity: motion.offset.dx > 20
+                                  ? motion.dragPercentage
+                                  : 0,
+                              nopeOpacity: motion.offset.dx < -20
+                                  ? motion.dragPercentage
+                                  : 0,
                               infoExpanded: _infoExpanded,
                               ratingText: currentRating,
                               distanceText: currentDistance,
@@ -1844,6 +1705,15 @@ class _SwipeDeckState extends State<_SwipeDeck>
                 ],
               ),
             ),
+            // Painted above the card so the settings button stays tappable;
+            // the gradient itself ignores pointers so card gestures pass
+            // through the top 300px.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _FloatingHeader(locationLabel: _locationLabel),
+            ),
           ],
         );
       },
@@ -1852,7 +1722,11 @@ class _SwipeDeckState extends State<_SwipeDeck>
 }
 
 class _FloatingHeader extends StatelessWidget {
-  const _FloatingHeader();
+  const _FloatingHeader({required this.locationLabel});
+
+  /// The user's reverse-geocoded whereabouts, from the profile row — not a
+  /// hardcoded town.
+  final String locationLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1861,22 +1735,24 @@ class _FloatingHeader extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.90),
-                    Colors.black.withValues(alpha: 0.82),
-                    Colors.black.withValues(alpha: 0.66),
-                    Colors.black.withValues(alpha: 0.46),
-                    Colors.black.withValues(alpha: 0.30),
-                    Colors.black.withValues(alpha: 0.16),
-                    Colors.black.withValues(alpha: 0.08),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.09, 0.20, 0.34, 0.50, 0.68, 0.86, 1.0],
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.90),
+                      Colors.black.withValues(alpha: 0.82),
+                      Colors.black.withValues(alpha: 0.66),
+                      Colors.black.withValues(alpha: 0.46),
+                      Colors.black.withValues(alpha: 0.30),
+                      Colors.black.withValues(alpha: 0.16),
+                      Colors.black.withValues(alpha: 0.08),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.09, 0.20, 0.34, 0.50, 0.68, 0.86, 1.0],
+                  ),
                 ),
               ),
             ),
@@ -1889,57 +1765,19 @@ class _FloatingHeader extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: BackdropFilter(
-                      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.34),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.10),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.place_rounded,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Peserai, Batu Pahat',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelMedium
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  GlassChip(
+                    icon: Icons.place_rounded,
+                    label: locationLabel,
                   ),
-                  IconButton(
-                    onPressed: () {
+                  GlassCircleButton(
+                    icon: Icons.settings_rounded,
+                    size: kUtilityButtonSize,
+                    iconSize: 20,
+                    background: Colors.black.withValues(alpha: 0.34),
+                    semanticLabel: 'Settings',
+                    onTap: () {
                       context.push('/settings');
                     },
-                    icon: const Icon(
-                      Icons.settings_rounded,
-                      color: Colors.white,
-                    ),
-                    splashRadius: 22,
-                    tooltip: 'Settings',
                   ),
                 ],
               ),
@@ -1955,6 +1793,28 @@ enum _SwipeMotionType {
   idle,
   settleBack,
   swipeOut,
+}
+
+/// One frame of swipe motion: see `_SwipeDeckState._motionFrame`.
+class _MotionFrame {
+  const _MotionFrame({
+    required this.progress,
+    required this.offset,
+    required this.dragPercentage,
+    required this.lift,
+  });
+
+  /// Eased 0..1 position through the settle-back / swipe-out animation.
+  final double progress;
+
+  /// Where the top card sits relative to its resting position.
+  final Offset offset;
+
+  /// How far towards a committed swipe the card is, 0..1.
+  final double dragPercentage;
+
+  /// Eased [dragPercentage], used to raise the card behind into place.
+  final double lift;
 }
 
 class _SwipeCard extends StatefulWidget {
@@ -2001,14 +1861,9 @@ class _SwipeCardState extends State<_SwipeCard> {
   @override
   void didUpdateWidget(covariant _SwipeCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.data.title != widget.data.title) {
+    if (oldWidget.data.id != widget.data.id) {
       _imageIndex = 0;
     }
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   void _changeImage(int delta) {
@@ -2034,21 +1889,24 @@ class _SwipeCardState extends State<_SwipeCard> {
 
   @override
   Widget build(BuildContext context) {
-    const bottomRadius = Radius.circular(40);
-    final hasMultipleImages = widget.data.imageUrls.length > 1;
+    const bottomRadius = Radius.circular(kRadiusCard);
+    final cardVideoUrl = widget.data.videoUrl;
+    final showsPhotos =
+        widget.isBehind || cardVideoUrl == null || cardVideoUrl.isEmpty;
+    final hasMultipleImages = showsPhotos && widget.data.imageUrls.length > 1;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: widget.onTap,
         child: ClipRRect(
-          borderRadius: BorderRadius.only(
+          borderRadius: const BorderRadius.only(
             bottomLeft: bottomRadius,
             bottomRight: bottomRadius,
           ),
           child: Container(
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.only(
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.only(
                 bottomLeft: bottomRadius,
                 bottomRight: bottomRadius,
               ),
@@ -2056,12 +1914,10 @@ class _SwipeCardState extends State<_SwipeCard> {
             child: Stack(
               fit: StackFit.expand,
               children: [
+                // Square at the top (the card runs under the status-bar
+                // scrim); only the outer bottom corners are rounded.
                 Positioned.fill(
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(40),
-                      topRight: Radius.circular(40),
-                    ),
+                  child: ClipRect(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final videoUrl = widget.data.videoUrl;
@@ -2074,6 +1930,13 @@ class _SwipeCardState extends State<_SwipeCard> {
                               videoUrl: videoUrl,
                               controllerFuture: widget.tiktokPlayerFuture,
                             ),
+                          );
+                        }
+
+                        if (widget.data.imageUrls.isEmpty) {
+                          return TikTokThumbnailPlaceholder(
+                            creatorHandle:
+                                tiktokCreatorHandle(widget.data.videoUrl),
                           );
                         }
 
@@ -2135,7 +1998,13 @@ class _SwipeCardState extends State<_SwipeCard> {
                                   );
                                 },
                                 errorBuilder: (context, error, stackTrace) {
-                                  return const SizedBox.expand();
+                                  return SizedBox.expand(
+                                    child: TikTokThumbnailPlaceholder(
+                                      creatorHandle: tiktokCreatorHandle(
+                                        widget.data.videoUrl,
+                                      ),
+                                    ),
+                                  );
                                 },
                               ),
                             ),
@@ -2171,10 +2040,25 @@ class _SwipeCardState extends State<_SwipeCard> {
                     ),
                   ),
                 ),
+                const PhotoBottomScrim(height: 360),
+                if (hasMultipleImages)
+                  Positioned(
+                    top: 150,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: _ImageProgressDots(
+                          count: widget.data.imageUrls.length,
+                          activeIndex: _imageIndex,
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
-                  left: 14,
-                  right: 14,
-                  bottom: AppSpacing.screenPadding + 4,
+                  left: 18,
+                  right: 18,
+                  bottom: AppSpacing.screenPadding + 2,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2184,17 +2068,30 @@ class _SwipeCardState extends State<_SwipeCard> {
                         expanded: widget.infoExpanded,
                         ratingText: widget.ratingText,
                         distanceText: widget.distanceText,
-                        imageIndex: _imageIndex,
-                        hasMultipleImages: hasMultipleImages,
                         onTap: widget.onInfoTap,
                         onReviewInteractionChanged:
                             widget.onReviewInteractionChanged,
                       ),
                       if (widget.onPass != null && widget.onLike != null) ...[
-                        const SizedBox(height: 3),
-                        _SwipeActionBar(
-                          onPass: widget.onPass!,
-                          onLike: widget.onLike!,
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            GlassCircleButton(
+                              icon: Icons.close_rounded,
+                              size: kActionButtonSize,
+                              background: Colors.black.withValues(alpha: 0.30),
+                              semanticLabel: 'Pass',
+                              onTap: widget.onPass!,
+                            ),
+                            GlassCircleButton(
+                              icon: Icons.favorite_rounded,
+                              size: kActionButtonSize,
+                              background: Colors.white.withValues(alpha: 0.22),
+                              semanticLabel: 'Like',
+                              onTap: widget.onLike!,
+                            ),
+                          ],
                         ),
                       ],
                     ],
@@ -2215,8 +2112,6 @@ class _RestaurantInfoPanel extends StatefulWidget {
     required this.expanded,
     required this.ratingText,
     required this.distanceText,
-    required this.imageIndex,
-    required this.hasMultipleImages,
     required this.onTap,
     required this.onReviewInteractionChanged,
   });
@@ -2225,8 +2120,6 @@ class _RestaurantInfoPanel extends StatefulWidget {
   final bool expanded;
   final String ratingText;
   final String distanceText;
-  final int imageIndex;
-  final bool hasMultipleImages;
   final VoidCallback onTap;
   final ValueChanged<bool> onReviewInteractionChanged;
 
@@ -2234,252 +2127,155 @@ class _RestaurantInfoPanel extends StatefulWidget {
   State<_RestaurantInfoPanel> createState() => _RestaurantInfoPanelState();
 }
 
-class _RestaurantInfoPanelState extends State<_RestaurantInfoPanel>
-    with SingleTickerProviderStateMixin {
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(24),
-        topRight: Radius.circular(24),
-      ),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Material(
-          color: Colors.black.withValues(alpha: 0.16),
-          child: InkWell(
-            onTap: widget.onTap,
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.12),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.hasMultipleImages) ...[
-                      _ImageProgressDots(
-                        count: widget.data.imageUrls.length,
-                        activeIndex: widget.imageIndex,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    Row(
-                      children: [
-                        _CategoryBadge(
-                          label: widget.data.tag,
-                          accent: widget.data.color,
-                        ),
-                        const Spacer(),
-                        AnimatedRotation(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOutCubic,
-                          turns: widget.expanded ? 0.5 : 0,
-                          child: Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: Colors.white.withValues(alpha: 0.65),
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      widget.data.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                height: 1.15,
-                              ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _RatingBadge(ratingText: widget.ratingText),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.place_rounded,
-                          color: Colors.white.withValues(alpha: 0.6),
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            widget.distanceText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelMedium
-                                ?.copyWith(
-                                  color: Colors.white.withValues(alpha: 0.75),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      alignment: Alignment.topCenter,
-                      child: widget.expanded
-                          ? Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.data.details,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          height: 1.35,
-                                          color: Colors.white
-                                              .withValues(alpha: 0.82),
-                                        ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  _ReviewCarousel(
-                                    reviews: widget.data.reviews,
-                                    onInteractionChanged:
-                                        widget.onReviewInteractionChanged,
-                                  ),
-                                ],
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+class _RestaurantInfoPanelState extends State<_RestaurantInfoPanel> {
+  Future<void> _openDirections() async {
+    final opened = await openDirections(
+      latitude: widget.data.latitude,
+      longitude: widget.data.longitude,
+      label: widget.data.title,
+    );
+    if (opened || !mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open maps for this place.')),
     );
   }
-}
-
-class _SwipeActionBar extends StatelessWidget {
-  const _SwipeActionBar({
-    required this.onPass,
-    required this.onLike,
-  });
-
-  final VoidCallback onPass;
-  final VoidCallback onLike;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        bottomLeft: Radius.circular(28),
-        bottomRight: Radius.circular(28),
-      ),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: double.infinity,
-          height: 68,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.14),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(28),
-              bottomRight: Radius.circular(28),
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.12),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _ConnectedActionButton(
-                    icon: Icons.close_rounded,
-                    label: 'Pass',
-                    color: const Color(0xFFE25555),
-                    onTap: onPass,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 28,
-                  color: Colors.white.withValues(alpha: 0.12),
-                ),
-                Expanded(
-                  child: _ConnectedActionButton(
-                    icon: Icons.favorite_rounded,
-                    label: 'Like',
-                    color: const Color(0xFF1F9D55),
-                    onTap: onLike,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ConnectedActionButton extends StatelessWidget {
-  const _ConnectedActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: color,
-                size: 18,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(kRadiusPanel),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.bottomCenter,
+              child: widget.expanded
+                  ? Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(kRadiusPanel),
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(
+                            sigmaX: kGlassBlurSigma,
+                            sigmaY: kGlassBlurSigma,
+                          ),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.32),
+                              borderRadius: BorderRadius.circular(kRadiusPanel),
+                              border: Border.all(color: kGlassBorder),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.data.details,
+                                  maxLines: 5,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        height: 1.35,
+                                        color: Colors.white
+                                            .withValues(alpha: 0.85),
+                                      ),
+                                ),
+                                const SizedBox(height: 10),
+                                _ReviewCarousel(
+                                  reviews: widget.data.reviews,
+                                  onInteractionChanged:
+                                      widget.onReviewInteractionChanged,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            Row(
+              children: [
+                _CategoryBadge(
+                  label: widget.data.tag,
+                  accent: widget.data.color,
+                ),
+                const Spacer(),
+                AnimatedRotation(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  turns: widget.expanded ? 0.5 : 0,
+                  child: Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    color: Colors.white.withValues(alpha: 0.65),
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text.rich(
+              TextSpan(
+                text: widget.data.title,
+                style: glassTitleStyle(context),
+                children: [
+                  // Unrated restaurants render ratingLabel's '–', which reads
+                  // as a stray dash after the name — show real ratings only.
+                  if (widget.ratingText.trim() != '–')
+                    TextSpan(
+                      text: '  ${widget.ratingText}',
+                      style: glassTitleMutedStyle(context),
                     ),
+                ],
               ),
-            ],
-          ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(
+                  Icons.place_rounded,
+                  color: kTextOnPhotoSecondary,
+                  size: 16,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    widget.distanceText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: glassPlaceStyle(context),
+                  ),
+                ),
+                if (hasMapFix(widget.data.latitude, widget.data.longitude)) ...[
+                  const SizedBox(width: 8),
+                  // Its own tap target: the surrounding InkWell expands the
+                  // panel, and leaving directions to that gesture would open
+                  // maps every time the user peeked at the reviews.
+                  GestureDetector(
+                    onTap: _openDirections,
+                    behavior: HitTestBehavior.opaque,
+                    child: const GlassChip(
+                      label: 'Directions',
+                      icon: Icons.directions_rounded,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -2501,144 +2297,14 @@ class _CategoryBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(kRadiusPill),
         border: Border.all(
           color: accent.withValues(alpha: 0.28),
         ),
       ),
       child: Text(
         label.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.95),
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.10,
-              fontSize: 9,
-            ),
-      ),
-    );
-  }
-}
-
-class _RatingBadge extends StatelessWidget {
-  const _RatingBadge({required this.ratingText});
-
-  final String ratingText;
-
-  static const _gold = Color(0xFFFFC24B);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _gold.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: _gold.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.star_rounded, color: _gold, size: 14),
-          const SizedBox(width: 4),
-          Text(
-            ratingText,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TagPill extends StatefulWidget {
-  const _TagPill({
-    required this.label,
-    required this.accent,
-  });
-
-  final String label;
-  final Color accent;
-
-  @override
-  State<_TagPill> createState() => _TagPillState();
-}
-
-class _TagPillState extends State<_TagPill> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTapDown: (_) {
-          setState(() {
-            _pressed = true;
-          });
-        },
-        onTapCancel: () {
-          setState(() {
-            _pressed = false;
-          });
-        },
-        onTap: () {
-          setState(() {
-            _pressed = !_pressed;
-          });
-        },
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOutCubic,
-          scale: _pressed ? 0.96 : 1.0,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: BoxDecoration(
-              color: widget.accent.withValues(alpha: _pressed ? 0.28 : 0.18),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: widget.accent.withValues(alpha: _pressed ? 0.45 : 0.28),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      widget.accent.withValues(alpha: _pressed ? 0.18 : 0.08),
-                  blurRadius: _pressed ? 12 : 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.label.toUpperCase(),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.10,
-                        fontSize: 9,
-                      ),
-                ),
-                const SizedBox(width: 5),
-                Icon(
-                  _pressed
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  size: 13,
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-              ],
-            ),
-          ),
-        ),
+        style: glassOverlineStyle(context),
       ),
     );
   }
@@ -2731,6 +2397,17 @@ class _SwipeTikTokPlayerState extends State<_SwipeTikTokPlayer> {
                 if (snapshot.connectionState != ConnectionState.done)
                   const Center(
                     child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else if (snapshot.hasError)
+                  // The spinner is gone but no WebView arrived, so without
+                  // this the card would sit on a bare black rectangle.
+                  Center(
+                    child: Text(
+                      'Video unavailable',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                    ),
                   ),
               ],
             );
@@ -2753,25 +2430,34 @@ Future<WebViewController> _createTikTokPlayerController(String videoUrl) async {
   }
 
   final controller = WebViewController.fromPlatformCreationParams(params);
-  controller
-    ..setJavaScriptMode(JavaScriptMode.unrestricted)
-    ..setBackgroundColor(Colors.black)
-    ..setUserAgent(
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
-      'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
-      'Mobile/15E148 Safari/604.1',
-    )
-    ..setNavigationDelegate(NavigationDelegate());
+  // Awaited one by one rather than cascaded: each setter returns a future, and
+  // a cascade drops them, so a failure would vanish and the load below could
+  // race ahead of the settings it depends on.
+  await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+  await controller.setBackgroundColor(Colors.black);
+  await controller.setUserAgent(
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
+    'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
+    'Mobile/15E148 Safari/604.1',
+  );
+  await controller.setNavigationDelegate(NavigationDelegate());
+
+  final platformController = controller.platform;
+  if (platformController is AndroidWebViewController) {
+    // Android blocks playback started by script or by an autoplay attribute
+    // until this is false, so the player would sit on its first frame.
+    await platformController.setMediaPlaybackRequiresUserGesture(false);
+  }
 
   final videoId = _extractTikTokVideoId(videoUrl);
   final playerUrl = videoId == null
       ? videoUrl
       : 'https://www.tiktok.com/player/v1/$videoId?autoplay=1&controls=1&volume_control=1&muted=0&music_info=1&description=1&timestamp=1&rel=0&loop=1';
 
-  await controller.loadHtmlString(
-    _buildTikTokPlayerHtml(playerUrl),
-    baseUrl: 'https://www.tiktok.com',
-  );
+  // The player is loaded as the top-level document. Wrapping it in local HTML
+  // needs a baseUrl, and claiming `https://www.tiktok.com` for a page TikTok
+  // did not serve makes the player refuse with its own "Player error" screen.
+  await controller.loadRequest(Uri.parse(playerUrl));
 
   return controller;
 }
@@ -2815,24 +2501,15 @@ class _TikTokPlayerScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Align(
                   alignment: Alignment.topRight,
-                  child: GestureDetector(
+                  child: GlassCircleButton(
+                    icon: Icons.close_rounded,
+                    size: kUtilityButtonSize,
+                    background: Colors.black.withValues(alpha: 0.48),
+                    // A WebView platform view cannot be blurred by a
+                    // BackdropFilter, so don't pay for one.
+                    frosted: false,
+                    semanticLabel: 'Close player',
                     onTap: () => Navigator.of(context).pop(),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.48),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.12),
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
                   ),
                 ),
               ),
@@ -2842,77 +2519,6 @@ class _TikTokPlayerScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-String _buildTikTokPlayerHtml(String playerUrl) {
-  return '''
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: #000;
-      }
-      .player {
-        position: relative;
-        width: 100%;
-        height: 100%;
-      }
-      iframe {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        border: 0;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="player">
-      <iframe
-        id="tiktok-player"
-        src="$playerUrl"
-        allow="autoplay; fullscreen; picture-in-picture"
-        allowfullscreen
-        scrolling="no"
-      ></iframe>
-    </div>
-    <script>
-      const iframe = document.getElementById('tiktok-player');
-      const sendCommand = (type) => {
-        if (!iframe || !iframe.contentWindow) {
-          return;
-        }
-
-        iframe.contentWindow.postMessage(
-          {
-            'x-tiktok-player': true,
-            type: type,
-            value: null,
-          },
-          '*',
-        );
-      };
-
-      const startPlayback = () => {
-        sendCommand('unMute');
-        sendCommand('play');
-      };
-
-      iframe.addEventListener('load', () => {
-        setTimeout(startPlayback, 400);
-        setTimeout(startPlayback, 1200);
-      });
-    </script>
-  </body>
-</html>
-''';
 }
 
 class _ReviewCarousel extends StatefulWidget {
@@ -3019,11 +2625,11 @@ class _ReviewCarouselState extends State<_ReviewCarousel> {
               children: [
                 Text(
                   'Swipe for more reviews',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.65),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 9,
-                      ),
+                  style: glassOverlineStyle(context).copyWith(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
                 ),
                 _ReviewDots(
                     count: widget.reviews.length, activeIndex: _pageIndex),
@@ -3050,7 +2656,7 @@ class _ReviewCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(kRadiusPanel),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.10),
         ),
@@ -3088,6 +2694,8 @@ class _ReviewCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   snippet.text,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.white.withValues(alpha: 0.90),
                         height: 1.35,
@@ -3123,7 +2731,7 @@ class _ReviewDots extends StatelessWidget {
           margin: EdgeInsets.only(right: index == count - 1 ? 0 : 4),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: isActive ? 0.95 : 0.30),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kRadiusPill),
           ),
         );
       }),
@@ -3155,7 +2763,7 @@ class _ImageProgressDots extends StatelessWidget {
           margin: EdgeInsets.only(right: index == count - 1 ? 0 : 5),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: isActive ? 0.95 : 0.35),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kRadiusPill),
           ),
         );
       }),
@@ -3163,97 +2771,9 @@ class _ImageProgressDots extends StatelessWidget {
   }
 }
 
-/*
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _FloatingIconButton(
-          icon: icon,
-          onTap: onTap,
-          color: label == 'Like'
-              ? const Color(0xFF1F9D55)
-              : const Color(0xFFE25555),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FloatingIconButton extends StatelessWidget {
-  const _FloatingIconButton({
-    required this.icon,
-    required this.onTap,
-    this.color,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final background = color ?? Colors.white.withValues(alpha: 0.16);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Material(
-          color: background,
-          child: InkWell(
-            onTap: onTap,
-            child: Container(
-              width: 56,
-              height: 56,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.14),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-*/
-
 class _SwipeCardData {
   const _SwipeCardData({
+    required this.id,
     required this.title,
     required this.tag,
     required this.details,
@@ -3268,6 +2788,7 @@ class _SwipeCardData {
     this.videoUrl,
   });
 
+  final int id;
   final String title;
   final String tag;
   final String details;
@@ -3294,6 +2815,7 @@ class _ReviewSnippet {
 
 class RestaurantDetailData {
   const RestaurantDetailData({
+    required this.id,
     required this.title,
     required this.tag,
     required this.details,
@@ -3304,10 +2826,12 @@ class RestaurantDetailData {
     required this.reviewName,
     required this.reviewText,
     required this.imageUrls,
+    this.videoUrl,
   });
 
   factory RestaurantDetailData.fromPayload(Map<String, dynamic> payload) {
     return RestaurantDetailData(
+      id: (payload['id'] as num?)?.toInt() ?? 0,
       title: payload['title'] as String? ?? 'Restaurant',
       tag: payload['tag'] as String? ?? '',
       details: payload['details'] as String? ?? '',
@@ -3320,9 +2844,11 @@ class RestaurantDetailData {
       imageUrls: (payload['imageUrls'] as List<dynamic>? ?? const [])
           .map((value) => value.toString())
           .toList(),
+      videoUrl: payload['videoUrl'] as String?,
     );
   }
 
+  final int id;
   final String title;
   final String tag;
   final String details;
@@ -3333,11 +2859,13 @@ class RestaurantDetailData {
   final String reviewName;
   final String reviewText;
   final List<String> imageUrls;
+  final String? videoUrl;
 }
 
 extension _SwipeCardDataPayload on _SwipeCardData {
   Map<String, dynamic> toDetailPayload() {
     return {
+      'id': id,
       'title': title,
       'tag': tag,
       'details': details,
@@ -3365,20 +2893,96 @@ class RestaurantDetailPage extends StatefulWidget {
   State<RestaurantDetailPage> createState() => _RestaurantDetailPageState();
 }
 
-class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
-  Position? _userPosition;
-  String? _distanceStatus;
+class _RestaurantDetailPageState extends State<RestaurantDetailPage>
+    with _UserPositionState {
+  int _heroIndex = 0;
+  final GlobalKey _locationKey = GlobalKey();
+  final GlobalKey _reviewKey = GlobalKey();
+  String? _placeName;
+
+  bool get _liked => LikesController.instance.isLiked(widget.data.id);
 
   @override
   void initState() {
     super.initState();
-    _userPosition = _dummyUserPosition();
+    _resolveUserPosition();
+    _resolvePlaceName();
+    LikesController.instance.addListener(_onLikesChanged);
+    // Best-effort: an unreachable backend leaves the heart empty, and the
+    // toggle below surfaces its own error if the user then taps it.
+    LikesController.instance.ensureLoaded().catchError((Object error) {
+      debugPrint('Likes load failed: $error');
+    });
+  }
+
+  @override
+  void dispose() {
+    LikesController.instance.removeListener(_onLikesChanged);
+    super.dispose();
+  }
+
+  void _onLikesChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _resolvePlaceName() async {
+    final name = await resolvePlaceNameForCoordinates(
+      widget.data.latitude,
+      widget.data.longitude,
+    );
+    if (!mounted || name == null) {
+      return;
+    }
+    setState(() {
+      _placeName = name;
+    });
+  }
+
+  Future<void> _openDirections() async {
+    final opened = await openDirections(
+      latitude: widget.data.latitude,
+      longitude: widget.data.longitude,
+      label: widget.data.title,
+    );
+    if (opened || !mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open maps for this place.')),
+    );
+  }
+
+  Future<void> _toggleLike() async {
+    final likes = LikesController.instance;
+    try {
+      if (likes.isLiked(widget.data.id)) {
+        await likes.unlike(widget.data.id, source: 'detail');
+      } else {
+        await likes.like(widget.data.id, source: 'detail');
+      }
+    } catch (error) {
+      debugPrint('Like toggle failed: $error');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save that change.')),
+      );
+    }
   }
 
   String _distanceLabel() {
     final userPosition = _userPosition;
     if (userPosition == null) {
-      return _distanceStatus ?? 'Distance loading';
+      return 'Distance loading';
+    }
+
+    if (!hasMapFix(widget.data.latitude, widget.data.longitude)) {
+      // Measuring to the 0,0 sentinel reports the distance to Null Island,
+      // which reads as a real answer.
+      return 'Distance unknown';
     }
 
     final meters = Geolocator.distanceBetween(
@@ -3399,178 +3003,539 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     return '${meters.toStringAsFixed(0)} m away';
   }
 
+  void _scrollToSection(GlobalKey key) {
+    final context = key.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: 0.08,
+    );
+  }
+
+  Widget _heroPlaceholder() {
+    return TikTokThumbnailPlaceholder(
+      creatorHandle: tiktokCreatorHandle(widget.data.videoUrl),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final imageUrls = widget.data.imageUrls;
+    final heroIndex =
+        imageUrls.isEmpty ? 0 : _heroIndex.clamp(0, imageUrls.length - 1);
+    final heroUrl = imageUrls.isEmpty ? null : imageUrls[heroIndex];
+    final videoUrl = widget.data.videoUrl;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0F14),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(widget.data.title),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.screenPadding,
-          8,
-          AppSpacing.screenPadding,
-          24,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: AspectRatio(
-                aspectRatio: 1.45,
-                child: Image.network(
-                  widget.data.imageUrls.isNotEmpty
-                      ? widget.data.imageUrls.first
-                      : 'https://via.placeholder.com/800x500',
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.data.title,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
+      backgroundColor: kBackgroundDark,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Hero image pinned behind the scrolling content.
+          Positioned.fill(
+            child: heroUrl == null
+                ? _heroPlaceholder()
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: SizedBox.expand(
+                      key: ValueKey(heroUrl),
+                      child: Image.network(
+                        heroUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return _heroPlaceholder();
+                        },
+                      ),
+                    ),
                   ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              widget.data.details,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.72),
-                    height: 1.4,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+          ),
+          const PhotoWash(),
+          const PhotoTopScrim(),
+          const PhotoBottomScrim(),
+          SingleChildScrollView(
+            child: Column(
               children: [
-                _DetailChip(
-                  icon: Icons.star_rounded,
-                  label: widget.data.rating.toStringAsFixed(1),
-                ),
-                _DetailChip(
-                  icon: Icons.place_rounded,
-                  label: _distanceLabel(),
-                ),
-                if (widget.data.tag.isNotEmpty)
-                  _DetailChip(
-                    icon: Icons.local_dining_rounded,
-                    label: widget.data.tag,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _DetailCard(
-              title: 'More photos',
-              child: Column(
-                children: widget.data.imageUrls
-                    .map(
-                      (imageUrl) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: AspectRatio(
-                            aspectRatio: 1.7,
-                            child: Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
+                SizedBox(
+                  height: MediaQuery.sizeOf(context).height,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                      child: Column(
+                        children: [
+                          const Spacer(),
+                          Text.rich(
+                            TextSpan(
+                              text: widget.data.title,
+                              style: glassTitleStyle(context),
+                              children: [
+                                if (ratingLabel(widget.data.rating) != '–')
+                                  TextSpan(
+                                    text:
+                                        '  ${ratingLabel(widget.data.rating)}',
+                                    style: glassTitleMutedStyle(context),
+                                  ),
+                              ],
                             ),
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.place_rounded,
+                                color: kTextOnPhotoSecondary,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  _distanceLabel(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: glassPlaceStyle(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              if (ratingLabel(widget.data.rating) != '–')
+                                GlassChip(
+                                  icon: Icons.star_rounded,
+                                  label: ratingLabel(widget.data.rating),
+                                ),
+                              if (widget.data.tag.isNotEmpty)
+                                GlassChip(
+                                  icon: Icons.local_dining_rounded,
+                                  label: widget.data.tag,
+                                ),
+                              if (videoUrl != null && videoUrl.isNotEmpty)
+                                const GlassChip(
+                                  icon: Icons.music_note_rounded,
+                                  label: 'TikTok Review',
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 22),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              GlassCircleButton(
+                                icon: Icons.favorite_rounded,
+                                iconColor: _liked ? kAccentLime : kTextOnPhoto,
+                                semanticLabel: _liked ? 'Liked' : 'Like',
+                                onTap: _toggleLike,
+                              ),
+                              GlassCircleButton(
+                                icon: Icons.chat_bubble_rounded,
+                                semanticLabel: 'Reviews',
+                                onTap: () => _scrollToSection(_reviewKey),
+                              ),
+                              GlassCircleButton(
+                                icon: Icons.route_rounded,
+                                semanticLabel: 'Location',
+                                onTap: () => _scrollToSection(_locationKey),
+                              ),
+                              GlassCircleButton(
+                                icon: Icons.close_rounded,
+                                semanticLabel: 'Close',
+                                onTap: () => Navigator.of(context).maybePop(),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  color: kBackgroundDark,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    20,
+                    AppSpacing.screenPadding,
+                    32,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.data.details,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.72),
+                              height: 1.4,
+                            ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (widget.data.imageUrls.isNotEmpty) ...[
+                        _DetailCard(
+                          title: 'More photos',
+                          child: Column(
+                            children: widget.data.imageUrls
+                                .map(
+                                  (imageUrl) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: ClipRRect(
+                                      borderRadius:
+                                          BorderRadius.circular(kRadiusThumb),
+                                      child: AspectRatio(
+                                        aspectRatio: 1.7,
+                                        child: Image.network(
+                                          imageUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return TikTokThumbnailPlaceholder(
+                                              creatorHandle:
+                                                  tiktokCreatorHandle(
+                                                widget.data.videoUrl,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      KeyedSubtree(
+                        key: _locationKey,
+                        child: _DetailCard(
+                          title: 'Location',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.location_pin,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (_placeName != null) ...[
+                                          Text(
+                                            _placeName!,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                        ],
+                                        Text(
+                                          hasMapFix(
+                                            widget.data.latitude,
+                                            widget.data.longitude,
+                                          )
+                                              ? '${_distanceLabel()} from your '
+                                                  'location'
+                                              : 'No location on file for this '
+                                                  'place',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.78),
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (hasMapFix(
+                                widget.data.latitude,
+                                widget.data.longitude,
+                              )) ...[
+                                const SizedBox(height: 12),
+                                _DirectionsButton(onTap: _openDirections),
+                              ],
+                            ],
                           ),
                         ),
                       ),
-                    )
-                    .toList(),
+                      const SizedBox(height: 12),
+                      KeyedSubtree(
+                        key: _reviewKey,
+                        child: _DetailCard(
+                          title: 'Top review',
+                          child: widget.data.reviewText.isEmpty
+                              ? Text(
+                                  'No reviews yet',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.66),
+                                      ),
+                                )
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.data.reviewName,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.68),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      widget.data.reviewText,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            height: 1.35,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Fixed top controls: back, photo switcher, video.
+          // Positioned rather than a plain Stack child: StackFit.expand would
+          // stretch this row to the full screen height, centring the controls
+          // vertically and letting the invisible row swallow drags meant for
+          // the scroll view underneath.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Row(
+                  children: [
+                    GlassCircleButton(
+                      icon: Icons.arrow_back_rounded,
+                      size: kUtilityButtonSize,
+                      background: Colors.black.withValues(alpha: 0.34),
+                      semanticLabel: 'Back',
+                      onTap: () => Navigator.of(context).maybePop(),
+                    ),
+                    Expanded(
+                      child: imageUrls.length > 1
+                          ? Center(
+                              child: _HeroThumbnailStrip(
+                                imageUrls: imageUrls,
+                                activeIndex: heroIndex,
+                                onSelected: (index) {
+                                  setState(() {
+                                    _heroIndex = index;
+                                  });
+                                },
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    if (videoUrl != null && videoUrl.isNotEmpty)
+                      GlassCircleButton(
+                        icon: Icons.play_arrow_rounded,
+                        size: kUtilityButtonSize,
+                        background: Colors.black.withValues(alpha: 0.34),
+                        semanticLabel: 'Watch TikTok review',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  _TikTokPlayerScreen(videoUrl: videoUrl),
+                            ),
+                          );
+                        },
+                      )
+                    else
+                      const SizedBox(width: kUtilityButtonSize),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            _DetailCard(
-              title: 'Location',
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.location_pin, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '${_distanceLabel()} from your location',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.78),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Top-center photo switcher from the reference design: a frosted pill of
+/// mini thumbnails; the active one gets an accent ring.
+class _HeroThumbnailStrip extends StatelessWidget {
+  const _HeroThumbnailStrip({
+    required this.imageUrls,
+    required this.activeIndex,
+    required this.onSelected,
+  });
+
+  final List<String> imageUrls;
+  final int activeIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = imageUrls.length > 5 ? imageUrls.sublist(0, 5) : imageUrls;
+
+    // Five 36px thumbnails need ~216px, more than the slot between the back
+    // and play buttons on a 320pt-wide phone. Shrink the pill to fit instead
+    // of overflowing it off the right edge.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: _pill(visible),
+    );
+  }
+
+  Widget _pill(List<String> visible) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(kRadiusPill),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(
+          sigmaX: kGlassBlurSigma,
+          sigmaY: kGlassBlurSigma,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.34),
+            borderRadius: BorderRadius.circular(kRadiusPill),
+            border: Border.all(color: kGlassBorder),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < visible.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(left: i == 0 ? 0 : 6),
+                  // Matches _StripThumb on the Like tab: screen readers need
+                  // to know these photo swatches are buttons.
+                  child: Semantics(
+                    label: 'Photo ${i + 1} of ${visible.length}',
+                    button: true,
+                    selected: i == activeIndex,
+                    child: GestureDetector(
+                      onTap: () => onSelected(i),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(kRadiusPill),
+                          border: Border.all(
+                            color: i == activeIndex
+                                ? kAccentLime
+                                : Colors.transparent,
+                            width: 2,
                           ),
+                        ),
+                        child: ClipOval(
+                          child: Image.network(
+                            visible[i],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const ColoredBox(
+                                color: kGlassFill,
+                                child: Icon(
+                                  Icons.image_not_supported_rounded,
+                                  color: Colors.white54,
+                                  size: 16,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _DetailCard(
-              title: 'Top review',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.data.reviewName,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.68),
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.data.reviewText,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white,
-                          height: 1.35,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _DetailChip extends StatelessWidget {
-  const _DetailChip({
-    required this.icon,
-    required this.label,
-  });
+class _DirectionsButton extends StatelessWidget {
+  const _DirectionsButton({required this.onTap});
 
-  final IconData icon;
-  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+    return SizedBox(
+      width: double.infinity,
+      child: Material(
+        color: kAccentLime,
+        borderRadius: BorderRadius.circular(kRadiusPill),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(kRadiusPill),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.directions_rounded,
+                  size: 18,
+                  color: kOnAccentLime,
                 ),
+                const SizedBox(width: 8),
+                // Flexible, or a large accessibility text scale pushes the
+                // label past the button's edge instead of ellipsising.
+                Flexible(
+                  child: Text(
+                    'Get directions',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: kOnAccentLime,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -3591,20 +3556,14 @@ class _DetailCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF141922),
-        borderRadius: BorderRadius.circular(20),
+        color: kSurfacePanel,
+        borderRadius: BorderRadius.circular(kRadiusPanel),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
+          Text(title, style: glassPanelTitleStyle(context)),
           const SizedBox(height: 10),
           child,
         ],
