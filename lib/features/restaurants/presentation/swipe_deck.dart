@@ -157,6 +157,11 @@ class _SwipeDeckState extends State<SwipeDeck>
         PageRouteBuilder<void>(
           opaque: true,
           barrierDismissible: false,
+          // Popping resolves this future as the reverse transition starts, so
+          // the card remounts the player while a fading fullscreen route still
+          // holds it — the two-mounts-one-controller state this handover
+          // exists to avoid. Leaving on the same frame keeps them exclusive.
+          reverseTransitionDuration: Duration.zero,
           pageBuilder: (context, animation, secondaryAnimation) {
             return TikTokPlayerScreen(
               videoUrl: videoUrl,

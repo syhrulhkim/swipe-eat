@@ -210,20 +210,32 @@ handles offline writes properly — real capability, real cost. PowerSync's own
 guidance is that it is overkill when all you need is caching. Revisit only if
 offline use becomes a product requirement rather than a nicety.
 
-## 7. Suggested order
+## 7. Status
 
-| Phase | Work | Rough size |
-| --- | --- | --- |
-| 0 | CI, README, password protection, `.gitignore`, commits | half a day |
-| 1 | `dashboard_page.dart` decomposition | two to three days |
-| 2 | TikTok player debt | one day |
-| 3 | Route by id, narrow the catches | half a day |
-| 4 | Sentry | half a day |
-| 5 | Offline cache | one day, optional |
+All six phases were delivered on 29–30 August 2026, on
+`feat/supabase-migration`, one commit per phase.
 
-Phases 0 and 2 are independent of everything else and can go first or in
-parallel. Phase 1 makes Phases 3 and 4 easier, because there will be a
-controller to put the error reporting in.
+| Phase | Work | Commit | Status |
+| --- | --- | --- | --- |
+| 0 | CI, README, `.gitignore`, lints | `3aa79ba` | Done |
+| 1 | `dashboard_page.dart` decomposition | `9fba039` | Done |
+| 2 | TikTok player debt | `e1953a6` | Done |
+| 3 | Route by id, narrow the catches | `1d9b25b` | Done |
+| 4 | Sentry | `f9bd299` | Done |
+| 5 | Offline cache | `a23dad7` | Done |
+
+Two items from Phase 0 are not code and remain open:
+
+- **Leaked-password protection** is a Supabase dashboard toggle
+  (Authentication → Providers → Email) and has to be turned on by hand.
+- **`SENTRY_DSN`** has to be created in Sentry and passed to release builds as
+  a `--dart-define`; with no DSN the app simply does not report, which is the
+  intended default for local runs and CI.
+
+Three behaviours are platform-level and were not exercised by
+`flutter analyze` or the test suite, so they want a device smoke test: the
+card-to-fullscreen player handover, Sentry initialisation with a real DSN, and
+the offline fallback in airplane mode.
 
 ## Sources
 
