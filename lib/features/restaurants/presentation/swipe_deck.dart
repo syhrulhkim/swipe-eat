@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/location/open_directions.dart';
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_lottie.dart';
+import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/rating_label.dart';
+import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../../auth/state/auth_controller.dart';
 import '../models/restaurant_card.dart';
 import '../state/deck_controller.dart';
@@ -46,6 +51,18 @@ class _SwipeDeckState extends State<SwipeDeck>
   Offset _dragOffset = Offset.zero;
   bool _infoExpanded = false;
 
+  /// Drives the intermittent match moment on ordinary likes.
+  final math.Random _random = math.Random();
+
+  /// Decided when the fly-out starts, published to [_matchCard] when it
+  /// finishes — the overlay must not appear over a card still in flight.
+  RestaurantCard? _pendingMatchCard;
+  bool _pendingMatchSuper = false;
+
+  /// The restaurant the match overlay is celebrating, if it is up.
+  RestaurantCard? _matchCard;
+  bool _matchIsSuper = false;
+
   /// The clip the fullscreen route is currently showing, if any. The card
   /// underneath must not mount the same controller at the same time.
   String? _fullscreenVideoUrl;
@@ -71,6 +88,11 @@ class _SwipeDeckState extends State<SwipeDeck>
         _infoExpanded = false;
         _reviewInteractionActive = false;
         _motionType = _SwipeMotionType.idle;
+        if (_pendingMatchCard != null) {
+          _matchCard = _pendingMatchCard;
+          _matchIsSuper = _pendingMatchSuper;
+          _pendingMatchCard = null;
+        }
       });
 
       _motionController.reset();
@@ -104,7 +126,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
-  void _animateOut(bool liked) {
+  void _animateOut({required bool liked, bool superLike = false}) {
     final card = _deck.current;
     if (card == null || _motionType != _SwipeMotionType.idle) {
       return;
@@ -112,20 +134,30 @@ class _SwipeDeckState extends State<SwipeDeck>
 
     // Optimistic: the card flies out immediately and the write follows behind
     // it.
-    unawaited(_deck.recordSwipe(card, liked: liked));
+    unawaited(_deck.recordSwipe(card, liked: liked, superLike: superLike));
+
+    // A super like always earns the moment — it is the emphatic yes. An
+    // ordinary like gets it roughly one time in four: Tinder does not stop
+    // the flow on every right-swipe, and neither should the deck.
+    final celebrate = superLike || (liked && _random.nextInt(4) == 0);
+    _pendingMatchCard = celebrate ? card : null;
+    _pendingMatchSuper = superLike;
 
     setState(() {
       _motionType = _SwipeMotionType.swipeOut;
       _animationStartOffset = _dragOffset;
-      _animationEndOffset = Offset(liked ? 460 : -460, -220);
+      // A super like flies up, off the top — its gesture's direction.
+      _animationEndOffset =
+          superLike ? const Offset(0, -900) : Offset(liked ? 460 : -460, -220);
     });
 
     _motionController.forward(from: 0);
   }
 
-  /// A tap on the pass/like button, which starts from a resting card rather
-  /// than a drag, so it nudges the card first to give the fly-out a direction.
-  void _triggerAction(bool liked) {
+  /// A tap on the pass/like/super-like button, which starts from a resting
+  /// card rather than a drag, so it nudges the card first to give the fly-out
+  /// a direction.
+  void _triggerAction({required bool liked, bool superLike = false}) {
     if (_deck.current == null || _motionType != _SwipeMotionType.idle) {
       return;
     }
@@ -133,10 +165,33 @@ class _SwipeDeckState extends State<SwipeDeck>
     setState(() {
       _motionController.stop();
       _motionType = _SwipeMotionType.idle;
-      _dragOffset = Offset(liked ? 14 : -14, -1);
+      _dragOffset =
+          superLike ? const Offset(0, -14) : Offset(liked ? 14 : -14, -1);
     });
 
-    _animateOut(liked);
+    _animateOut(liked: liked, superLike: superLike);
+  }
+
+  /// Takes back the last swipe. The await chain lives in the controller; here
+  /// only the drag state is reset so the returning card lands at rest.
+  Future<void> _rewind() async {
+    if (_motionType != _SwipeMotionType.idle) {
+      return;
+    }
+
+    final restored = await _deck.rewind();
+    if (!restored || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _dragOffset = Offset.zero;
+      _infoExpanded = false;
+      // A rewind is a "wait, no" — any celebration of the swipe it undoes
+      // would ring false.
+      _pendingMatchCard = null;
+      _matchCard = null;
+    });
   }
 
   Future<void> _openVideoPlayer(RestaurantCard data) async {
@@ -206,7 +261,13 @@ class _SwipeDeckState extends State<SwipeDeck>
               progress,
             ) ??
             _dragOffset;
-    final dragPercentage = (offset.dx.abs() / 260).clamp(0.0, 1.0);
+    // During a fly-out the travel may be vertical (super like), so the frame
+    // measures full distance; a drag measures dx only, because vertical drag
+    // alone must not read as swipe progress.
+    final travel = _motionType == _SwipeMotionType.swipeOut
+        ? offset.distance
+        : offset.dx.abs();
+    final dragPercentage = (travel / 260).clamp(0.0, 1.0);
 
     return _MotionFrame(
       progress: progress,
@@ -250,6 +311,8 @@ class _SwipeDeckState extends State<SwipeDeck>
     required String title,
     required String subtitle,
     required String actionLabel,
+    String? secondaryActionLabel,
+    VoidCallback? onSecondaryAction,
     AppMotion? art,
   }) {
     return _deckMessage(
@@ -259,6 +322,8 @@ class _SwipeDeckState extends State<SwipeDeck>
         message: subtitle,
         actionLabel: actionLabel,
         onAction: () => unawaited(_deck.load()),
+        secondaryActionLabel: secondaryActionLabel,
+        onSecondaryAction: onSecondaryAction,
         // Played once, not looped: the state is standing still, and art that
         // keeps moving on it reads as work in progress.
         art: art == null
@@ -272,7 +337,25 @@ class _SwipeDeckState extends State<SwipeDeck>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _deck,
-      builder: (context, _) => _buildDeck(context),
+      builder: (context, _) {
+        final matchCard = _matchCard;
+
+        // The overlay sits above whatever the deck is showing — including
+        // the exhausted state, which the last card's like may have caused.
+        return Stack(
+          children: [
+            _buildDeck(context),
+            if (matchCard != null)
+              Positioned.fill(
+                child: _MatchOverlay(
+                  card: matchCard,
+                  isSuperLike: _matchIsSuper,
+                  onDismiss: () => setState(() => _matchCard = null),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -312,6 +395,11 @@ class _SwipeDeckState extends State<SwipeDeck>
         title: 'No more cards',
         subtitle: 'Reload to keep swiping.',
         actionLabel: 'Reload deck',
+        // Rewind still works from the empty deck: it brings the very last
+        // card back, exactly as Tinder does.
+        secondaryActionLabel: _deck.canRewind ? 'Rewind last swipe' : null,
+        onSecondaryAction:
+            _deck.canRewind ? () => unawaited(_rewind()) : null,
         art: AppMotion.heart,
       );
     }
@@ -406,13 +494,20 @@ class _SwipeDeckState extends State<SwipeDeck>
       onPanEnd: gesturesLocked
           ? null
           : (details) {
+              // Up-swipe is the super like, as on Tinder. Checked first, and
+              // only when the drag is not already a committed left/right.
+              if (_dragOffset.dy < -140 && _dragOffset.dx.abs() < 110) {
+                _animateOut(liked: true, superLike: true);
+                return;
+              }
+
               if (_dragOffset.dx > 110) {
-                _animateOut(true);
+                _animateOut(liked: true);
                 return;
               }
 
               if (_dragOffset.dx < -110) {
-                _animateOut(false);
+                _animateOut(liked: false);
                 return;
               }
 
@@ -469,8 +564,10 @@ class _SwipeDeckState extends State<SwipeDeck>
             });
           },
           onReviewInteractionChanged: _setReviewInteractionActive,
-          onPass: () => _triggerAction(false),
-          onLike: () => _triggerAction(true),
+          onPass: () => _triggerAction(liked: false),
+          onLike: () => _triggerAction(liked: true),
+          onSuperLike: () => _triggerAction(liked: true, superLike: true),
+          onRewind: _deck.canRewind ? () => unawaited(_rewind()) : null,
         ),
       ),
     );
@@ -560,6 +657,123 @@ class DeckHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The match moment: a full-screen take-over after a like the deck decides to
+/// celebrate, and after every super like. A restaurant cannot swipe back, so
+/// this is honest about what it is — a nudge to actually go — rather than a
+/// faked reciprocity.
+class _MatchOverlay extends StatelessWidget {
+  const _MatchOverlay({
+    required this.card,
+    required this.isSuperLike,
+    required this.onDismiss,
+  });
+
+  final RestaurantCard card;
+  final bool isSuperLike;
+  final VoidCallback onDismiss;
+
+  Future<void> _openDirections(BuildContext context) async {
+    final opened = await openDirections(
+      latitude: card.latitude,
+      longitude: card.longitude,
+      label: card.title,
+    );
+    if (opened || !context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open maps for this place.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canRoute = hasMapFix(card.latitude, card.longitude);
+
+    // Fades and settles in once; a finite animation, so tests can pump it to
+    // rest.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(opacity: t, child: child),
+      // Opaque and gesture-absorbing: nothing under it may take a tap.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {},
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: kBackgroundDark),
+            if (card.imageUrls.isNotEmpty)
+              Image.network(
+                card.imageUrls.first,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    TikTokThumbnailPlaceholder(
+                  creatorHandle: tiktokCreatorHandle(card.videoUrl),
+                ),
+              )
+            else
+              TikTokThumbnailPlaceholder(
+                creatorHandle: tiktokCreatorHandle(card.videoUrl),
+              ),
+            const PhotoWash(),
+            const PhotoBottomScrim(),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Spacer(),
+                    AppEyebrow(
+                      label: isSuperLike ? 'Must try' : "It's a match",
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      card.title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: appTitleStyle(context),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isSuperLike
+                          ? 'Starred and saved to your likes — this one jumps '
+                              'the queue.'
+                          : 'Saved to your likes. Go while the craving is hot.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: kTextOnPhotoSecondary,
+                            height: 1.35,
+                          ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    if (canRoute) ...[
+                      AppPrimaryButton(
+                        label: 'Get directions',
+                        icon: Icons.directions_rounded,
+                        expand: true,
+                        onPressed: () => unawaited(_openDirections(context)),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    AppSecondaryButton(
+                      label: 'Keep swiping',
+                      expand: true,
+                      onPressed: onDismiss,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

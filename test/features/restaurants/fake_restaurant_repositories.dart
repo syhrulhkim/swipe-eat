@@ -90,12 +90,14 @@ class SwipeCall {
     required this.restaurantId,
     required this.liked,
     required this.source,
+    this.superLike = false,
     this.latitude,
     this.longitude,
   });
 
   final int restaurantId;
   final bool liked;
+  final bool superLike;
   final String source;
   final double? latitude;
   final double? longitude;
@@ -103,17 +105,24 @@ class SwipeCall {
 
 class FakeSwipeRepository implements SwipeRepository {
   final List<SwipeCall> calls = [];
+
+  /// Restaurant ids handed to [undo], in call order.
+  final List<int> undoCalls = [];
+
   bool fail = false;
+  bool failUndo = false;
 
   /// Lets a test act as the backend: e.g. mirror a successful swipe into a
   /// [FakeRestaurantRepository.likedRows] so the follow-up refresh agrees
   /// with the optimistic update, the way the real swipes table would.
   void Function(SwipeCall call)? onRecord;
+  void Function(int restaurantId)? onUndo;
 
   @override
   Future<void> record({
     required int restaurantId,
     required bool liked,
+    bool superLike = false,
     String source = 'deck',
     double? latitude,
     double? longitude,
@@ -124,6 +133,7 @@ class FakeSwipeRepository implements SwipeRepository {
     final call = SwipeCall(
       restaurantId: restaurantId,
       liked: liked,
+      superLike: superLike,
       source: source,
       latitude: latitude,
       longitude: longitude,
@@ -131,22 +141,36 @@ class FakeSwipeRepository implements SwipeRepository {
     calls.add(call);
     onRecord?.call(call);
   }
+
+  @override
+  Future<void> undo({required int restaurantId}) async {
+    if (failUndo) {
+      throw Exception('undo refused');
+    }
+    undoCalls.add(restaurantId);
+    onUndo?.call(restaurantId);
+  }
 }
 
 /// Wires the two fakes together so they behave like one backend: a recorded
 /// like inserts the restaurant at the top of [restaurants.likedRows], an
-/// unlike removes it — mirroring `record_swipe` + `get_liked_restaurants`.
+/// unlike or an undo removes it — mirroring `record_swipe` + `undo_swipe` +
+/// `get_liked_restaurants`.
 void wireFakeBackend(
   FakeRestaurantRepository restaurants,
   FakeSwipeRepository swipes,
 ) {
+  List<Restaurant> without(int restaurantId) => [
+        for (final row in restaurants.likedRows)
+          if (row.id != restaurantId) row,
+      ];
+
   swipes.onRecord = (call) {
-    final without = [
-      for (final row in restaurants.likedRows)
-        if (row.id != call.restaurantId) row,
-    ];
     restaurants.likedRows = call.liked
-        ? [testRestaurant(call.restaurantId), ...without]
-        : without;
+        ? [testRestaurant(call.restaurantId), ...without(call.restaurantId)]
+        : without(call.restaurantId);
+  };
+  swipes.onUndo = (restaurantId) {
+    restaurants.likedRows = without(restaurantId);
   };
 }

@@ -109,6 +109,12 @@ class DeckController extends ChangeNotifier {
   final StreamController<String> _messages = StreamController<String>.broadcast();
   Stream<String> get messages => _messages.stream;
 
+  /// Swipe writes still in flight, by restaurant id. [rewind] must wait for
+  /// the write it is undoing: swipes are optimistic, so an undo fired before
+  /// its write lands would delete nothing — and then the write would put the
+  /// row right back.
+  final Map<int, Future<void>> _pendingWrites = {};
+
   @override
   void dispose() {
     authController.removeListener(_onAuthChanged);
@@ -243,7 +249,31 @@ class DeckController extends ChangeNotifier {
   /// Records a swipe. Optimistic by design: the card has already flown out, so
   /// a failed write costs a toast and nothing else — the backend never saw the
   /// swipe, and the card simply resurfaces on a future deck.
-  Future<void> recordSwipe(RestaurantCard card, {required bool liked}) async {
+  ///
+  /// The returned future never throws; failures end at the toast.
+  Future<void> recordSwipe(
+    RestaurantCard card, {
+    required bool liked,
+    bool superLike = false,
+  }) {
+    late final Future<void> write;
+    write = _writeSwipe(card, liked: liked, superLike: superLike)
+        .whenComplete(() {
+      // Identity check: a re-swipe of the same restaurant (rewind, then swipe
+      // again) may already own the slot by the time this one settles.
+      if (identical(_pendingWrites[card.id], write)) {
+        _pendingWrites.remove(card.id);
+      }
+    });
+    _pendingWrites[card.id] = write;
+    return write;
+  }
+
+  Future<void> _writeSwipe(
+    RestaurantCard card, {
+    required bool liked,
+    required bool superLike,
+  }) async {
     final position = _userPosition;
     final hasRealPosition =
         position != null && !isFallbackUserPosition(position);
@@ -254,7 +284,12 @@ class DeckController extends ChangeNotifier {
       if (liked) {
         // Through the likes controller so the Like tab and any open detail
         // page update without their own round trip.
-        await _likes.like(card.id, latitude: latitude, longitude: longitude);
+        await _likes.like(
+          card.id,
+          superLike: superLike,
+          latitude: latitude,
+          longitude: longitude,
+        );
       } else {
         await _swipes.record(
           restaurantId: card.id,
@@ -269,6 +304,62 @@ class DeckController extends ChangeNotifier {
         _messages.add('Could not save that swipe.');
       }
     }
+  }
+
+  /// Whether there is a swipe to take back: something swiped from this deal,
+  /// and no reload in progress (a reload is about to re-deal from index 0).
+  bool get canRewind => _index > 0 && !_loading;
+
+  /// Takes back the most recent swipe: deletes its row server-side, then steps
+  /// the deck back so the card is on top again.
+  ///
+  /// Not optimistic, unlike the swipes themselves: stepping back before the
+  /// delete confirms would show a card the server still considers swiped, and
+  /// re-swiping it from that state gets confusing fast. Returns whether the
+  /// card came back.
+  Future<bool> rewind() async {
+    if (!canRewind) {
+      return false;
+    }
+    final generation = _loadGeneration;
+    final card = _cards[_index - 1];
+
+    // Wait out the optimistic write being undone (see [_pendingWrites]); it
+    // catches its own errors, so this await cannot throw.
+    final pending = _pendingWrites[card.id];
+    if (pending != null) {
+      await pending;
+    }
+
+    try {
+      await _swipes.undo(restaurantId: card.id);
+    } on Object catch (error) {
+      debugPrint('Undo swipe failed: $error');
+      if (!_messages.isClosed) {
+        _messages.add('Could not undo that swipe.');
+      }
+      return false;
+    }
+
+    // A reload may have re-dealt the deck during the awaits above; the delete
+    // still landed (the card will be dealt again), but this rewind's index no
+    // longer means anything.
+    if (generation != _loadGeneration) {
+      return false;
+    }
+
+    if (_index > 0) {
+      _index -= 1;
+      notifyListeners();
+    }
+
+    // The undone swipe may have been a like; the Like tab must forget it.
+    // Refreshed rather than surgically removed, because only the server knows
+    // whether the row existed at all.
+    unawaited(_likes.refresh().catchError((Object error) {
+      debugPrint('Likes refresh after rewind failed: $error');
+    }));
+    return true;
   }
 
   /// How far the user is from [card], phrased for the card's location row.

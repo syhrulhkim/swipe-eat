@@ -18,6 +18,8 @@ class AppEmptyState extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
     this.art,
   });
 
@@ -30,6 +32,11 @@ class AppEmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// A quieter second way out (the deck's "Rewind" under "Reload deck").
+  /// Same both-or-nothing rule as the primary pair.
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
+
   /// Sits above the text. Left null the state is type-only.
   final Widget? art;
 
@@ -37,6 +44,8 @@ class AppEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = actionLabel;
     final action = onAction;
+    final secondaryLabel = secondaryActionLabel;
+    final secondaryAction = onSecondaryAction;
 
     return Center(
       child: SingleChildScrollView(
@@ -69,6 +78,13 @@ class AppEmptyState extends StatelessWidget {
               if (label != null && action != null) ...[
                 const SizedBox(height: AppSpacing.lg),
                 AppPrimaryButton(label: label, onPressed: action),
+              ],
+              if (secondaryLabel != null && secondaryAction != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                AppSecondaryButton(
+                  label: secondaryLabel,
+                  onPressed: secondaryAction,
+                ),
               ],
             ],
           ),

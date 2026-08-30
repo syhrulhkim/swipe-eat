@@ -135,6 +135,7 @@ class LikesController extends ChangeNotifier {
   Future<void> like(
     int restaurantId, {
     String source = 'deck',
+    bool superLike = false,
     double? latitude,
     double? longitude,
   }) async {
@@ -146,6 +147,7 @@ class LikesController extends ChangeNotifier {
       await _swipeRepository.record(
         restaurantId: restaurantId,
         liked: true,
+        superLike: superLike,
         source: source,
         latitude: latitude,
         longitude: longitude,

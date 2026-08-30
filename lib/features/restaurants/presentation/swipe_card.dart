@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/location/open_directions.dart';
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
@@ -24,6 +25,8 @@ class SwipeCard extends StatefulWidget {
     this.videoHiddenForFullscreen = false,
     this.onPass,
     this.onLike,
+    this.onSuperLike,
+    this.onRewind,
     this.isBehind = false,
     this.likeOpacity = 0,
     this.nopeOpacity = 0,
@@ -47,6 +50,12 @@ class SwipeCard extends StatefulWidget {
   /// card is the one being dragged.
   final VoidCallback? onPass;
   final VoidCallback? onLike;
+
+  /// The Tinder extras. [onSuperLike] follows the same rule as [onPass];
+  /// [onRewind] is null both on the card behind and when there is nothing
+  /// swiped yet to take back — the button then renders dimmed and inert.
+  final VoidCallback? onSuperLike;
+  final VoidCallback? onRewind;
 
   final bool isBehind;
   final double likeOpacity;
@@ -166,49 +175,42 @@ class _SwipeCardState extends State<SwipeCard> {
                       ),
                     ),
                   ),
+                // The Figma's bottom panel: an opaque grey card carrying the
+                // name, the rating block, the fact chips and — on the top
+                // card — the action bar, all in one rounded surface.
                 Positioned(
-                  left: 18,
-                  right: 18,
+                  left: 14,
+                  right: 14,
                   bottom: AppSpacing.screenPadding + 2,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      RestaurantInfoPanel(
-                        data: widget.data,
-                        expanded: widget.infoExpanded,
-                        ratingText: widget.ratingText,
-                        distanceText: widget.distanceText,
-                        onTap: widget.onInfoTap,
-                        onReviewInteractionChanged:
-                            widget.onReviewInteractionChanged,
-                      ),
-                      if (widget.onPass != null && widget.onLike != null) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            AppCircleButton(
-                              icon: Icons.close_rounded,
-                              size: kActionButtonSize,
-                              semanticLabel: 'Pass',
-                              onTap: widget.onPass!,
-                            ),
-                            // Cream, like every other primary action: liking
-                            // is what the deck is asking for, and passing is
-                            // the way out of it.
-                            AppCircleButton(
-                              icon: Icons.favorite_rounded,
-                              size: kActionButtonSize,
-                              background: kAccentCream,
-                              iconColor: kOnAccent,
-                              semanticLabel: 'Like',
-                              onTap: widget.onLike!,
-                            ),
-                          ],
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: kSurfacePanel,
+                      borderRadius: BorderRadius.circular(kRadiusSheet),
+                      border: Border.all(color: kHairline),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        RestaurantInfoPanel(
+                          data: widget.data,
+                          expanded: widget.infoExpanded,
+                          ratingText: widget.ratingText,
+                          distanceText: widget.distanceText,
+                          onTap: widget.onInfoTap,
+                          onReviewInteractionChanged:
+                              widget.onReviewInteractionChanged,
                         ),
+                        if (widget.onPass != null &&
+                            widget.onLike != null) ...[
+                          const SizedBox(height: 14),
+                          Container(height: 1, color: kHairline),
+                          const SizedBox(height: 14),
+                          _buildActionBar(),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -216,6 +218,64 @@ class _SwipeCardState extends State<SwipeCard> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The Figma's "✕ Pass | Like" bar, flanked by the two Tinder extras:
+  /// rewind on the far left, the super-like star between the pills.
+  Widget _buildActionBar() {
+    final rewind = widget.onRewind;
+
+    return Row(
+      children: [
+        // Inert-but-visible when there is nothing to take back, so the
+        // control keeps its place in the bar instead of popping in after the
+        // first swipe.
+        IgnorePointer(
+          ignoring: rewind == null,
+          child: Opacity(
+            opacity: rewind == null ? 0.4 : 1,
+            child: AppCircleButton(
+              icon: Icons.replay_rounded,
+              size: kUtilityButtonSize,
+              iconSize: 20,
+              onPhoto: false,
+              background: kSurfaceDark,
+              semanticLabel: 'Rewind',
+              onTap: rewind ?? () {},
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: AppSecondaryButton(
+            label: 'Pass',
+            icon: Icons.close_rounded,
+            expand: true,
+            onPressed: widget.onPass,
+          ),
+        ),
+        const SizedBox(width: 10),
+        AppCircleButton(
+          icon: Icons.star_rounded,
+          size: kUtilityButtonSize,
+          iconSize: 22,
+          iconColor: kAccentEmber,
+          onPhoto: false,
+          background: kSurfaceDark,
+          semanticLabel: 'Must try',
+          onTap: widget.onSuperLike ?? () {},
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: AppPrimaryButton(
+            label: 'Like',
+            icon: Icons.favorite_rounded,
+            expand: true,
+            onPressed: widget.onLike,
+          ),
+        ),
+      ],
     );
   }
 
@@ -358,6 +418,10 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
 
   @override
   Widget build(BuildContext context) {
+    // Unrated restaurants render ratingLabel's '–', which would put a bare
+    // dash in the rating block — the block only appears for real ratings.
+    final hasRating = widget.ratingText.trim() != '–';
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -376,11 +440,51 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
                   : const SizedBox.shrink(),
             ),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _CategoryBadge(
-                  label: widget.data.tag,
-                  accent: widget.data.color,
+                Expanded(
+                  child: Text(
+                    widget.data.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: appTitleStyle(context),
+                  ),
                 ),
+                if (hasRating) ...[
+                  const SizedBox(width: 12),
+                  _RatingBlock(ratingText: widget.ratingText),
+                ],
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Flexible(
+                  child: AppChip(
+                    icon: Icons.place_rounded,
+                    label: widget.distanceText,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: AppChip(label: widget.data.tag),
+                ),
+                if (hasMapFix(widget.data.latitude, widget.data.longitude)) ...[
+                  const SizedBox(width: 8),
+                  // Its own tap target: the surrounding InkWell expands the
+                  // panel, and leaving directions to that gesture would open
+                  // maps every time the user peeked at the reviews.
+                  Flexible(
+                    child: GestureDetector(
+                      onTap: _openDirections,
+                      behavior: HitTestBehavior.opaque,
+                      child: const AppChip(
+                        label: 'Directions',
+                        icon: Icons.directions_rounded,
+                      ),
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 AnimatedRotation(
                   duration: const Duration(milliseconds: 180),
@@ -392,57 +496,6 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
                     size: 22,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text.rich(
-              TextSpan(
-                text: widget.data.title,
-                style: appTitleStyle(context),
-                children: [
-                  // Unrated restaurants render ratingLabel's '–', which reads
-                  // as a stray dash after the name — show real ratings only.
-                  if (widget.ratingText.trim() != '–')
-                    TextSpan(
-                      text: '  ${widget.ratingText}',
-                      style: appTitleMutedStyle(context),
-                    ),
-                ],
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(
-                  Icons.place_rounded,
-                  color: kTextOnPhotoSecondary,
-                  size: 16,
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    widget.distanceText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: appPlaceStyle(context),
-                  ),
-                ),
-                if (hasMapFix(widget.data.latitude, widget.data.longitude)) ...[
-                  const SizedBox(width: 8),
-                  // Its own tap target: the surrounding InkWell expands the
-                  // panel, and leaving directions to that gesture would open
-                  // maps every time the user peeked at the reviews.
-                  GestureDetector(
-                    onTap: _openDirections,
-                    behavior: HitTestBehavior.opaque,
-                    child: const AppChip(
-                      label: 'Directions',
-                      icon: Icons.directions_rounded,
-                    ),
-                  ),
-                ],
               ],
             ),
           ],
@@ -492,29 +545,46 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
   }
 }
 
-class _CategoryBadge extends StatelessWidget {
-  const _CategoryBadge({
-    required this.label,
-    required this.accent,
-  });
+/// The Figma's ember rating tile: the number large, "Google rating" under it
+/// so the figure is never mistaken for a price or a distance.
+class _RatingBlock extends StatelessWidget {
+  const _RatingBlock({required this.ratingText});
 
-  final String label;
-  final Color accent;
+  final String ratingText;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(kRadiusPill),
-        border: Border.all(
-          color: accent.withValues(alpha: 0.28),
-        ),
+        color: kAccentEmber,
+        borderRadius: BorderRadius.circular(kRadiusThumb),
       ),
-      child: Text(
-        label.toUpperCase(),
-        style: appEyebrowStyle(context),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            ratingText,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontFamily: kDisplayFontFamily,
+              color: kOnAccent,
+              fontWeight: FontWeight.w700,
+              height: 1.05,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Google rating',
+            maxLines: 1,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: kOnAccent.withValues(alpha: 0.75),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
