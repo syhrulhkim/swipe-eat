@@ -34,11 +34,20 @@ class FakeRestaurantRepository implements RestaurantRepository {
   /// What `get_cuisine_counts` would return, biggest category first.
   List<CuisineCount> cuisineRows = const [];
 
+  /// What `get_visited_restaurants` / `get_reviewed_restaurants` /
+  /// `get_super_liked_ids` would return.
+  List<Restaurant> visitedRows = const [];
+  List<Restaurant> reviewedRows = const [];
+  Set<int> superLikedRows = const {};
+
   bool failDeck = false;
   bool failLiked = false;
   bool failSearch = false;
   bool failFetchById = false;
   bool failCuisines = false;
+  bool failVisited = false;
+  bool failReviewed = false;
+  bool failSuperLiked = false;
 
   /// The cuisineId of the latest [search] call, null included.
   int? lastSearchCuisineId;
@@ -100,6 +109,36 @@ class FakeRestaurantRepository implements RestaurantRepository {
       throw Exception('cuisines unavailable');
     }
     return List.of(cuisineRows);
+  }
+
+  @override
+  Future<List<Restaurant>> visitedRestaurants({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    if (failVisited) {
+      throw Exception('visited unavailable');
+    }
+    return List.of(visitedRows);
+  }
+
+  @override
+  Future<List<Restaurant>> reviewedRestaurants({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    if (failReviewed) {
+      throw Exception('reviewed unavailable');
+    }
+    return List.of(reviewedRows);
+  }
+
+  @override
+  Future<Set<int>> superLikedIds() async {
+    if (failSuperLiked) {
+      throw Exception('super likes unavailable');
+    }
+    return Set.of(superLikedRows);
   }
 }
 
@@ -167,6 +206,21 @@ class FakeSwipeRepository implements SwipeRepository {
     }
     undoCalls.add(restaurantId);
     onUndo?.call(restaurantId);
+  }
+
+  /// Restaurant ids handed to [markVisited], in call order.
+  final List<int> markVisitedCalls = [];
+  bool failMarkVisited = false;
+
+  @override
+  Future<void> markVisited({
+    required int restaurantId,
+    bool visited = true,
+  }) async {
+    if (failMarkVisited) {
+      throw Exception('mark visited refused');
+    }
+    markVisitedCalls.add(restaurantId);
   }
 }
 

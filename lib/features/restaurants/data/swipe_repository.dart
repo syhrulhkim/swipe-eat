@@ -44,4 +44,17 @@ class SwipeRepository {
       'p_restaurant_id': restaurantId,
     }).timeout(_timeout);
   }
+
+  /// Stamps (or clears) `visited_at` on the swipe row; the backend inserts a
+  /// non-deck row if the place was never swiped, so this works from any
+  /// surface.
+  Future<void> markVisited({
+    required int restaurantId,
+    bool visited = true,
+  }) async {
+    await _client.rpc<dynamic>('mark_visited', params: {
+      'p_restaurant_id': restaurantId,
+      'p_visited': visited,
+    }).timeout(_timeout);
+  }
 }

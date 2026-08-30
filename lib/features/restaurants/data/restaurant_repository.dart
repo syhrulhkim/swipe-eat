@@ -104,6 +104,50 @@ class RestaurantRepository {
     return rows.map(Restaurant.fromJson).toList();
   }
 
+  /// The Visited segment: places with a `visited_at` stamp, latest visit
+  /// first.
+  Future<List<Restaurant>> visitedRestaurants({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final rows = await _client
+        .rpc<dynamic>('get_visited_restaurants', params: {
+          'p_limit': limit,
+          'p_offset': offset,
+        })
+        .select(_deckColumns)
+        .timeout(_timeout);
+
+    return rows.map(Restaurant.fromJson).toList();
+  }
+
+  /// The Reviewed segment: places the user has written a review for, most
+  /// recently reviewed first.
+  Future<List<Restaurant>> reviewedRestaurants({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final rows = await _client
+        .rpc<dynamic>('get_reviewed_restaurants', params: {
+          'p_limit': limit,
+          'p_offset': offset,
+        })
+        .select(_deckColumns)
+        .timeout(_timeout);
+
+    return rows.map(Restaurant.fromJson).toList();
+  }
+
+  /// Which liked rows carry the super-like flag — the Liked grid's star
+  /// badges.
+  Future<Set<int>> superLikedIds() async {
+    final rows = await _client
+        .rpc<dynamic>('get_super_liked_ids')
+        .timeout(_timeout) as List<dynamic>;
+
+    return {for (final id in rows) (id as num).toInt()};
+  }
+
   /// The Explore grid: every active cuisine, its restaurant count and a cover
   /// photo. Ordered by count descending server-side — the biggest categories
   /// lead, and the client must not re-sort.

@@ -72,6 +72,7 @@ class LikesController extends ChangeNotifier {
 
   List<Restaurant> _liked = const [];
   Set<int> _likedIds = <int>{};
+  Set<int> _superLikedIds = <int>{};
   bool _loaded = false;
   Future<void>? _loading;
   StreamSubscription<AuthState>? _authSubscription;
@@ -90,6 +91,9 @@ class LikesController extends ChangeNotifier {
   List<Restaurant> get liked => List.unmodifiable(_liked);
 
   bool isLiked(int restaurantId) => _likedIds.contains(restaurantId);
+
+  /// Whether the like was the emphatic kind — the Liked grid's star badge.
+  bool isSuperLiked(int restaurantId) => _superLikedIds.contains(restaurantId);
 
   /// Loads once; concurrent callers share the same request. A failed load
   /// clears itself so the next call retries instead of caching the error.
@@ -118,12 +122,25 @@ class LikesController extends ChangeNotifier {
   Future<void> refresh() async {
     _ensureAuthSubscription();
     final generation = _generation;
+    // Best-effort: a badge is decoration, and failing the whole refresh over
+    // it would take the Like tab down with it. Null means "keep what we had".
+    final superLikedFuture = _restaurantRepository
+        .superLikedIds()
+        .then<Set<int>?>((ids) => ids)
+        .catchError((Object error) {
+      debugPrint('Super-liked ids fetch failed: $error');
+      return null;
+    });
     final rows = await _restaurantRepository.likedRestaurants();
+    final superLiked = await superLikedFuture;
     if (generation != _generation) {
       return;
     }
     _liked = rows;
     _likedIds = {for (final restaurant in rows) restaurant.id};
+    if (superLiked != null) {
+      _superLikedIds = superLiked;
+    }
     _loaded = true;
     notifyListeners();
   }
@@ -141,6 +158,14 @@ class LikesController extends ChangeNotifier {
   }) async {
     final generation = _generation;
     _likedIds.add(restaurantId);
+    // Mirror the backend: every record_swipe overwrites super_like, so a
+    // plain re-like clears an old star just as a super like sets one.
+    final wasSuperLiked = _superLikedIds.contains(restaurantId);
+    if (superLike) {
+      _superLikedIds.add(restaurantId);
+    } else {
+      _superLikedIds.remove(restaurantId);
+    }
     notifyListeners();
 
     try {
@@ -155,6 +180,11 @@ class LikesController extends ChangeNotifier {
     } catch (_) {
       if (generation == _generation) {
         _likedIds.remove(restaurantId);
+        if (wasSuperLiked) {
+          _superLikedIds.add(restaurantId);
+        } else {
+          _superLikedIds.remove(restaurantId);
+        }
         notifyListeners();
       }
       rethrow;
@@ -175,6 +205,8 @@ class LikesController extends ChangeNotifier {
     if (!_likedIds.remove(restaurantId) && removed == null) {
       return;
     }
+    // The pass this writes overwrites super_like to false server-side.
+    final wasSuperLiked = _superLikedIds.remove(restaurantId);
     if (removed != null) {
       _liked = List.of(_liked)..removeAt(index);
     }
@@ -189,6 +221,9 @@ class LikesController extends ChangeNotifier {
     } catch (_) {
       if (generation == _generation) {
         _likedIds.add(restaurantId);
+        if (wasSuperLiked) {
+          _superLikedIds.add(restaurantId);
+        }
         // A concurrent refresh may have republished the list with the row
         // still in it (the unlike never landed); reinserting blindly would
         // render the restaurant twice.
@@ -209,6 +244,7 @@ class LikesController extends ChangeNotifier {
     _generation++;
     _liked = const [];
     _likedIds = <int>{};
+    _superLikedIds = <int>{};
     _loaded = false;
     _loading = null;
     notifyListeners();

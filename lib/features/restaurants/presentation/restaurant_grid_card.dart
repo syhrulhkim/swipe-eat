@@ -83,14 +83,18 @@ class RestaurantGridCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (badge != null)
-                Positioned(top: 8, right: 8, child: badge!),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(kRadiusPanel),
-                  border: Border.all(color: kHairline),
+              // IgnorePointer, or this full-card overlay swallows every tap
+              // meant for the badge buttons underneath it.
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(kRadiusPanel),
+                    border: Border.all(color: kHairline),
+                  ),
                 ),
               ),
+              if (badge != null)
+                Positioned(top: 8, right: 8, child: badge!),
             ],
           ),
         ),

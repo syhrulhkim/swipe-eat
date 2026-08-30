@@ -179,10 +179,14 @@ class _CuisineTile extends StatelessWidget {
               ),
               // A hairline over the photo keeps the tile edges crisp against
               // the dark background, matching every panel in the app.
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(kRadiusPanel),
-                  border: Border.all(color: kHairline),
+              // IgnorePointer for the same reason as RestaurantGridCard: a
+              // full-tile overlay must never intercept taps.
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(kRadiusPanel),
+                    border: Border.all(color: kHairline),
+                  ),
                 ),
               ),
             ],
