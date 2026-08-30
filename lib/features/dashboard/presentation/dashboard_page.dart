@@ -6,11 +6,11 @@ import 'package:flutter/services.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../profile/presentation/profile_tab.dart';
-import '../../quiz/presentation/quiz_tab.dart';
 import '../../restaurants/data/likes_migration.dart';
 import '../../restaurants/presentation/swipe_deck.dart';
 import '../../restaurants/state/likes_controller.dart';
 import 'explore_tab.dart';
+import 'group_tab.dart';
 import 'likes_tab.dart';
 
 /// The signed-in home: five tabs behind one bottom bar.
@@ -26,8 +26,7 @@ class DashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: authController,
-      builder: (context, _) =>
-          _DashboardShell(authController: authController),
+      builder: (context, _) => _DashboardShell(authController: authController),
     );
   }
 }
@@ -85,7 +84,7 @@ class _DashboardShellState extends State<_DashboardShell> {
           SwipeDeck(authController: widget.authController),
           ExploreTab(authController: widget.authController),
           const LikesTab(),
-          const QuizTab(),
+          const GroupTab(),
           ProfileTab(user: widget.authController.user),
         ],
       ),
@@ -93,13 +92,9 @@ class _DashboardShellState extends State<_DashboardShell> {
   }
 }
 
-/// The floating tab bar: a dark pill carrying the four secondary tabs, with
-/// the deck raised out of it as a centre disc.
-///
-/// The deck is the one thing the app is for, so it does not sit in the row as
-/// a peer of Quiz and Profile — it is the button you cannot miss, in the place
-/// a thumb already rests. The other four keep their [_kTabOrder] index into
-/// the shell's `IndexedStack`; only where they are drawn changes.
+/// The floating tab bar: a dark pill carrying all five tabs as equals, the
+/// way the Figma draws it. The selected tab's icon sits inside a ring — the
+/// bar's one highlight — rather than raising any tab out of the row.
 class _DashboardBottomNav extends StatelessWidget {
   const _DashboardBottomNav({
     required this.selectedIndex,
@@ -110,23 +105,15 @@ class _DashboardBottomNav extends StatelessWidget {
   final ValueChanged<int> onSelected;
 
   /// Height of the pill itself.
-  static const double _barHeight = 66;
-
-  /// Diameter of the centre disc.
-  static const double _discSize = 64;
-
-  /// How far the disc's top clears the pill's, which is also the extra height
-  /// the bar has to reserve so the raised half is not clipped away.
-  static const double _discRaise = 26;
-
-  static const _deckIndex = 0;
+  static const double _barHeight = 78;
 
   /// The tabs drawn in the pill, left to right, with the `IndexedStack` index
   /// each one selects.
   static const _tabs = <({IconData icon, String label, int index})>[
+    (icon: Icons.swipe_rounded, label: 'Swipe', index: 0),
     (icon: Icons.explore_rounded, label: 'Explore', index: 1),
-    (icon: Icons.favorite_rounded, label: 'Like', index: 2),
-    (icon: Icons.quiz_rounded, label: 'Quiz', index: 3),
+    (icon: Icons.thumb_up_rounded, label: 'Liked', index: 2),
+    (icon: Icons.groups_rounded, label: 'Group', index: 3),
     (icon: Icons.person_rounded, label: 'Profile', index: 4),
   ];
 
@@ -136,55 +123,24 @@ class _DashboardBottomNav extends StatelessWidget {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        child: SizedBox(
-          height: _barHeight + _discRaise,
-          child: Stack(
-            // The disc deliberately overhangs the pill; clipping the stack
-            // would slice its top off.
-            clipBehavior: Clip.none,
+        child: Container(
+          height: _barHeight,
+          decoration: BoxDecoration(
+            color: kSurfaceDark,
+            borderRadius: BorderRadius.circular(kRadiusPill),
+            border: Border.all(color: kHairline),
+          ),
+          child: Row(
             children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: _barHeight,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: kSurfaceDark,
-                    borderRadius: BorderRadius.circular(kRadiusPill),
-                    border: Border.all(color: kHairline),
-                  ),
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < _tabs.length; i++) ...[
-                        // The gap the disc sits in, between tab two and three.
-                        if (i == 2) const SizedBox(width: _discSize + 16),
-                        Expanded(
-                          child: _BottomNavItem(
-                            icon: _tabs[i].icon,
-                            label: _tabs[i].label,
-                            isSelected: selectedIndex == _tabs[i].index,
-                            onTap: () => onSelected(_tabs[i].index),
-                          ),
-                        ),
-                      ],
-                    ],
+              for (final tab in _tabs)
+                Expanded(
+                  child: _BottomNavItem(
+                    icon: tab.icon,
+                    label: tab.label,
+                    isSelected: selectedIndex == tab.index,
+                    onTap: () => onSelected(tab.index),
                   ),
                 ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                height: _discSize,
-                child: Center(
-                  child: _DeckDisc(
-                    isSelected: selectedIndex == _deckIndex,
-                    onTap: () => onSelected(_deckIndex),
-                    size: _discSize,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -193,53 +149,7 @@ class _DashboardBottomNav extends StatelessWidget {
   }
 }
 
-/// The raised centre control that returns to the deck.
-class _DeckDisc extends StatelessWidget {
-  const _DeckDisc({
-    required this.isSelected,
-    required this.onTap,
-    required this.size,
-  });
-
-  final bool isSelected;
-  final VoidCallback onTap;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Swipe',
-      button: true,
-      selected: isSelected,
-      child: _PressScale(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            // Cream while the deck is up, matching the primary pill: the disc
-            // is the same "this is the action" signal in a different shape.
-            color: isSelected ? kAccentCream : kSurfacePanel,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isSelected ? Colors.transparent : kHairline,
-              width: 4,
-            ),
-          ),
-          child: Icon(
-            Icons.swipe_rounded,
-            size: 28,
-            color: isSelected ? kOnAccent : kTextOnPhoto,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One flat tab in the pill: icon over a small label, warm when selected.
+/// One tab in the pill: icon in a ring when selected, over a small label.
 class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
     required this.icon,
@@ -248,14 +158,17 @@ class _BottomNavItem extends StatelessWidget {
     required this.onTap,
   });
 
-  final IconData icon;
   final String label;
+  final IconData icon;
   final bool isSelected;
   final VoidCallback onTap;
 
+  /// Diameter of the ring around the selected icon.
+  static const double _ringSize = 40;
+
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? kAccentEmber : kTextOnPhotoMuted;
+    final color = isSelected ? kTextOnPhoto : kTextOnPhotoMuted;
 
     return Semantics(
       label: label,
@@ -268,15 +181,29 @@ class _BottomNavItem extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 22, color: color),
-              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: _ringSize,
+                height: _ringSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected ? kTextOnPhoto : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(icon, size: 20, color: color),
+              ),
+              const SizedBox(height: 2),
               Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: color,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w400,
                     ),
               ),
             ],
@@ -287,8 +214,7 @@ class _BottomNavItem extends StatelessWidget {
   }
 }
 
-/// Tap target that dips under the finger. Shared by the tabs and the disc so
-/// both answer a press the same way.
+/// Tap target that dips under the finger.
 class _PressScale extends StatefulWidget {
   const _PressScale({required this.onTap, required this.child});
 

@@ -8,7 +8,7 @@ import 'design_tokens.dart';
 /// eyebrow, a display-face line, one sentence of explanation, and at most one
 /// action.
 ///
-/// Centralised because the deck, the Likes tab and the Quiz tab all need one,
+/// Centralised because the deck and the Likes tab both need one,
 /// and three hand-rolled versions drift into three different silences.
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
