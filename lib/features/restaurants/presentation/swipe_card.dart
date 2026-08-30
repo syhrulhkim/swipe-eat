@@ -459,33 +459,39 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Flexible(
-                  child: AppChip(
-                    icon: Icons.place_rounded,
-                    label: widget.distanceText,
+                // A Wrap, not flexed chips: flex would cap each chip at a
+                // quarter of the row and ellipsize the distance on ordinary
+                // phone widths. Here every chip gets its natural size and an
+                // overlong set flows to a second line instead of clipping.
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      AppChip(
+                        icon: Icons.place_rounded,
+                        label: widget.distanceText,
+                      ),
+                      AppChip(label: widget.data.tag),
+                      if (hasMapFix(
+                          widget.data.latitude, widget.data.longitude))
+                        // Its own tap target: the surrounding InkWell expands
+                        // the panel, and leaving directions to that gesture
+                        // would open maps every time the user peeked at the
+                        // reviews.
+                        GestureDetector(
+                          onTap: _openDirections,
+                          behavior: HitTestBehavior.opaque,
+                          child: const AppChip(
+                            label: 'Directions',
+                            icon: Icons.directions_rounded,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Flexible(
-                  child: AppChip(label: widget.data.tag),
-                ),
-                if (hasMapFix(widget.data.latitude, widget.data.longitude)) ...[
-                  const SizedBox(width: 8),
-                  // Its own tap target: the surrounding InkWell expands the
-                  // panel, and leaving directions to that gesture would open
-                  // maps every time the user peeked at the reviews.
-                  Flexible(
-                    child: GestureDetector(
-                      onTap: _openDirections,
-                      behavior: HitTestBehavior.opaque,
-                      child: const AppChip(
-                        label: 'Directions',
-                        icon: Icons.directions_rounded,
-                      ),
-                    ),
-                  ),
-                ],
-                const Spacer(),
                 AnimatedRotation(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
