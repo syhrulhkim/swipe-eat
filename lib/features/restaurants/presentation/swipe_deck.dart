@@ -16,6 +16,7 @@ import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../../auth/state/auth_controller.dart';
 import '../models/restaurant_card.dart';
 import '../state/deck_controller.dart';
+import 'discovery_filter_sheet.dart';
 import 'swipe_card.dart';
 import 'tiktok_player.dart';
 
@@ -128,7 +129,9 @@ class _SwipeDeckState extends State<SwipeDeck>
 
   void _animateOut({required bool liked, bool superLike = false}) {
     final card = _deck.current;
-    if (card == null || _motionType != _SwipeMotionType.idle) {
+    if (card == null ||
+        _motionType != _SwipeMotionType.idle ||
+        _deck.outOfSwipes) {
       return;
     }
 
@@ -158,7 +161,9 @@ class _SwipeDeckState extends State<SwipeDeck>
   /// card rather than a drag, so it nudges the card first to give the fly-out
   /// a direction.
   void _triggerAction({required bool liked, bool superLike = false}) {
-    if (_deck.current == null || _motionType != _SwipeMotionType.idle) {
+    if (_deck.current == null ||
+        _motionType != _SwipeMotionType.idle ||
+        _deck.outOfSwipes) {
       return;
     }
 
@@ -287,6 +292,22 @@ class _SwipeDeckState extends State<SwipeDeck>
     });
   }
 
+  Future<void> _openFilters() {
+    return showDiscoveryFilterSheet(context, deck: _deck);
+  }
+
+  DeckHeader _buildHeader() {
+    return DeckHeader(
+      locationLabel: _deck.locationLabel,
+      stalenessLabel: _deck.stalenessLabel,
+      streakDays: _deck.streakDays,
+      swipesLeft: _deck.swipesLeft,
+      activeFilterCount:
+          widget.authController.user?.activeFilterCount ?? 0,
+      onFilterTap: () => unawaited(_openFilters()),
+    );
+  }
+
   // Keeps the floating header visible around the loading/error/empty states
   // so those states aren't a bare widget on an otherwise blank tab.
   Widget _deckMessage(Widget child) {
@@ -297,10 +318,7 @@ class _SwipeDeckState extends State<SwipeDeck>
           top: 0,
           left: 0,
           right: 0,
-          child: DeckHeader(
-            locationLabel: _deck.locationLabel,
-            stalenessLabel: _deck.stalenessLabel,
-          ),
+          child: _buildHeader(),
         ),
       ],
     );
@@ -374,6 +392,22 @@ class _SwipeDeckState extends State<SwipeDeck>
       );
     }
 
+    // Checked before the cards: the limit is about the user's day, not the
+    // deck's supply. Rewind stays offered — taking a swipe back refunds it.
+    if (_deck.outOfSwipes) {
+      return _messageCard(
+        eyebrow: 'Daily limit',
+        title: 'Out of swipes for today',
+        subtitle: 'All ${DeckController.dailySwipeLimit} swipes are spent. '
+            'Come back tomorrow — the streak keeps counting.',
+        actionLabel: 'Refresh',
+        secondaryActionLabel: _deck.canRewind ? 'Rewind last swipe' : null,
+        onSecondaryAction:
+            _deck.canRewind ? () => unawaited(_rewind()) : null,
+        art: AppMotion.heart,
+      );
+    }
+
     if (_deck.cards.isEmpty) {
       return _messageCard(
         eyebrow: 'Nothing dealt',
@@ -426,10 +460,7 @@ class _SwipeDeckState extends State<SwipeDeck>
           top: 0,
           left: 0,
           right: 0,
-          child: DeckHeader(
-            locationLabel: _deck.locationLabel,
-            stalenessLabel: _deck.stalenessLabel,
-          ),
+          child: _buildHeader(),
         ),
       ],
     );
@@ -581,6 +612,10 @@ class DeckHeader extends StatelessWidget {
     super.key,
     required this.locationLabel,
     this.stalenessLabel,
+    this.streakDays = 0,
+    this.swipesLeft,
+    this.activeFilterCount = 0,
+    this.onFilterTap,
   });
 
   /// The user's reverse-geocoded whereabouts, from the profile row — not a
@@ -590,6 +625,20 @@ class DeckHeader extends StatelessWidget {
   /// Set when the deck came off the device instead of the server. Shown under
   /// the location chip so saved cards are never mistaken for fresh ones.
   final String? stalenessLabel;
+
+  /// Consecutive swipe days; the flame chip appears from 2 up — a one-day
+  /// "streak" is just today.
+  final int streakDays;
+
+  /// Today's remaining allowance, or null when unknown. The chip only appears
+  /// once it runs low; a full counter would nag every swipe.
+  final int? swipesLeft;
+
+  /// How many discovery filters are on — the badge on the filter button.
+  final int activeFilterCount;
+
+  /// Opens the discovery filter sheet. Null hides the button.
+  final VoidCallback? onFilterTap;
 
   @override
   Widget build(BuildContext context) {
@@ -631,25 +680,69 @@ class DeckHeader extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      AppChip(
-                        icon: Icons.place_rounded,
-                        label: locationLabel,
+                      Flexible(
+                        child: AppChip(
+                          icon: Icons.place_rounded,
+                          label: locationLabel,
+                        ),
                       ),
-                      AppCircleButton(
-                        icon: Icons.settings_rounded,
-                        size: kUtilityButtonSize,
-                        iconSize: 20,
-                        background: Colors.black.withValues(alpha: 0.34),
-                        semanticLabel: 'Settings',
-                        onTap: () => context.push('/settings'),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (onFilterTap != null) ...[
+                            AppCircleButton(
+                              icon: Icons.tune_rounded,
+                              size: kUtilityButtonSize,
+                              iconSize: 20,
+                              background: Colors.black.withValues(alpha: 0.34),
+                              semanticLabel: 'Discovery filters',
+                              badgeCount: activeFilterCount,
+                              onTap: onFilterTap!,
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          AppCircleButton(
+                            icon: Icons.settings_rounded,
+                            size: kUtilityButtonSize,
+                            iconSize: 20,
+                            background: Colors.black.withValues(alpha: 0.34),
+                            semanticLabel: 'Settings',
+                            onTap: () => context.push('/settings'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  if (stalenessLabel != null) ...[
+                  if (stalenessLabel != null ||
+                      streakDays >= 2 ||
+                      (swipesLeft != null && swipesLeft! <= 10)) ...[
                     const SizedBox(height: 10),
-                    AppChip(
-                      icon: Icons.cloud_off_rounded,
-                      label: stalenessLabel!,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (stalenessLabel != null)
+                          AppChip(
+                            icon: Icons.cloud_off_rounded,
+                            label: stalenessLabel!,
+                          ),
+                        if (streakDays >= 2)
+                          AppChip(
+                            icon: Icons.local_fire_department_rounded,
+                            label: '$streakDays-day streak',
+                            tint: kTintMorning,
+                          ),
+                        if (swipesLeft != null && swipesLeft! <= 10)
+                          AppChip(
+                            icon: Icons.hourglass_bottom_rounded,
+                            label: swipesLeft == 0
+                                ? 'No swipes left today'
+                                : swipesLeft == 1
+                                    ? '1 swipe left today'
+                                    : '$swipesLeft swipes left today',
+                            tint: kAccentEmber,
+                          ),
+                      ],
                     ),
                   ],
                 ],

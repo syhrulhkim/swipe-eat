@@ -7,6 +7,10 @@ import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../restaurants/models/cuisine_count.dart';
+import '../../restaurants/models/restaurant.dart';
+import '../../restaurants/models/restaurant_card.dart';
+import '../../restaurants/models/restaurant_detail_data.dart';
+import '../../restaurants/presentation/restaurant_grid_card.dart';
 import '../state/explore_controller.dart';
 import 'dashboard_widgets.dart';
 
@@ -51,6 +55,13 @@ class _ExploreTabState extends State<ExploreTab> {
     context.push('/explore/cuisine/${cuisine.id}', extra: cuisine);
   }
 
+  void _openRestaurant(Restaurant restaurant) {
+    context.push(
+      '/restaurant/${restaurant.id}',
+      extra: RestaurantCard.fromRestaurant(restaurant).toDetailPayload(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -86,32 +97,114 @@ class _ExploreTabState extends State<ExploreTab> {
                           ),
                       ],
                     )
-                  : GridView.builder(
+                  : CustomScrollView(
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.screenPadding,
-                        4,
-                        AppSpacing.screenPadding,
-                        AppSpacing.screenPadding,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 1.15,
-                      ),
-                      itemCount: _explore.cuisines.length,
-                      itemBuilder: (context, index) {
-                        final cuisine = _explore.cuisines[index];
-                        return _CuisineTile(
-                          cuisine: cuisine,
-                          onTap: () => _openCuisine(cuisine),
-                        );
-                      },
+                      slivers: [
+                        if (_explore.topPicks.isNotEmpty)
+                          SliverToBoxAdapter(
+                            child: _TopPicksRail(
+                              picks: _explore.topPicks,
+                              onOpen: _openRestaurant,
+                            ),
+                          ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.screenPadding,
+                            4,
+                            AppSpacing.screenPadding,
+                            AppSpacing.screenPadding,
+                          ),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 10,
+                              childAspectRatio: 1.15,
+                            ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final cuisine = _explore.cuisines[index];
+                                return _CuisineTile(
+                                  cuisine: cuisine,
+                                  onTap: () => _openCuisine(cuisine),
+                                );
+                              },
+                              childCount: _explore.cuisines.length,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
         );
       },
+    );
+  }
+}
+
+/// The Top Picks rail: today's shortlist from the deck ranking, unswiped rows
+/// only, reshuffled at midnight with the deck seed. Thins out as the user
+/// swipes and disappears when empty.
+class _TopPicksRail extends StatelessWidget {
+  const _TopPicksRail({required this.picks, required this.onOpen});
+
+  final List<Restaurant> picks;
+  final ValueChanged<Restaurant> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenPadding,
+            4,
+            AppSpacing.screenPadding,
+            0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Top picks today', style: appSectionTitleStyle(context)),
+              const SizedBox(height: 2),
+              Text(
+                'Your shortlist, reshuffled at midnight.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: kTextOnPhotoMuted,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 190,
+          child: ListView.separated(
+            physics: const BouncingScrollPhysics(),
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenPadding,
+            ),
+            itemCount: picks.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final restaurant = picks[index];
+              return SizedBox(
+                width: 148,
+                child: RestaurantGridCard(
+                  restaurant: restaurant,
+                  // The rail has no position of its own; the cuisine tag is
+                  // the more useful second line here anyway.
+                  distanceText: restaurant.tag,
+                  onTap: () => onOpen(restaurant),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 18),
+      ],
     );
   }
 }

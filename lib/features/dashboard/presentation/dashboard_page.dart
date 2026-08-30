@@ -85,7 +85,7 @@ class _DashboardShellState extends State<_DashboardShell> {
           const ExploreTab(),
           const LikesTab(),
           const GroupTab(),
-          ProfileTab(user: widget.authController.user),
+          ProfileTab(authController: widget.authController),
         ],
       ),
     );

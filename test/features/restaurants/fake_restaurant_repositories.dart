@@ -4,6 +4,7 @@ import 'package:swipe_eat/features/restaurants/data/restaurant_repository.dart';
 import 'package:swipe_eat/features/restaurants/data/swipe_repository.dart';
 import 'package:swipe_eat/features/restaurants/models/cuisine_count.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
+import 'package:swipe_eat/features/restaurants/models/swipe_stats.dart';
 
 /// A minimal but real [Restaurant] for list/like fixtures.
 Restaurant testRestaurant(int id, {String? name}) {
@@ -40,6 +41,10 @@ class FakeRestaurantRepository implements RestaurantRepository {
   List<Restaurant> reviewedRows = const [];
   Set<int> superLikedRows = const {};
 
+  /// What `get_top_picks` / `get_swipe_stats` would return.
+  List<Restaurant> topPicksRows = const [];
+  SwipeStats statsRow = const SwipeStats(swipesToday: 0, streakDays: 0);
+
   bool failDeck = false;
   bool failLiked = false;
   bool failSearch = false;
@@ -48,6 +53,8 @@ class FakeRestaurantRepository implements RestaurantRepository {
   bool failVisited = false;
   bool failReviewed = false;
   bool failSuperLiked = false;
+  bool failTopPicks = false;
+  bool failStats = false;
 
   /// The cuisineId of the latest [search] call, null included.
   int? lastSearchCuisineId;
@@ -131,6 +138,22 @@ class FakeRestaurantRepository implements RestaurantRepository {
       throw Exception('reviewed unavailable');
     }
     return List.of(reviewedRows);
+  }
+
+  @override
+  Future<List<Restaurant>> topPicks({int limit = 10}) async {
+    if (failTopPicks) {
+      throw Exception('top picks unavailable');
+    }
+    return List.of(topPicksRows);
+  }
+
+  @override
+  Future<SwipeStats> swipeStats() async {
+    if (failStats) {
+      throw Exception('stats unavailable');
+    }
+    return statsRow;
   }
 
   @override

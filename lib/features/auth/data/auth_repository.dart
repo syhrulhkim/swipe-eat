@@ -41,7 +41,9 @@ class AuthRepository {
   final OAuthProviderClient _oauth;
 
   static const String _profileColumns =
-      'id, name, avatar_url, onboarded_at, search_radius_km, last_place_name';
+      'id, name, avatar_url, onboarded_at, search_radius_km, last_place_name, '
+      'filter_cuisine_ids, filter_dietary_tag_ids, filter_min_rating, '
+      'passport_latitude, passport_longitude, passport_place_name';
 
   GoTrueClient get _auth => _client.auth;
 

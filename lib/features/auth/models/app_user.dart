@@ -15,6 +15,12 @@ class AppUser {
     this.onboardedAt,
     this.searchRadiusKm,
     this.lastPlaceName,
+    this.filterCuisineIds = const [],
+    this.filterDietaryTagIds = const [],
+    this.filterMinRating,
+    this.passportLatitude,
+    this.passportLongitude,
+    this.passportPlaceName,
   });
 
   final String id;
@@ -36,7 +42,28 @@ class AppUser {
   /// shown in the deck's header chip. Null until a real fix has been synced.
   final String? lastPlaceName;
 
+  /// Discovery filters — hard limits the deck applies server-side. Empty
+  /// lists and a null rating mean "filter off".
+  final List<int> filterCuisineIds;
+  final List<int> filterDietaryTagIds;
+  final double? filterMinRating;
+
+  /// Passport: a manually pinned location that beats the GPS fix while set.
+  /// All three null when the passport is off.
+  final double? passportLatitude;
+  final double? passportLongitude;
+  final String? passportPlaceName;
+
   bool get needsOnboarding => onboardedAt == null;
+
+  bool get hasPassport => passportLatitude != null && passportLongitude != null;
+
+  /// How many discovery constraints are switched on — the filter button's
+  /// badge.
+  int get activeFilterCount =>
+      (filterCuisineIds.isEmpty ? 0 : 1) +
+      (filterDietaryTagIds.isEmpty ? 0 : 1) +
+      (filterMinRating == null ? 0 : 1);
 
   /// Builds the user from a `profiles` row, falling back to the auth record
   /// for anything the profile has not been given yet (a fresh OAuth signup
@@ -63,6 +90,12 @@ class AppUser {
       onboardedAt: _dateTime(row['onboarded_at']),
       searchRadiusKm: _int(row['search_radius_km']),
       lastPlaceName: _string(row['last_place_name']),
+      filterCuisineIds: _intList(row['filter_cuisine_ids']),
+      filterDietaryTagIds: _intList(row['filter_dietary_tag_ids']),
+      filterMinRating: _double(row['filter_min_rating']),
+      passportLatitude: _double(row['passport_latitude']),
+      passportLongitude: _double(row['passport_longitude']),
+      passportPlaceName: _string(row['passport_place_name']),
     );
   }
 
@@ -78,6 +111,12 @@ class AppUser {
       onboardedAt: _dateTime(json['onboarded_at']),
       searchRadiusKm: _int(json['search_radius_km']),
       lastPlaceName: _string(json['last_place_name']),
+      filterCuisineIds: _intList(json['filter_cuisine_ids']),
+      filterDietaryTagIds: _intList(json['filter_dietary_tag_ids']),
+      filterMinRating: _double(json['filter_min_rating']),
+      passportLatitude: _double(json['passport_latitude']),
+      passportLongitude: _double(json['passport_longitude']),
+      passportPlaceName: _string(json['passport_place_name']),
     );
   }
 
@@ -90,6 +129,12 @@ class AppUser {
       'onboarded_at': onboardedAt?.toIso8601String(),
       'search_radius_km': searchRadiusKm,
       'last_place_name': lastPlaceName,
+      'filter_cuisine_ids': filterCuisineIds,
+      'filter_dietary_tag_ids': filterDietaryTagIds,
+      'filter_min_rating': filterMinRating,
+      'passport_latitude': passportLatitude,
+      'passport_longitude': passportLongitude,
+      'passport_place_name': passportPlaceName,
     };
   }
 
@@ -112,6 +157,14 @@ class AppUser {
       onboardedAt: onboardedAt ?? this.onboardedAt,
       searchRadiusKm: searchRadiusKm ?? this.searchRadiusKm,
       lastPlaceName: lastPlaceName ?? this.lastPlaceName,
+      // Filters and passport only change through RPCs that return the whole
+      // profile row, so copyWith always carries them through unchanged.
+      filterCuisineIds: filterCuisineIds,
+      filterDietaryTagIds: filterDietaryTagIds,
+      filterMinRating: filterMinRating,
+      passportLatitude: passportLatitude,
+      passportLongitude: passportLongitude,
+      passportPlaceName: passportPlaceName,
     );
   }
 
@@ -141,6 +194,26 @@ class AppUser {
       return value.toInt();
     }
     return null;
+  }
+
+  static double? _double(Object? value) {
+    if (value is num && value.isFinite) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value);
+    }
+    return null;
+  }
+
+  static List<int> _intList(Object? value) {
+    if (value is! List) {
+      return const [];
+    }
+    return [
+      for (final item in value)
+        if (item is num) item.toInt(),
+    ];
   }
 
   static DateTime? _dateTime(Object? value) {

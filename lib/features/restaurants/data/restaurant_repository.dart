@@ -1,7 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/supabase/single_row.dart';
 import '../models/cuisine_count.dart';
 import '../models/restaurant.dart';
+import '../models/swipe_stats.dart';
 
 class RestaurantRepository {
   RestaurantRepository({SupabaseClient? client}) : _injected = client;
@@ -146,6 +148,27 @@ class RestaurantRepository {
         .timeout(_timeout) as List<dynamic>;
 
     return {for (final id in rows) (id as num).toInt()};
+  }
+
+  /// Today's shortlist: the head of the deck ranking, unswiped rows only.
+  /// The rail thins out as the user swipes, and reshuffles at midnight with
+  /// the deck seed. No coordinates passed — the RPC resolves passport, then
+  /// the stored fix, server-side. Server caps the limit at 20.
+  Future<List<Restaurant>> topPicks({int limit = 10}) async {
+    final rows = await _client
+        .rpc<dynamic>('get_top_picks', params: {'p_limit': limit})
+        .select(_deckColumns)
+        .timeout(_timeout);
+
+    return rows.map(Restaurant.fromJson).toList();
+  }
+
+  /// The daily-limit and streak chip.
+  Future<SwipeStats> swipeStats() async {
+    final response =
+        await _client.rpc<dynamic>('get_swipe_stats').timeout(_timeout);
+
+    return SwipeStats.fromJson(asSingleRow(response));
   }
 
   /// The Explore grid: every active cuisine, its restaurant count and a cover

@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../../core/location/open_directions.dart';
 import '../../../core/location/place_name.dart';
 import '../../../core/location/user_location.dart';
+import '../../auth/models/app_user.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../../core/storage/cached_at.dart';
@@ -13,6 +14,7 @@ import '../data/deck_cache.dart';
 import '../data/restaurant_repository.dart';
 import '../data/swipe_repository.dart';
 import '../models/restaurant_card.dart';
+import '../models/swipe_stats.dart';
 import 'likes_controller.dart';
 import 'tiktok_player_cache.dart';
 
@@ -39,9 +41,14 @@ class DeckController extends ChangeNotifier {
         _likes = likes ?? LikesController.instance,
         players = players ?? TikTokPlayerCache(),
         _resolvePosition = resolvePosition ?? resolveUserPosition {
-    _appliedRadiusKm = authController.user?.searchRadiusKm;
+    _appliedDeckSignature = _deckSignature(authController.user);
     authController.addListener(_onAuthChanged);
   }
+
+  /// The Tinder-style daily allowance. Enforced client-side off
+  /// `get_swipe_stats`; when the count is unknown (the stats call failed)
+  /// swiping stays open — a stats hiccup must never brick the deck.
+  static const int dailySwipeLimit = 50;
 
   final AuthController authController;
   final RestaurantRepository _restaurants;
@@ -82,9 +89,39 @@ class DeckController extends ChangeNotifier {
     return savedAt == null ? null : 'Offline · saved ${describeAge(savedAt)}';
   }
 
-  /// What the header chip says: the reverse-geocoded name of the last stored
-  /// fix, or 'Nearby' for an account that has never granted location.
-  String get locationLabel => authController.user?.lastPlaceName ?? 'Nearby';
+  /// What the header chip says: the passport pin while one is set — the deck
+  /// is dealing that city, and the chip must not claim the user's real town —
+  /// otherwise the reverse-geocoded name of the last stored fix, or 'Nearby'
+  /// for an account that has never granted location.
+  String get locationLabel {
+    final user = authController.user;
+    if (user != null && user.hasPassport) {
+      return user.passportPlaceName ?? 'Passport';
+    }
+    return user?.lastPlaceName ?? 'Nearby';
+  }
+
+  /// Swipes spent today, from `get_swipe_stats` plus local bookkeeping.
+  /// Null while unknown (never loaded, or the stats call failed).
+  int? _swipesToday;
+
+  int _streakDays = 0;
+
+  /// Consecutive days with at least one swipe, for the header flame.
+  int get streakDays => _streakDays;
+
+  /// How many swipes remain today, or null when the count is unknown.
+  int? get swipesLeft {
+    final spent = _swipesToday;
+    if (spent == null) {
+      return null;
+    }
+    final left = dailySwipeLimit - spent;
+    return left < 0 ? 0 : left;
+  }
+
+  /// True only when the count is known and spent — unknown stays swipeable.
+  bool get outOfSwipes => swipesLeft == 0;
 
   /// True once every dealt card has been swiped.
   bool get isExhausted => _index >= _cards.length;
@@ -98,11 +135,29 @@ class DeckController extends ChangeNotifier {
   /// overwrite a fresher deck.
   int _loadGeneration = 0;
 
-  /// The radius the current deck was dealt under. The tabs live in an
-  /// IndexedStack that never re-inits, so a Settings change has to be listened
-  /// for — the radius is a server-side filter, and stale cards would break its
-  /// promise that out-of-range places are not dealt.
-  int? _appliedRadiusKm;
+  /// The deck-shaping profile state the current deck was dealt under: radius,
+  /// discovery filters and passport. The tabs live in an IndexedStack that
+  /// never re-inits, so a change to any of them has to be listened for — they
+  /// are server-side filters, and stale cards would break their promises.
+  ///
+  /// Deliberately excludes `lastPlaceName` and the stored fix: every load
+  /// syncs those through [applyUser], and including them would make each load
+  /// trigger the next.
+  String? _appliedDeckSignature;
+
+  static String _deckSignature(AppUser? user) {
+    if (user == null) {
+      return '';
+    }
+    return [
+      user.searchRadiusKm,
+      user.filterMinRating,
+      user.filterCuisineIds.join(','),
+      user.filterDietaryTagIds.join(','),
+      user.passportLatitude,
+      user.passportLongitude,
+    ].join('|');
+  }
 
   /// Errors worth telling the user about, raised by [recordSwipe]. The widget
   /// drains this to show a toast; nothing else depends on it.
@@ -123,11 +178,11 @@ class DeckController extends ChangeNotifier {
   }
 
   void _onAuthChanged() {
-    final radius = authController.user?.searchRadiusKm;
-    if (radius == _appliedRadiusKm) {
+    final signature = _deckSignature(authController.user);
+    if (signature == _appliedDeckSignature) {
       return;
     }
-    _appliedRadiusKm = radius;
+    _appliedDeckSignature = signature;
     unawaited(load());
   }
 
@@ -138,6 +193,16 @@ class DeckController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Best-effort and concurrent with the deck fetch: a failed stats read
+      // costs the chip and the limit gate, never the cards.
+      final statsFuture = _restaurants
+          .swipeStats()
+          .then<SwipeStats?>((stats) => stats)
+          .catchError((Object error) {
+        debugPrint('Swipe stats load failed: $error');
+        return null;
+      });
+
       // The position is an input to the server-side ranking, so it is resolved
       // first. It is session-cached, so only the very first load pays for the
       // permission dialog and the GPS fix. A fallback position is not a real
@@ -157,10 +222,15 @@ class DeckController extends ChangeNotifier {
         latitude: hasRealPosition ? position.latitude : null,
         longitude: hasRealPosition ? position.longitude : null,
       );
+      final stats = await statsFuture;
       if (generation != _loadGeneration) {
         return;
       }
 
+      if (stats != null) {
+        _swipesToday = stats.swipesToday;
+        _streakDays = stats.streakDays;
+      }
       _cards = restaurants.map(RestaurantCard.fromRestaurant).toList();
       _index = 0;
       _loading = false;
@@ -256,6 +326,14 @@ class DeckController extends ChangeNotifier {
     required bool liked,
     bool superLike = false,
   }) {
+    // Optimistic, like the write itself; only when the count is known, so a
+    // failed stats read never fabricates a nearly-full allowance from zero.
+    final spent = _swipesToday;
+    if (spent != null) {
+      _swipesToday = spent + 1;
+      notifyListeners();
+    }
+
     late final Future<void> write;
     write = _writeSwipe(card, liked: liked, superLike: superLike)
         .whenComplete(() {
@@ -350,8 +428,14 @@ class DeckController extends ChangeNotifier {
 
     if (_index > 0) {
       _index -= 1;
-      notifyListeners();
     }
+    // `undo_swipe` deletes the row, so today's server-side count really did
+    // go down with it.
+    final spent = _swipesToday;
+    if (spent != null && spent > 0) {
+      _swipesToday = spent - 1;
+    }
+    notifyListeners();
 
     // The undone swipe may have been a like; the Like tab must forget it.
     // Refreshed rather than surgically removed, because only the server knows
@@ -362,10 +446,40 @@ class DeckController extends ChangeNotifier {
     return true;
   }
 
+  /// Writes the discovery filter sheet's state to the profile. The returned
+  /// row goes through [AuthController.applyUser], whose change notification
+  /// is what reloads the deck — no explicit reload here.
+  Future<bool> applyDiscoveryFilters({
+    required List<int> cuisineIds,
+    required List<int> dietaryTagIds,
+    double? minRating,
+  }) async {
+    try {
+      final user = await _profiles.setDiscoveryFilters(
+        cuisineIds: cuisineIds,
+        dietaryTagIds: dietaryTagIds,
+        minRating: minRating,
+      );
+      authController.applyUser(user);
+      return true;
+    } on Object catch (error) {
+      debugPrint('Discovery filters write failed: $error');
+      if (!_messages.isClosed) {
+        _messages.add('Could not save your filters.');
+      }
+      return false;
+    }
+  }
+
   /// How far the user is from [card], phrased for the card's location row.
+  /// With a passport pinned, "the user" is the pin — the whole deck is dealt
+  /// from there, and measuring from the real fix would caption every card
+  /// with the distance home.
   String distanceLabelFor(RestaurantCard card) {
+    final user = authController.user;
+    final passportActive = user != null && user.hasPassport;
     final position = _userPosition;
-    if (position == null) {
+    if (!passportActive && position == null) {
       return 'Distance loading';
     }
 
@@ -376,8 +490,8 @@ class DeckController extends ChangeNotifier {
     }
 
     final meters = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
+      passportActive ? user.passportLatitude! : position!.latitude,
+      passportActive ? user.passportLongitude! : position!.longitude,
       card.latitude,
       card.longitude,
     );
