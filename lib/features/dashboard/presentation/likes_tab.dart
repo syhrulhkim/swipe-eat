@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/location/user_position_state.dart';
+import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../restaurants/models/restaurant.dart';
@@ -119,14 +120,18 @@ class _LikesTabState extends State<LikesTab> with UserPositionState {
     final error = _error;
     if (!likes.isLoaded || error != null) {
       return DashboardTabShell(
+        eyebrow: 'Saved for later',
         title: 'Like',
         child: error == null
-            ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+            ? const Center(
+                child: AppLottie(motion: AppMotion.heart, size: 88),
+              )
             : ListView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
                   EmptyTabMessage(
+                    eyebrow: 'Likes unavailable',
                     title: 'Something went wrong',
                     subtitle: error,
                     actionLabel: 'Try again',

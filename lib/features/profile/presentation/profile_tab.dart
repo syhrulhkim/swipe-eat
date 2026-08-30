@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
+import '../../../core/ui/radius_options.dart';
 import '../../auth/models/app_user.dart';
 import '../../dashboard/presentation/dashboard_widgets.dart';
 
@@ -14,11 +16,13 @@ class ProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final signedIn = user != null;
     final name = user?.name ?? 'Guest';
     final email = user?.email ?? 'Sign in to sync your picks';
 
     return DashboardTabShell(
-      title: 'Profile',
+      eyebrow: signedIn ? 'Signed in' : 'Not signed in',
+      title: name,
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(
@@ -30,7 +34,16 @@ class ProfileTab extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ProfileHeaderCard(name: name, email: email),
+            _ProfileHeaderCard(user: user, email: email),
+            const SizedBox(height: 22),
+            Text('Your taste', style: appSectionTitleStyle(context)),
+            const SizedBox(height: 4),
+            Text(
+              'What the deck weighs before it deals.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: kTextOnPhotoMuted,
+                  ),
+            ),
             const SizedBox(height: 12),
             const PreferenceTile(
               icon: Icons.wb_sunny_rounded,
@@ -62,47 +75,67 @@ class ProfileTab extends StatelessWidget {
   }
 }
 
+/// The account card. The name is already the screen title, so this carries the
+/// face, the address, and the two settings the deck actually reads.
 class _ProfileHeaderCard extends StatelessWidget {
-  const _ProfileHeaderCard({
-    required this.name,
-    required this.email,
-  });
+  const _ProfileHeaderCard({required this.user, required this.email});
 
-  final String name;
+  final AppUser? user;
   final String email;
 
   @override
   Widget build(BuildContext context) {
+    final account = user;
+    final avatarUrl = account?.avatarUrl;
+
     return SimpleCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.person_rounded, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, style: appPanelTitleStyle(context)),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.62),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: kFillOnPhoto,
+                  backgroundImage:
+                      avatarUrl == null ? null : NetworkImage(avatarUrl),
+                  child: avatarUrl != null
+                      ? null
+                      : const Icon(
+                          Icons.person_rounded,
+                          color: kTextOnPhotoSecondary,
                         ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    email,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: kTextOnPhotoSecondary,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            if (account != null) ...[
+              const SizedBox(height: 16),
+              AppStatStrip(
+                stats: [
+                  AppStat(
+                    label: 'Location',
+                    value: account.lastPlaceName ?? 'Not set',
+                  ),
+                  AppStat(
+                    label: 'Search radius',
+                    value: radiusLabel(account.searchRadiusKm),
                   ),
                 ],
               ),
-            ),
+            ],
           ],
         ),
       ),

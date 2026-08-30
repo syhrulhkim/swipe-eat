@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/location/user_position_state.dart';
+import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
@@ -68,15 +69,19 @@ class _ExploreTabState extends State<ExploreTab> with UserPositionState {
         final error = _explore.error;
         if (_explore.loading || error != null || _explore.restaurants.isEmpty) {
           return DashboardTabShell(
+            eyebrow: 'Everything in range',
             title: 'Explore',
             child: _explore.loading
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                ? const Center(
+                    child: AppLottie(motion: AppMotion.pin, size: 88),
+                  )
                 : ListView(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.all(AppSpacing.screenPadding),
                     children: [
                       if (error != null)
                         EmptyTabMessage(
+                          eyebrow: 'Map unavailable',
                           title: 'Something went wrong',
                           subtitle: error,
                           actionLabel: 'Try again',
@@ -84,6 +89,7 @@ class _ExploreTabState extends State<ExploreTab> with UserPositionState {
                         )
                       else
                         const EmptyTabMessage(
+                          eyebrow: 'Nothing nearby',
                           title: 'No restaurants yet',
                           subtitle: 'Check back soon.',
                         ),

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_buttons.dart';
+import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
@@ -44,6 +46,7 @@ class _QuizTabState extends State<QuizTab> {
     return AnimatedBuilder(
       animation: _quiz,
       builder: (context, _) => DashboardTabShell(
+        eyebrow: 'One question a day',
         title: 'Quiz',
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -64,10 +67,12 @@ class _QuizTabState extends State<QuizTab> {
 
   List<Widget> _buildBody(BuildContext context) {
     if (_quiz.loading) {
+      // Transient, so it may loop: the tab replaces it the moment the
+      // question arrives.
       return const [
         Padding(
           padding: EdgeInsets.only(top: 40),
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          child: Center(child: AppLottie(motion: AppMotion.spinner, size: 64)),
         ),
       ];
     }
@@ -76,6 +81,7 @@ class _QuizTabState extends State<QuizTab> {
     if (error != null) {
       return [
         EmptyTabMessage(
+          eyebrow: 'Quiz unavailable',
           title: 'Something went wrong',
           subtitle: error,
           actionLabel: 'Try again',
@@ -88,6 +94,7 @@ class _QuizTabState extends State<QuizTab> {
     if (question == null || question.options.isEmpty) {
       return const [
         EmptyTabMessage(
+          eyebrow: 'Nothing today',
           title: 'No quiz available',
           subtitle: 'Check back soon.',
         ),
@@ -97,14 +104,10 @@ class _QuizTabState extends State<QuizTab> {
     final selected = _quiz.selectedOption;
 
     return [
-      Text(
-        question.prompt,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.64),
-              height: 1.35,
-            ),
-      ),
-      const SizedBox(height: 12),
+      // The question is the name of what is on this screen, so it carries the
+      // display face rather than sitting under the header as body copy.
+      Text(question.prompt, style: appSectionTitleStyle(context)),
+      const SizedBox(height: 16),
       ...question.options.map(
         (option) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -118,8 +121,8 @@ class _QuizTabState extends State<QuizTab> {
       const SizedBox(height: 14),
       if (selected != null)
         _QuizResultCard(
-          title: selected.resultTitle,
-          subtitle: selected.recommendedRestaurantName ?? 'None',
+          eyebrow: selected.resultTitle,
+          name: selected.recommendedRestaurantName ?? 'None',
           body: selected.resultBody,
           accent: selected.resultAccent,
         )
@@ -127,7 +130,7 @@ class _QuizTabState extends State<QuizTab> {
         Text(
           'Select an answer above to get a suggestion.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.60),
+                color: kTextOnPhotoMuted,
               ),
         ),
     ];
@@ -147,9 +150,6 @@ class _QuizAnswerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent =
-        selected ? kAccentEmber : Colors.white.withValues(alpha: 0.10);
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -160,12 +160,10 @@ class _QuizAnswerTile extends StatelessWidget {
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: selected
-                ? accent.withValues(alpha: 0.14)
-                : Colors.white.withValues(alpha: 0.05),
+            color: kSurfacePanel,
             borderRadius: BorderRadius.circular(kRadiusPanel),
             border: Border.all(
-              color: accent.withValues(alpha: selected ? 0.42 : 0.08),
+              color: selected ? kAccentEmber : kHairline,
             ),
           ),
           child: Row(
@@ -174,10 +172,9 @@ class _QuizAnswerTile extends StatelessWidget {
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: selected ? accent : Colors.transparent,
+                  color: selected ? kAccentEmber : Colors.transparent,
                   border: Border.all(
-                    color:
-                        selected ? accent : Colors.white.withValues(alpha: 0.24),
+                    color: selected ? kAccentEmber : kTextOnPhotoMuted,
                   ),
                   shape: BoxShape.circle,
                 ),
@@ -185,7 +182,7 @@ class _QuizAnswerTile extends StatelessWidget {
                     ? const Icon(
                         Icons.check_rounded,
                         size: 13,
-                        color: Colors.black,
+                        color: kOnAccent,
                       )
                     : null,
               ),
@@ -194,8 +191,8 @@ class _QuizAnswerTile extends StatelessWidget {
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                        color: selected ? kTextOnPhoto : kTextOnPhotoSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
                 ),
               ),
@@ -207,16 +204,18 @@ class _QuizAnswerTile extends StatelessWidget {
   }
 }
 
+/// The answer: the same eyebrow-over-name stack the deck and the detail page
+/// use, so the suggestion reads as a restaurant rather than as a verdict.
 class _QuizResultCard extends StatelessWidget {
   const _QuizResultCard({
-    required this.title,
-    required this.subtitle,
+    required this.eyebrow,
+    required this.name,
     required this.body,
     required this.accent,
   });
 
-  final String title;
-  final String subtitle;
+  final String eyebrow;
+  final String name;
   final String body;
   final Color accent;
 
@@ -229,27 +228,14 @@ class _QuizResultCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: accent,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.12,
-                  ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
+            AppEyebrow(label: eyebrow, color: accent),
+            const SizedBox(height: 8),
+            Text(name, style: appTitleStyle(context)),
             const SizedBox(height: 8),
             Text(
               body,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.74),
+                    color: kTextOnPhotoSecondary,
                     height: 1.35,
                   ),
             ),

@@ -1,5 +1,5 @@
 name: swipe_eat
-description: A Forui-first mobile app for Swipe Eat, backed by Supabase.
+description: Swipe Eat — a restaurant discovery app on a dark CREME-style design system, backed by Supabase.
 publish_to: "none"
 version: 0.1.0+1
 
