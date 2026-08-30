@@ -42,8 +42,8 @@ const Color kBackgroundDeep = Color(0xFF050505);
 const Color kSurfaceDark = Color(0xFF141414);
 
 /// Raised surface: panels, list rows, anything that must separate from
-/// [kSurfaceDark] without a border.
-const Color kSurfacePanel = Color(0xFF1C1C1C);
+/// [kSurfaceDark] without a border. Matches the Figma's panel grey.
+const Color kSurfacePanel = Color(0xFF1E1E1E);
 
 /// Stands in for a restaurant's own brand colour when the row has none or the
 /// stored value is unreadable. Matches [kSurfacePanel] so an unbranded card is
@@ -88,12 +88,17 @@ const Color kTextOnPhotoSecondary = Color(0xE6FFFFFF);
 /// Font size for the small uppercase badges (category pills, eyebrows).
 const double kOverlineFontSize = 10;
 
-/// Display face — headlines and anything that carries a screen. Tight, slightly
-/// quirky grotesk; used at 20 px and above, never for body copy.
-const String kDisplayFontFamily = 'BricolageGrotesque';
+/// The one family the design uses, headlines and body alike. The Figma sets
+/// everything in Lexend and differentiates by size and weight only, so the
+/// display/text split collapses to a single face.
+///
+/// Two names are kept because call sites ask "display or text?", which is a
+/// role, not a family — if a second face ever returns, only these two lines
+/// change.
+const String kDisplayFontFamily = 'Lexend';
 
-/// Text face — body copy, labels, chips, form fields.
-const String kTextFontFamily = 'InstrumentSans';
+/// See [kDisplayFontFamily]: same family, different role.
+const String kTextFontFamily = 'Lexend';
 
 /// The large overlaid restaurant name, identical on the deck, the Like tab and
 /// the detail page so the three screens read as one design.
@@ -104,9 +109,11 @@ TextStyle appTitleStyle(BuildContext context) {
   return Theme.of(context).textTheme.headlineMedium!.copyWith(
         fontFamily: kDisplayFontFamily,
         color: kTextOnPhoto,
-        fontWeight: FontWeight.w700,
-        height: 1.04,
-        letterSpacing: -0.6,
+        fontWeight: FontWeight.w600,
+        // The Figma sets Lexend at 105% line height and no tracking; the
+        // negative tracking the old grotesk needed would cramp it.
+        height: 1.05,
+        letterSpacing: 0,
       );
 }
 
@@ -131,8 +138,8 @@ TextStyle appPanelTitleStyle(BuildContext context) {
   return Theme.of(context).textTheme.titleMedium!.copyWith(
         fontFamily: kDisplayFontFamily,
         color: kTextOnPhoto,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0,
       );
 }
 
@@ -154,8 +161,8 @@ TextStyle appSectionTitleStyle(BuildContext context) {
   return Theme.of(context).textTheme.titleLarge!.copyWith(
         fontFamily: kDisplayFontFamily,
         color: kTextOnPhoto,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.4,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0,
       );
 }
 

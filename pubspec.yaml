@@ -47,32 +47,23 @@ flutter:
     # abstract: a spinner, a heart and a location pulse, not illustrations.
     - assets/lottie/
 
-  # Both families are bundled rather than fetched at runtime: the app now
-  # serves a cached deck with no connection, and a first offline launch that
-  # falls back to the platform font would undo half the redesign.
+  # Bundled rather than fetched at runtime: the app serves a cached deck with
+  # no connection, and a first offline launch that falls back to the platform
+  # font would undo the redesign.
   #
-  # Upstream ships these as variable fonts. The files here are static
-  # instances cut from those (Bricolage at opsz 36, both at wdth 100), because
-  # Flutter picks a face by the weights declared below and cannot instance a
-  # variable axis from a `fontWeight` alone. Licences sit next to them.
+  # Upstream ships Lexend as a variable font. The files here are static
+  # instances cut from it, because Flutter picks a face by the weights
+  # declared below and cannot instance a variable axis from a `fontWeight`
+  # alone. Licence sits next to them.
   fonts:
-    # Display face: headlines, restaurant names, screen titles.
-    - family: BricolageGrotesque
+    # The design's single face: headlines, restaurant names, body copy, chips.
+    - family: Lexend
       fonts:
-        - asset: assets/fonts/BricolageGrotesque-600.ttf
-          weight: 600
-        - asset: assets/fonts/BricolageGrotesque-700.ttf
-          weight: 700
-        - asset: assets/fonts/BricolageGrotesque-800.ttf
-          weight: 800
-    # Text face: body copy, labels, chips, form fields.
-    - family: InstrumentSans
-      fonts:
-        - asset: assets/fonts/InstrumentSans-400.ttf
+        - asset: assets/fonts/Lexend-400.ttf
           weight: 400
-        - asset: assets/fonts/InstrumentSans-500.ttf
+        - asset: assets/fonts/Lexend-500.ttf
           weight: 500
-        - asset: assets/fonts/InstrumentSans-600.ttf
+        - asset: assets/fonts/Lexend-600.ttf
           weight: 600
-        - asset: assets/fonts/InstrumentSans-700.ttf
+        - asset: assets/fonts/Lexend-700.ttf
           weight: 700
