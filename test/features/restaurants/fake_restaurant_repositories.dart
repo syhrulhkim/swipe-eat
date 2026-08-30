@@ -2,6 +2,7 @@ import 'package:swipe_eat/core/ui/design_tokens.dart';
 
 import 'package:swipe_eat/features/restaurants/data/restaurant_repository.dart';
 import 'package:swipe_eat/features/restaurants/data/swipe_repository.dart';
+import 'package:swipe_eat/features/restaurants/models/cuisine_count.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 
 /// A minimal but real [Restaurant] for list/like fixtures.
@@ -30,10 +31,17 @@ class FakeRestaurantRepository implements RestaurantRepository {
   /// Rows the detail route can open by id.
   List<Restaurant> catalogRows = const [];
 
+  /// What `get_cuisine_counts` would return, biggest category first.
+  List<CuisineCount> cuisineRows = const [];
+
   bool failDeck = false;
   bool failLiked = false;
   bool failSearch = false;
   bool failFetchById = false;
+  bool failCuisines = false;
+
+  /// The cuisineId of the latest [search] call, null included.
+  int? lastSearchCuisineId;
 
   int likedFetches = 0;
 
@@ -76,12 +84,22 @@ class FakeRestaurantRepository implements RestaurantRepository {
     String? query,
     double? latitude,
     double? longitude,
+    int? cuisineId,
     int limit = 100,
   }) async {
+    lastSearchCuisineId = cuisineId;
     if (failSearch) {
       throw Exception('search unavailable');
     }
     return searchRows;
+  }
+
+  @override
+  Future<List<CuisineCount>> cuisineCounts() async {
+    if (failCuisines) {
+      throw Exception('cuisines unavailable');
+    }
+    return List.of(cuisineRows);
   }
 }
 

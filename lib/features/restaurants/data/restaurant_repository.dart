@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/cuisine_count.dart';
 import '../models/restaurant.dart';
 
 class RestaurantRepository {
@@ -77,13 +78,15 @@ class RestaurantRepository {
 
   /// Explore. A null [query] browses the catalog; either way the RPC applies
   /// the same radius rule as the deck — what the user cannot be served, they
-  /// cannot find. The RPC caps at 100 rows, so with no radius set a 288-row
-  /// catalog does not fit: the closest 100 win, which is the right 100 for a
-  /// map.
+  /// cannot find. [cuisineId] narrows the rows to one cuisine, which is how a
+  /// tap on an Explore category tile becomes a list. The RPC caps at 100 rows,
+  /// so with no radius set a 288-row catalog does not fit: the closest 100
+  /// win, which is the right 100 for a browse surface.
   Future<List<Restaurant>> search({
     String? query,
     double? latitude,
     double? longitude,
+    int? cuisineId,
     int limit = 100,
   }) async {
     final rows = await _client
@@ -93,10 +96,24 @@ class RestaurantRepository {
           'p_limit': limit,
           if (latitude != null) 'p_latitude': latitude,
           if (longitude != null) 'p_longitude': longitude,
+          if (cuisineId != null) 'p_cuisine_id': cuisineId,
         })
         .select(_deckColumns)
         .timeout(_timeout);
 
     return rows.map(Restaurant.fromJson).toList();
+  }
+
+  /// The Explore grid: every active cuisine, its restaurant count and a cover
+  /// photo. Ordered by count descending server-side — the biggest categories
+  /// lead, and the client must not re-sort.
+  Future<List<CuisineCount>> cuisineCounts() async {
+    final rows = await _client
+        .rpc<dynamic>('get_cuisine_counts')
+        .timeout(_timeout) as List<dynamic>;
+
+    return rows
+        .map((row) => CuisineCount.fromJson(row as Map<String, dynamic>))
+        .toList();
   }
 }

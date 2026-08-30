@@ -82,7 +82,7 @@ class _DashboardShellState extends State<_DashboardShell> {
         index: _selectedIndex,
         children: [
           SwipeDeck(authController: widget.authController),
-          ExploreTab(authController: widget.authController),
+          const ExploreTab(),
           const LikesTab(),
           const GroupTab(),
           ProfileTab(user: widget.authController.user),

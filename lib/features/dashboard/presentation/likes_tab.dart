@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/location/distance_label.dart';
 import '../../../core/location/user_position_state.dart';
 import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
@@ -83,28 +83,11 @@ class _LikesTabState extends State<LikesTab> with UserPositionState {
   }
 
   String _distanceLabel(Restaurant restaurant) {
-    final position = userPosition;
-    if (position == null ||
-        (restaurant.latitude == 0 && restaurant.longitude == 0)) {
-      return 'Johor Bahru';
-    }
-
-    final meters = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
-      restaurant.latitude,
-      restaurant.longitude,
+    return distanceLabelFrom(
+      userPosition,
+      latitude: restaurant.latitude,
+      longitude: restaurant.longitude,
     );
-
-    if (meters >= 100000) {
-      return '100 km +';
-    }
-
-    if (meters >= 1000) {
-      return '${(meters / 1000).toStringAsFixed(1)} km away';
-    }
-
-    return '${meters.toStringAsFixed(0)} m away';
   }
 
   void _openRestaurant(Restaurant restaurant) {
