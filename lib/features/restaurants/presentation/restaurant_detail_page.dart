@@ -8,6 +8,7 @@ import '../../../core/location/user_position_state.dart';
 import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
+import '../../../core/ui/page_transitions.dart';
 import '../../../core/ui/rating_label.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../models/restaurant_detail_data.dart';
@@ -518,9 +519,11 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                   onTap: () {
                     unawaited(
                       Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              TikTokPlayerScreen(videoUrl: videoUrl),
+                        // The same fade the deck opens the player with: one
+                        // screen reached two ways should not arrive two ways.
+                        fadeThroughRoute<void>(
+                          context,
+                          (_) => TikTokPlayerScreen(videoUrl: videoUrl),
                         ),
                       ),
                     );

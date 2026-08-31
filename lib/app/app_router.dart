@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../core/observability/crash_reporting.dart';
+import '../core/ui/page_transitions.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/auth/presentation/register_page.dart';
 import '../features/auth/presentation/splash_page.dart';
@@ -59,28 +60,49 @@ GoRouter createRouter(AuthController authController) {
         redirect: (context, state) =>
             authController.isAuthenticated ? '/dashboard' : '/login',
       ),
+      // The five screens below are reached by replacement, not by a push: the
+      // redirect above decides which one is owed and swaps it in. They
+      // crossfade into each other. The pushed routes further down keep the
+      // platform transition, and with it the iOS swipe-back gesture.
       GoRoute(
         path: '/splash',
-        builder: (context, state) => const SplashPage(),
+        pageBuilder: (context, state) => fadeThroughPage<void>(
+          context,
+          key: state.pageKey,
+          child: const SplashPage(),
+        ),
       ),
       GoRoute(
         path: '/login',
-        builder: (context, state) => LoginPage(authController: authController),
+        pageBuilder: (context, state) => fadeThroughPage<void>(
+          context,
+          key: state.pageKey,
+          child: LoginPage(authController: authController),
+        ),
       ),
       GoRoute(
         path: '/register',
-        builder: (context, state) =>
-            RegisterPage(authController: authController),
+        pageBuilder: (context, state) => fadeThroughPage<void>(
+          context,
+          key: state.pageKey,
+          child: RegisterPage(authController: authController),
+        ),
       ),
       GoRoute(
         path: '/onboarding',
-        builder: (context, state) =>
-            OnboardingPage(authController: authController),
+        pageBuilder: (context, state) => fadeThroughPage<void>(
+          context,
+          key: state.pageKey,
+          child: OnboardingPage(authController: authController),
+        ),
       ),
       GoRoute(
         path: '/dashboard',
-        builder: (context, state) =>
-            DashboardPage(authController: authController),
+        pageBuilder: (context, state) => fadeThroughPage<void>(
+          context,
+          key: state.pageKey,
+          child: DashboardPage(authController: authController),
+        ),
       ),
       GoRoute(
         path: '/settings',

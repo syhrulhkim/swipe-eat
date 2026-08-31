@@ -40,8 +40,22 @@ class _DashboardShell extends StatefulWidget {
   State<_DashboardShell> createState() => _DashboardShellState();
 }
 
-class _DashboardShellState extends State<_DashboardShell> {
+class _DashboardShellState extends State<_DashboardShell>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
+
+  /// Fades the newly selected tab in. Starts completed so the first tab is
+  /// simply there — the dashboard has just crossfaded in from the splash, and
+  /// a second fade on top of that reads as a stutter.
+  ///
+  /// One shot per selection: the tabs are all mounted at once behind an
+  /// IndexedStack, so anything that kept running would animate a resting
+  /// screen.
+  late final AnimationController _tabFade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+    value: 1,
+  );
 
   @override
   void initState() {
@@ -57,6 +71,12 @@ class _DashboardShellState extends State<_DashboardShell> {
     }));
   }
 
+  @override
+  void dispose() {
+    _tabFade.dispose();
+    super.dispose();
+  }
+
   void _setSelectedIndex(int index) {
     if (_selectedIndex == index) {
       return;
@@ -65,6 +85,7 @@ class _DashboardShellState extends State<_DashboardShell> {
     setState(() {
       _selectedIndex = index;
     });
+    _tabFade.forward(from: 0);
   }
 
   @override
@@ -77,16 +98,20 @@ class _DashboardShellState extends State<_DashboardShell> {
       ),
       // An IndexedStack, not a swap: rebuilding a tab on every visit would
       // re-deal the deck and refetch the map each time the user glanced at
-      // another tab.
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          SwipeDeck(authController: widget.authController),
-          const ExploreTab(),
-          const LikesTab(),
-          const GroupTab(),
-          ProfileTab(authController: widget.authController),
-        ],
+      // another tab. The switch itself is instant, so the fade below is what
+      // makes it read as a change of screen rather than as a repaint.
+      body: FadeTransition(
+        opacity: CurvedAnimation(parent: _tabFade, curve: Curves.easeOutCubic),
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: [
+            SwipeDeck(authController: widget.authController),
+            const ExploreTab(),
+            const LikesTab(),
+            const GroupTab(),
+            ProfileTab(authController: widget.authController),
+          ],
+        ),
       ),
     );
   }
