@@ -183,6 +183,39 @@ class PhotoWash extends StatelessWidget {
   }
 }
 
+/// The wash that keeps a caption legible over a photo *tile*.
+///
+/// Sized to the tile rather than in pixels, which is the difference from
+/// [PhotoBottomScrim]: that one is hundreds of pixels tall for a full-bleed
+/// photo screen, so on a tile a couple of hundred pixels high only the
+/// near-opaque end of its gradient is ever visible and the whole card goes
+/// black. This keeps its ramp in the bottom half of whatever it is given.
+class PhotoTileScrim extends StatelessWidget {
+  const PhotoTileScrim({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.78),
+                Colors.black.withValues(alpha: 0.42),
+                Colors.black.withValues(alpha: 0.0),
+              ],
+              stops: const [0.0, 0.28, 0.58],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The dark wash under content overlaid on a photo. The ramp stays dark
 /// through the whole band where the title, chips and controls sit.
 class PhotoBottomScrim extends StatelessWidget {

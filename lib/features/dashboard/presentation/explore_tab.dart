@@ -245,7 +245,7 @@ class _CuisineTile extends StatelessWidget {
                 ),
               // Text sits straight on the photo, so it needs the same scrim
               // the cards use — and on the plain panel it is harmlessly dark.
-              const PhotoBottomScrim(),
+              const PhotoTileScrim(),
               Positioned(
                 left: 12,
                 right: 12,

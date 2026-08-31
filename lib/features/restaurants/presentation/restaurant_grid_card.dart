@@ -54,7 +54,7 @@ class RestaurantGridCard extends StatelessWidget {
                     );
                   },
                 ),
-              const _CardScrim(),
+              const PhotoTileScrim(),
               Positioned(
                 left: 12,
                 right: 12,
@@ -96,39 +96,6 @@ class RestaurantGridCard extends StatelessWidget {
               if (badge != null)
                 Positioned(top: 8, right: 8, child: badge!),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The wash that keeps the name and rating legible over a photo.
-///
-/// Sized to the tile rather than in pixels. [PhotoBottomScrim] is 620 px tall
-/// for a full-bleed photo screen; on a grid tile a few hundred pixels high that
-/// is the near-opaque end of the gradient covering the entire card, which
-/// turned every tile black. This one keeps its ramp in the bottom half of
-/// whatever it is given.
-class _CardScrim extends StatelessWidget {
-  const _CardScrim();
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.78),
-                Colors.black.withValues(alpha: 0.42),
-                Colors.black.withValues(alpha: 0.0),
-              ],
-              stops: const [0.0, 0.28, 0.58],
-            ),
           ),
         ),
       ),
