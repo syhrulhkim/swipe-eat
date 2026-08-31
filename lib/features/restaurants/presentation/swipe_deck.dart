@@ -16,6 +16,7 @@ import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../../auth/state/auth_controller.dart';
 import '../models/restaurant_card.dart';
 import '../state/deck_controller.dart';
+import '../state/visit_prompt_controller.dart';
 import 'discovery_filter_sheet.dart';
 import 'swipe_card.dart';
 import 'tiktok_player.dart';
@@ -776,7 +777,14 @@ class _MatchOverlay extends StatelessWidget {
       longitude: card.longitude,
       label: card.title,
     );
-    if (opened || !context.mounted) {
+    if (opened) {
+      unawaited(VisitPromptController.instance.recordDirections(
+        restaurantId: card.id,
+        name: card.title,
+      ));
+      return;
+    }
+    if (!context.mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(

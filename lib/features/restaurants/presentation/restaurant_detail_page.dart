@@ -13,6 +13,7 @@ import '../../../core/ui/rating_label.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../models/restaurant_detail_data.dart';
 import '../state/likes_controller.dart';
+import '../state/visit_prompt_controller.dart';
 import 'tiktok_player.dart';
 
 /// One restaurant in full: hero photo, the facts, its location and its top
@@ -82,7 +83,16 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
       longitude: widget.data.longitude,
       label: widget.data.title,
     );
-    if (opened || !mounted) {
+    if (opened) {
+      // Remember the trip so the dashboard can ask whether it happened. Never
+      // blocks the tap; a cache that will not write only costs the question.
+      unawaited(VisitPromptController.instance.recordDirections(
+        restaurantId: widget.data.id,
+        name: widget.data.title,
+      ));
+      return;
+    }
+    if (!mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(

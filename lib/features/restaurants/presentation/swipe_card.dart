@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../core/location/open_directions.dart';
 import '../../../core/ui/app_buttons.dart';
@@ -6,6 +8,7 @@ import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../data/tiktok_player_factory.dart';
 import '../models/restaurant_card.dart';
+import '../state/visit_prompt_controller.dart';
 import 'review_carousel.dart';
 import 'tiktok_player.dart';
 
@@ -408,7 +411,14 @@ class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
       longitude: widget.data.longitude,
       label: widget.data.title,
     );
-    if (opened || !mounted) {
+    if (opened) {
+      unawaited(VisitPromptController.instance.recordDirections(
+        restaurantId: widget.data.id,
+        name: widget.data.title,
+      ));
+      return;
+    }
+    if (!mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
