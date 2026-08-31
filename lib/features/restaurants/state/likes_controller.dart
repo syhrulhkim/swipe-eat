@@ -95,6 +95,10 @@ class LikesController extends ChangeNotifier {
   /// Whether the like was the emphatic kind — the Liked grid's star badge.
   bool isSuperLiked(int restaurantId) => _superLikedIds.contains(restaurantId);
 
+  /// How many likes were the emphatic kind. Counted from the id set rather
+  /// than from [liked], so it is not capped by that list's page size.
+  int get superLikedCount => _superLikedIds.length;
+
   /// Loads once; concurrent callers share the same request. A failed load
   /// clears itself so the next call retries instead of caching the error.
   Future<void> ensureLoaded() {
