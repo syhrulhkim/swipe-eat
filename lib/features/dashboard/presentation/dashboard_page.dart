@@ -117,9 +117,15 @@ class _DashboardShellState extends State<_DashboardShell>
   }
 }
 
-/// The floating tab bar: a dark pill carrying all five tabs as equals, the
-/// way the Figma draws it. The selected tab's icon sits inside a ring — the
-/// bar's one highlight — rather than raising any tab out of the row.
+/// The floating tab bar: a dark pill carrying all five tabs as equals. No tab
+/// is raised out of the row; the selected one is marked by an ember pill
+/// behind its icon, the same accent the buttons and focus rings use.
+///
+/// Diverges from the Figma, which draws the selection as a white ring. A ring
+/// is a shape the rest of the app never uses, and it said "selected" only by
+/// being there — the ember fill says it in the app's own colour, and the
+/// outline/filled icon pair says it a second time for anyone who cannot pick
+/// the tint out.
 class _DashboardBottomNav extends StatelessWidget {
   const _DashboardBottomNav({
     required this.selectedIndex,
@@ -129,17 +135,51 @@ class _DashboardBottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  /// Height of the pill itself.
-  static const double _barHeight = 78;
+  /// Height of the pill itself. Enough for a 48 px touch target under the
+  /// indicator and its label, and no more.
+  static const double _barHeight = 70;
 
   /// The tabs drawn in the pill, left to right, with the `IndexedStack` index
   /// each one selects.
-  static const _tabs = <({IconData icon, String label, int index})>[
-    (icon: Icons.swipe_rounded, label: 'Swipe', index: 0),
-    (icon: Icons.explore_rounded, label: 'Explore', index: 1),
-    (icon: Icons.thumb_up_rounded, label: 'Liked', index: 2),
-    (icon: Icons.groups_rounded, label: 'Group', index: 3),
-    (icon: Icons.person_rounded, label: 'Profile', index: 4),
+  ///
+  /// Every tab carries an outline glyph for its resting state and a solid one
+  /// for the selected state, so the current tab is legible without relying on
+  /// colour alone.
+  static const _tabs =
+      <({IconData icon, IconData activeIcon, String label, int index})>[
+    (
+      icon: Icons.style_outlined,
+      activeIcon: Icons.style_rounded,
+      label: 'Swipe',
+      index: 0,
+    ),
+    (
+      icon: Icons.explore_outlined,
+      activeIcon: Icons.explore_rounded,
+      label: 'Explore',
+      index: 1,
+    ),
+    // A heart, not a thumbs-up: the deck's like button is a heart and the Liked
+    // grid badges hearts, so the tab that collects them should be the same
+    // glyph.
+    (
+      icon: Icons.favorite_border_rounded,
+      activeIcon: Icons.favorite_rounded,
+      label: 'Liked',
+      index: 2,
+    ),
+    (
+      icon: Icons.groups_outlined,
+      activeIcon: Icons.groups_rounded,
+      label: 'Group',
+      index: 3,
+    ),
+    (
+      icon: Icons.person_outline_rounded,
+      activeIcon: Icons.person_rounded,
+      label: 'Profile',
+      index: 4,
+    ),
   ];
 
   @override
@@ -161,6 +201,7 @@ class _DashboardBottomNav extends StatelessWidget {
                 Expanded(
                   child: _BottomNavItem(
                     icon: tab.icon,
+                    activeIcon: tab.activeIcon,
                     label: tab.label,
                     isSelected: selectedIndex == tab.index,
                     onTap: () => onSelected(tab.index),
@@ -174,10 +215,12 @@ class _DashboardBottomNav extends StatelessWidget {
   }
 }
 
-/// One tab in the pill: icon in a ring when selected, over a small label.
+/// One tab in the pill: a solid icon on an ember pill when selected, an
+/// outline icon on nothing when not, over a small label.
 class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
     required this.icon,
+    required this.activeIcon,
     required this.label,
     required this.isSelected,
     required this.onTap,
@@ -185,15 +228,18 @@ class _BottomNavItem extends StatelessWidget {
 
   final String label;
   final IconData icon;
+  final IconData activeIcon;
   final bool isSelected;
   final VoidCallback onTap;
 
-  /// Diameter of the ring around the selected icon.
-  static const double _ringSize = 40;
+  /// The selection pill behind the icon. Wider than it is tall so five of them
+  /// sit in the bar without crowding the labels.
+  static const double _indicatorWidth = 44;
+  static const double _indicatorHeight = 30;
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? kTextOnPhoto : kTextOnPhotoMuted;
+    final color = isSelected ? kAccentEmber : kTextOnPhotoMuted;
 
     return Semantics(
       label: label,
@@ -209,27 +255,39 @@ class _BottomNavItem extends StatelessWidget {
               AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOutCubic,
-                width: _ringSize,
-                height: _ringSize,
+                width: _indicatorWidth,
+                height: _indicatorHeight,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected ? kTextOnPhoto : Colors.transparent,
-                    width: 1.5,
-                  ),
+                  color: isSelected
+                      ? kAccentEmber.withValues(alpha: 0.16)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(kRadiusPill),
                 ),
-                child: Icon(icon, size: 20, color: color),
+                child: Icon(
+                  isSelected ? activeIcon : icon,
+                  size: 21,
+                  color: color,
+                ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: color,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w400,
-                    ),
+              const SizedBox(height: 4),
+              // The bar is a fixed height that the rest of the layout sits
+              // above, so the label cannot be allowed to grow without bound —
+              // past a point it would push itself out of the pill. It stops
+              // scaling where it still fits; the screens themselves scale all
+              // the way.
+              MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.3,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: color,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                ),
               ),
             ],
           ),
