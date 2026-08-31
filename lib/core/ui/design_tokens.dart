@@ -155,34 +155,6 @@ TextStyle appEyebrowStyle(BuildContext context, {Color color = kAccentEmber}) {
       );
 }
 
-/// The oversized statement line at the top of a screen that is mostly about
-/// one subject — currently the Profile masthead. A step above [appTitleStyle],
-/// same face and the same zero tracking, so it reads as the loudest size in
-/// one type scale rather than as a second design.
-TextStyle appDisplayStyle(BuildContext context) {
-  return Theme.of(context).textTheme.displaySmall!.copyWith(
-        fontFamily: kDisplayFontFamily,
-        color: kTextOnPhoto,
-        fontWeight: FontWeight.w600,
-        // Tighter than [appTitleStyle]: at display size the default leading
-        // opens a visible gap between two lines of one name.
-        height: 0.98,
-        letterSpacing: 0,
-      );
-}
-
-/// A large standalone number over a small label — the counts in a stat band.
-/// The number carries the emphasis, so the label under it stays muted.
-TextStyle appNumeralStyle(BuildContext context, {Color color = kTextOnPhoto}) {
-  return Theme.of(context).textTheme.headlineLarge!.copyWith(
-        fontFamily: kDisplayFontFamily,
-        color: color,
-        fontWeight: FontWeight.w600,
-        height: 1,
-        letterSpacing: 0,
-      );
-}
-
 /// A section title above a list ("Nearby", "Your likes"). Display face at a
 /// size where the text face would look plain.
 TextStyle appSectionTitleStyle(BuildContext context) {
