@@ -135,7 +135,7 @@ class _DetailPlaceholder extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.screenPadding),
               child: Align(
                 alignment: Alignment.topLeft,
-                child: AppCircleButton(
+                child: AppIconButton(
                   icon: Icons.arrow_back_rounded,
                   size: kUtilityButtonSize,
                   semanticLabel: 'Back',

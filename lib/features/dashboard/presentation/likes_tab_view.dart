@@ -203,7 +203,7 @@ class _LikesTabViewState extends State<LikesTabView> {
                 onSelected: (sort) => setState(() => _sort = sort),
               ),
               const Spacer(),
-              AppCircleButton(
+              AppIconButton(
                 icon: Icons.tune_rounded,
                 size: kUtilityButtonSize,
                 onPhoto: false,
@@ -365,14 +365,14 @@ class _LikesTabViewState extends State<LikesTabView> {
                 const SizedBox(width: 6),
               ],
               if (likedActions) ...[
-                AppCircleButton(
+                AppIconButton(
                   icon: Icons.check_rounded,
                   size: 30,
                   semanticLabel: 'Mark visited',
                   onTap: () => widget.onMarkVisited(restaurant),
                 ),
                 const SizedBox(width: 6),
-                AppCircleButton(
+                AppIconButton(
                   icon: Icons.favorite_rounded,
                   size: 30,
                   iconColor: kAccentEmber,
@@ -399,9 +399,9 @@ class _SuperLikeBadge extends StatelessWidget {
       child: Container(
         width: 30,
         height: 30,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: kAccentEmber,
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(kRadiusPill),
         ),
         child: const Icon(Icons.star_rounded, size: 18, color: kOnAccent),
       ),
@@ -409,7 +409,7 @@ class _SuperLikeBadge extends StatelessWidget {
   }
 }
 
-/// Liked | Visited | Reviewed. One pill container, the active segment filled
+/// Liked | Visited | Reviewed. One container, the active segment filled
 /// cream the way the primary button is.
 class _SegmentControl extends StatelessWidget {
   const _SegmentControl({required this.segment, required this.onSelected});
@@ -489,7 +489,7 @@ class _SegmentPill extends StatelessWidget {
   }
 }
 
-/// "Latest ▾" — the sort menu, styled as the secondary pill.
+/// "Latest ▾" — the sort menu, styled as the secondary button.
 class _SortButton extends StatelessWidget {
   const _SortButton({required this.sort, required this.onSelected});
 

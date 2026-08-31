@@ -77,7 +77,7 @@ class PreferenceTile extends StatelessWidget {
           height: 40,
           decoration: BoxDecoration(
             color: tint.withValues(alpha: 0.16),
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(kRadiusPill),
           ),
           child: Icon(icon, color: tint),
         ),

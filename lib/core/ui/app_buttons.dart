@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 
 import 'design_tokens.dart';
 
-/// Height of every pill button, so a row of them lines up without each call
+/// Height of every bar button, so a row of them lines up without each call
 /// site guessing at padding.
 const double kPillButtonHeight = 46;
 
-/// The one primary action on a screen: a cream pill with dark ink.
+/// The one primary action on a screen: a cream bar with dark ink.
 ///
 /// Deliberately loud, and deliberately rare — the design leans on exactly one
 /// of these per screen (Continue, Get directions, Reload deck). Everything
@@ -29,11 +29,11 @@ class AppPrimaryButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final IconData? icon;
 
-  /// Whether the button fills the width it is given. Left false a pill is only
-  /// as wide as its label, which is what an action row wants.
+  /// Whether the button fills the width it is given. Left false the button is
+  /// only as wide as its label, which is what an action row wants.
   final bool expand;
 
-  /// Swaps the label for a spinner and stops taps. The pill keeps its width so
+  /// Swaps the label for a spinner and stops taps. The button keeps its width so
   /// the row does not jump while a request is in flight.
   final bool busy;
 
@@ -52,7 +52,7 @@ class AppPrimaryButton extends StatelessWidget {
   }
 }
 
-/// A secondary action: dark pill, hairline border, white label.
+/// A secondary action: dark bar, hairline border, white label.
 class AppSecondaryButton extends StatelessWidget {
   const AppSecondaryButton({
     super.key,
@@ -89,7 +89,7 @@ class AppSecondaryButton extends StatelessWidget {
   }
 }
 
-/// Shared body of both pills. Private: the two public wrappers above are the
+/// Shared body of both buttons. Private: the two public wrappers above are the
 /// vocabulary, and a third fill would mean a third meaning nobody defined.
 class _PillButton extends StatelessWidget {
   const _PillButton({
@@ -149,7 +149,7 @@ class _PillButton extends StatelessWidget {
           );
 
     return Opacity(
-      // Disabled reads as dimmed rather than as a different fill, so the pill
+      // Disabled reads as dimmed rather than as a different fill, so the button
       // keeps its identity while it waits for a valid form.
       opacity: enabled ? 1 : 0.45,
       child: Material(

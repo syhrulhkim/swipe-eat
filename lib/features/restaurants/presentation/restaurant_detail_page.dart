@@ -285,26 +285,26 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
               const SizedBox(height: 22),
               Row(
                 children: [
-                  AppCircleButton(
+                  AppIconButton(
                     icon: Icons.favorite_rounded,
                     iconColor: _liked ? kAccentEmber : kTextOnPhoto,
                     semanticLabel: _liked ? 'Liked' : 'Like',
                     onTap: () => unawaited(_toggleLike()),
                   ),
                   const SizedBox(width: 12),
-                  AppCircleButton(
+                  AppIconButton(
                     icon: Icons.chat_bubble_rounded,
                     semanticLabel: 'Reviews',
                     onTap: () => _scrollToSection(_reviewKey),
                   ),
                   const SizedBox(width: 12),
-                  AppCircleButton(
+                  AppIconButton(
                     icon: Icons.route_rounded,
                     semanticLabel: 'Location',
                     onTap: () => _scrollToSection(_locationKey),
                   ),
                   const SizedBox(width: 12),
-                  AppCircleButton(
+                  AppIconButton(
                     icon: Icons.close_rounded,
                     semanticLabel: 'Close',
                     onTap: () => unawaited(Navigator.of(context).maybePop()),
@@ -431,7 +431,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
         ),
         if (hasFix) ...[
           const SizedBox(height: 12),
-          // The one cream pill on this screen: leaving for the restaurant is
+          // The one cream button on this screen: leaving for the restaurant is
           // the only thing the page is asking you to do.
           AppPrimaryButton(
             label: 'Get directions',
@@ -498,7 +498,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: Row(
             children: [
-              AppCircleButton(
+              AppIconButton(
                 icon: Icons.arrow_back_rounded,
                 size: kUtilityButtonSize,
                 background: kFillOnPhoto,
@@ -521,7 +521,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                     : const SizedBox.shrink(),
               ),
               if (videoUrl != null && videoUrl.isNotEmpty)
-                AppCircleButton(
+                AppIconButton(
                   icon: Icons.play_arrow_rounded,
                   size: kUtilityButtonSize,
                   background: kFillOnPhoto,
@@ -549,7 +549,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
   }
 }
 
-/// Top-center photo switcher: a pill of mini thumbnails over the hero image;
+/// Top-center photo switcher: a strip of mini thumbnails over the hero image;
 /// the active one gets an accent ring.
 ///
 /// Public only so widget tests have a stable handle on the strip. Nothing
@@ -571,7 +571,7 @@ class HeroThumbnailStrip extends StatelessWidget {
     final visible = imageUrls.length > 5 ? imageUrls.sublist(0, 5) : imageUrls;
 
     // Five 36px thumbnails need ~216px, more than the slot between the back
-    // and play buttons on a 320pt-wide phone. Shrink the pill to fit instead
+    // and play buttons on a 320pt-wide phone. Shrink the strip to fit instead
     // of overflowing it off the right edge.
     return FittedBox(
       fit: BoxFit.scaleDown,
@@ -615,7 +615,8 @@ class HeroThumbnailStrip extends StatelessWidget {
                             width: 2,
                           ),
                         ),
-                        child: ClipOval(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(kRadiusPill),
                           child: Image.network(
                             visible[i],
                             fit: BoxFit.cover,

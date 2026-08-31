@@ -59,25 +59,31 @@ const Color kFillOnPhoto = Color(0x59000000);
 /// rather than drawing a frame.
 const Color kHairline = Color(0x14FFFFFF);
 
-/// Fully rounded corners (pills, circles-as-rects).
-const double kRadiusPill = 999;
+// The app is square-cornered. Every rounded shape in it resolves through one of
+// the five radii below — nothing hard-codes a corner — so the whole look is one
+// edit away in either direction. Restore 999 / 32 / 28 / 18 / 12 to get the
+// rounded app back.
 
-/// Corner radius for the large full-bleed cards (swipe deck bottom corners).
-const double kRadiusCard = 32;
+/// Was the pill radius: chips, the nav indicator, round buttons.
+const double kRadiusPill = 0;
 
-/// Corner radius for the large bottom sheets (explore info card, browse-all).
-const double kRadiusSheet = 28;
+/// Was the radius of the large full-bleed cards (swipe deck bottom corners).
+const double kRadiusCard = 0;
 
-/// Corner radius for panels and cards (info panel, review/detail cards).
-const double kRadiusPanel = 18;
+/// Was the radius of the large bottom sheets (explore info card, browse-all).
+const double kRadiusSheet = 0;
 
-/// Corner radius for small image tiles (gallery thumbs, hero strip).
-const double kRadiusThumb = 12;
+/// Was the radius of panels and cards (info panel, review/detail cards).
+const double kRadiusPanel = 0;
 
-/// Diameter of the primary action circles (like/pass/chat/route…).
+/// Was the radius of small image tiles (gallery thumbs, hero strip).
+const double kRadiusThumb = 0;
+
+/// Side of the primary action buttons (like/pass/chat/route…). Square, so it
+/// is both the width and the height.
 const double kActionButtonSize = 58;
 
-/// Diameter of small utility circles (settings, back, more).
+/// Side of the small utility buttons (settings, back, more).
 const double kUtilityButtonSize = 44;
 
 /// Primary/secondary text on photographic backgrounds.
@@ -85,7 +91,7 @@ const Color kTextOnPhoto = Colors.white;
 const Color kTextOnPhotoMuted = Color(0x8CFFFFFF);
 const Color kTextOnPhotoSecondary = Color(0xE6FFFFFF);
 
-/// Font size for the small uppercase badges (category pills, eyebrows).
+/// Font size for the small uppercase badges (category chips, eyebrows).
 const double kOverlineFontSize = 10;
 
 /// The one family the design uses, headlines and body alike. The Figma sets
@@ -285,10 +291,14 @@ class PhotoTopScrim extends StatelessWidget {
   }
 }
 
-/// Circular icon button — the like/pass/route controls and every small
-/// utility circle (back, settings, more).
-class AppCircleButton extends StatelessWidget {
-  const AppCircleButton({
+/// Square icon button — the like/pass/route controls and every small utility
+/// button (back, settings, more).
+///
+/// Shaped by [kRadiusPill] rather than by a [CircleBorder], so it follows the
+/// app's corner radius: square today, and a true circle again the moment that
+/// token goes back to its pill value, because the box is always a square.
+class AppIconButton extends StatelessWidget {
+  const AppIconButton({
     super.key,
     required this.icon,
     required this.onTap,
@@ -318,11 +328,15 @@ class AppCircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(kRadiusPill),
+    );
+
     final button = Material(
       color: background ?? (onPhoto ? kFillOnPhoto : kSurfacePanel),
-      shape: const CircleBorder(side: BorderSide(color: kHairline)),
+      shape: shape.copyWith(side: const BorderSide(color: kHairline)),
       child: InkWell(
-        customBorder: const CircleBorder(),
+        customBorder: shape,
         onTap: () {
           HapticFeedback.selectionClick();
           onTap();
@@ -339,7 +353,10 @@ class AppCircleButton extends StatelessWidget {
       ),
     );
 
-    Widget result = ClipOval(child: button);
+    Widget result = ClipRRect(
+      borderRadius: BorderRadius.circular(kRadiusPill),
+      child: button,
+    );
 
     final count = badgeCount;
     if (count != null && count > 0) {
@@ -387,7 +404,7 @@ class AppCircleButton extends StatelessWidget {
   }
 }
 
-/// Pill chip with a leading icon: tags, ratings, the location marker.
+/// Chip with a leading icon: tags, ratings, the location marker.
 class AppChip extends StatelessWidget {
   const AppChip({
     super.key,
@@ -400,7 +417,7 @@ class AppChip extends StatelessWidget {
   final String label;
   final IconData? icon;
 
-  /// Whether the chip sits on a photo or video. See [AppCircleButton.onPhoto].
+  /// Whether the chip sits on a photo or video. See [AppIconButton.onPhoto].
   final bool onPhoto;
 
   /// Colours the icon and label. Null leaves both white, which is the default

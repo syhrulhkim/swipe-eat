@@ -125,7 +125,7 @@ class _CuisineRestaurantsPageState extends State<CuisineRestaurantsPage>
               ),
               child: Row(
                 children: [
-                  AppCircleButton(
+                  AppIconButton(
                     icon: Icons.arrow_back_rounded,
                     size: kUtilityButtonSize,
                     onPhoto: false,

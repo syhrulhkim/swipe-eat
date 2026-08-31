@@ -114,6 +114,31 @@ class _SwipeEatAppState extends State<SwipeEatApp> {
           borderRadius: BorderRadius.circular(kRadiusPanel),
         ),
       ),
+      // Material's own defaults for these are rounded and reach the screen
+      // without passing through any of the app's widgets, so they are pinned
+      // to the app's radii here rather than left to the framework.
+      cardTheme: CardThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusPanel),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusPanel),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kRadiusPanel),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(kRadiusSheet),
+          ),
+        ),
+      ),
       colorScheme: baseMaterialTheme.colorScheme.copyWith(
         primary: kAccentEmber,
         onPrimary: kOnAccent,

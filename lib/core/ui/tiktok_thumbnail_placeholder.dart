@@ -29,7 +29,7 @@ class TikTokThumbnailPlaceholder extends StatelessWidget {
                 height: 52,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(kRadiusPill),
                 ),
                 child: const Icon(
                   Icons.music_note_rounded,

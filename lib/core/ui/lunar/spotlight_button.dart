@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../design_tokens.dart';
 import 'spotlight.dart';
 
-/// A pill button whose outline lights up under the pointer.
+/// A button whose outline lights up under the pointer.
 ///
 /// Port of Lunar UI's Spotlight Button. Same shader as [SpotlightCard], but
 /// stroked onto the outline instead of filling the shape, which lights an arc
@@ -20,7 +21,7 @@ class SpotlightButton extends StatefulWidget {
     this.restingBorderColor = const Color(0x1FFFFFFF),
     this.borderWidth = 1.4,
     this.padding = const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-    this.borderRadius = const BorderRadius.all(Radius.circular(999)),
+    this.borderRadius = const BorderRadius.all(Radius.circular(kRadiusPill)),
     this.textStyle,
   });
 

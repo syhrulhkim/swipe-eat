@@ -122,7 +122,7 @@ class _SparklesDemo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(kRadiusPanel),
       child: const SizedBox(
         height: 200,
         child: Sparkles(
@@ -153,7 +153,7 @@ class _StarGridDemo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(kRadiusPanel),
       child: const ColoredBox(
         color: kSurfaceDark,
         child: SizedBox(

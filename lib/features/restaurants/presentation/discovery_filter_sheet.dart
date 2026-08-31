@@ -308,7 +308,7 @@ class _OptionWrap extends StatelessWidget {
   }
 }
 
-/// One selectable pill: cream fill when picked, hairline outline otherwise —
+/// One selectable chip: cream fill when picked, hairline outline otherwise —
 /// the same selected-state grammar as the Liked screen's segments.
 class _FilterPill extends StatelessWidget {
   const _FilterPill({

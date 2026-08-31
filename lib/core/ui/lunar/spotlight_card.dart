@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design_tokens.dart';
 import 'spotlight.dart';
 
 /// How the highlight sits relative to the card's content.
@@ -31,7 +32,7 @@ class SpotlightCard extends StatelessWidget {
     this.mode = SpotlightCardMode.border,
     this.surfaceColor = const Color(0xFF18181B),
     this.restingBorderColor = const Color(0x1AFFFFFF),
-    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
+    this.borderRadius = const BorderRadius.all(Radius.circular(kRadiusPanel)),
     this.borderWidth = 1,
     this.padding = const EdgeInsets.all(24),
     this.overlayOpacity = 0.18,

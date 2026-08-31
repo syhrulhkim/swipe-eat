@@ -691,7 +691,7 @@ class DeckHeader extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (onFilterTap != null) ...[
-                            AppCircleButton(
+                            AppIconButton(
                               icon: Icons.tune_rounded,
                               size: kUtilityButtonSize,
                               iconSize: 20,
@@ -702,7 +702,7 @@ class DeckHeader extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                           ],
-                          AppCircleButton(
+                          AppIconButton(
                             icon: Icons.settings_rounded,
                             size: kUtilityButtonSize,
                             iconSize: 20,

@@ -226,8 +226,8 @@ class _DashboardShellState extends State<_DashboardShell>
   }
 }
 
-/// The floating tab bar: a dark pill carrying all five tabs as equals. No tab
-/// is raised out of the row; the selected one is marked by an ember pill
+/// The floating tab bar: a dark band carrying all five tabs as equals. No tab
+/// is raised out of the row; the selected one is marked by an ember block
 /// behind its icon, the same accent the buttons and focus rings use.
 ///
 /// Diverges from the Figma, which draws the selection as a white ring. A ring
@@ -244,11 +244,11 @@ class _DashboardBottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  /// Height of the pill itself. Enough for a 48 px touch target under the
+  /// Height of the bar itself. Enough for a 48 px touch target under the
   /// indicator and its label, and no more.
   static const double _barHeight = 70;
 
-  /// The tabs drawn in the pill, left to right, with the `IndexedStack` index
+  /// The tabs drawn in the bar, left to right, with the `IndexedStack` index
   /// each one selects.
   ///
   /// Every tab carries an outline glyph for its resting state and a solid one
@@ -324,7 +324,7 @@ class _DashboardBottomNav extends StatelessWidget {
   }
 }
 
-/// One tab in the pill: a solid icon on an ember pill when selected, an
+/// One tab in the bar: a solid icon on an ember block when selected, an
 /// outline icon on nothing when not, over a small label.
 class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
@@ -341,7 +341,7 @@ class _BottomNavItem extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  /// The selection pill behind the icon. Wider than it is tall so five of them
+  /// The selection block behind the icon. Wider than it is tall so five of them
   /// sit in the bar without crowding the labels.
   static const double _indicatorWidth = 44;
   static const double _indicatorHeight = 30;
@@ -382,7 +382,7 @@ class _BottomNavItem extends StatelessWidget {
               const SizedBox(height: 4),
               // The bar is a fixed height that the rest of the layout sits
               // above, so the label cannot be allowed to grow without bound —
-              // past a point it would push itself out of the pill. It stops
+              // past a point it would push itself out of the bar. It stops
               // scaling where it still fits; the screens themselves scale all
               // the way.
               MediaQuery.withClampedTextScaling(

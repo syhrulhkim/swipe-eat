@@ -131,8 +131,8 @@ class _SwipeCardState extends State<SwipeCard> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Square at the top (the card runs under the status-bar
-                // scrim); only the outer bottom corners are rounded.
+                // Clipped square, like every other corner in the app; the
+                // card runs under the status-bar scrim at the top.
                 Positioned.fill(
                   child: ClipRect(child: _buildMedia()),
                 ),
@@ -180,7 +180,7 @@ class _SwipeCardState extends State<SwipeCard> {
                   ),
                 // The Figma's bottom panel: an opaque grey card carrying the
                 // name, the rating block, the fact chips and — on the top
-                // card — the action bar, all in one rounded surface.
+                // card — the action bar, all in one surface.
                 Positioned(
                   left: 14,
                   right: 14,
@@ -225,7 +225,7 @@ class _SwipeCardState extends State<SwipeCard> {
   }
 
   /// The Figma's "✕ Pass | Like" bar, flanked by the two Tinder extras:
-  /// rewind on the far left, the super-like star between the pills.
+  /// rewind on the far left, the super-like star between the buttons.
   Widget _buildActionBar() {
     final rewind = widget.onRewind;
 
@@ -238,7 +238,7 @@ class _SwipeCardState extends State<SwipeCard> {
           ignoring: rewind == null,
           child: Opacity(
             opacity: rewind == null ? 0.4 : 1,
-            child: AppCircleButton(
+            child: AppIconButton(
               icon: Icons.replay_rounded,
               size: kUtilityButtonSize,
               iconSize: 20,
@@ -259,7 +259,7 @@ class _SwipeCardState extends State<SwipeCard> {
           ),
         ),
         const SizedBox(width: 10),
-        AppCircleButton(
+        AppIconButton(
           icon: Icons.star_rounded,
           size: kUtilityButtonSize,
           iconSize: 22,

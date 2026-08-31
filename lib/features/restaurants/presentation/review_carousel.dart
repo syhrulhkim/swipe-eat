@@ -162,7 +162,7 @@ class _ReviewCard extends StatelessWidget {
             height: 30,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(kRadiusPill),
             ),
             child: const Icon(
               Icons.rate_review_rounded,

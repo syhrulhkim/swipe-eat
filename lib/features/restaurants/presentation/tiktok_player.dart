@@ -226,7 +226,7 @@ class TikTokPlayerScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Align(
                   alignment: Alignment.topRight,
-                  child: AppCircleButton(
+                  child: AppIconButton(
                     icon: Icons.close_rounded,
                     size: kUtilityButtonSize,
                     background: Colors.black.withValues(alpha: 0.48),
