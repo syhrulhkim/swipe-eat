@@ -49,7 +49,7 @@ Future<void> _pumpStack(WidgetTester tester, List<Widget> children) async {
   );
 }
 
-/// Matches the [Semantics] wrapper [AppCircleButton] adds for an
+/// Matches the [Semantics] wrapper [AppIconButton] adds for an
 /// icon-only control. `button: true` is what tells a screen reader this is
 /// tappable; [Material]/[InkWell] never set that flag themselves, so a hit
 /// here can only come from the widget under test.
@@ -63,14 +63,14 @@ Finder _buttonSemantics({String? label}) {
   );
 }
 
-/// The fill the button paints, which is what [AppCircleButton.onPhoto]
+/// The fill the button paints, which is what [AppIconButton.onPhoto]
 /// chooses between.
 Color? _circleButtonFill(WidgetTester tester) {
   return tester
       .widget<Material>(
         find
             .descendant(
-              of: find.byType(AppCircleButton),
+              of: find.byType(AppIconButton),
               matching: find.byType(Material),
             )
             .first,
@@ -92,11 +92,11 @@ Color? _chipFill(WidgetTester tester) {
 }
 
 void main() {
-  group('AppCircleButton', () {
+  group('AppIconButton', () {
     testWidgets('renders the requested icon', (tester) async {
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.favorite_rounded,
             iconColor: kAccentEmber,
             onTap: () {},
@@ -114,14 +114,14 @@ void main() {
       var taps = 0;
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.route_rounded,
             onTap: () => taps++,
           ),
         ),
       );
 
-      await tester.tap(find.byType(AppCircleButton));
+      await tester.tap(find.byType(AppIconButton));
       await tester.pump();
 
       expect(taps, 1);
@@ -130,7 +130,7 @@ void main() {
     testWidgets('sizes the tap target to the given diameter', (tester) async {
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.settings_rounded,
             size: kUtilityButtonSize,
             onTap: () {},
@@ -139,7 +139,7 @@ void main() {
       );
 
       expect(
-        tester.getSize(find.byType(AppCircleButton)),
+        tester.getSize(find.byType(AppIconButton)),
         const Size(kUtilityButtonSize, kUtilityButtonSize),
       );
     });
@@ -148,7 +148,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.close_rounded,
             onTap: () {},
           ),
@@ -162,7 +162,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.close_rounded,
             onPhoto: false,
             onTap: () {},
@@ -178,7 +178,7 @@ void main() {
     testWidgets('an explicit background wins over both', (tester) async {
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.close_rounded,
             background: kAccentCream,
             onTap: () {},
@@ -192,7 +192,7 @@ void main() {
     testWidgets('renders the badge count when it is above 0', (tester) async {
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.chat_bubble_rounded,
             badgeCount: 3,
             onTap: () {},
@@ -208,7 +208,7 @@ void main() {
       for (final count in <int?>[null, 0, -1]) {
         await tester.pumpWidget(
           _host(
-            AppCircleButton(
+            AppIconButton(
               icon: Icons.chat_bubble_rounded,
               badgeCount: count,
               onTap: () {},
@@ -220,7 +220,7 @@ void main() {
         // a [RichText] — so no Text at all means no badge.
         expect(
           find.descendant(
-            of: find.byType(AppCircleButton),
+            of: find.byType(AppIconButton),
             matching: find.byType(Text),
           ),
           findsNothing,
@@ -234,7 +234,7 @@ void main() {
       var taps = 0;
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.chat_bubble_rounded,
             badgeCount: 12,
             onTap: () => taps++,
@@ -264,7 +264,7 @@ void main() {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.favorite_rounded,
             semanticLabel: 'Like',
             onTap: () {},
@@ -283,7 +283,7 @@ void main() {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(
         _host(
-          AppCircleButton(
+          AppIconButton(
             icon: Icons.favorite_rounded,
             onTap: () {},
           ),
@@ -448,7 +448,7 @@ void main() {
         await _pumpStack(tester, [
           Positioned.fill(
             child: Center(
-              child: AppCircleButton(
+              child: AppIconButton(
                 icon: Icons.favorite_rounded,
                 onTap: () => taps++,
               ),
