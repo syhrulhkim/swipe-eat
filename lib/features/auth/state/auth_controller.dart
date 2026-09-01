@@ -124,6 +124,33 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  /// Deletes the account, then tears down the session and the on-device caches
+  /// exactly as [logout] does. Returns false and sets [errorMessage] when the
+  /// delete failed, so the caller can keep the user signed in rather than
+  /// showing an empty app for an account that still exists.
+  Future<bool> deleteAccount() async {
+    final ok = await _run(_repository.deleteAccount);
+    if (!ok) {
+      return false;
+    }
+
+    // The account is gone; sign-out only clears the local token, and a failure
+    // there must not be reported as a failed deletion.
+    try {
+      await _repository.logout();
+    } on Object catch (error) {
+      debugPrint('Sign-out after account deletion failed: $error');
+    }
+    await _profileCache.clear();
+    await const DeckCache().clear();
+    _status = AuthStatus.unauthenticated;
+    _user = null;
+    _errorMessage = null;
+    _notice = null;
+    notifyListeners();
+    return true;
+  }
+
   /// Re-reads the profile row — call after onboarding or a preference write so
   /// `needsOnboarding` and the displayed name reflect the database.
   Future<void> refreshUser() async {

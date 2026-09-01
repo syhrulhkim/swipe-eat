@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/radius_options.dart';
 import '../../auth/state/auth_controller.dart';
@@ -30,6 +32,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// previous state.
   late int? _radiusKm = widget.authController.user?.searchRadiusKm;
   bool _saving = false;
+  bool _deleting = false;
 
   Future<void> _saveRadius(int? radiusKm) async {
     final previous = widget.authController.user?.searchRadiusKm;
@@ -68,6 +71,79 @@ class _SettingsPageState extends State<SettingsPage> {
         const SnackBar(content: Text('Could not save your search radius.')),
       );
     }
+  }
+
+  Future<void> _openUrl(String url) async {
+    final launched = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (launched || !mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open the page.')),
+    );
+  }
+
+  /// Two-step delete: a dialog that spells out what is lost, then the call. Both
+  /// stores require this path to exist in the app, and it is irreversible, so it
+  /// is deliberately not a one-tap action.
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text(
+          'This permanently deletes your account, your taste preferences and '
+          'every place you liked, saved or marked as visited. It cannot be '
+          'undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: Theme.of(dialogContext).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() {
+      _deleting = true;
+    });
+    final deleted = await widget.authController.deleteAccount();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _deleting = false;
+    });
+
+    if (deleted) {
+      // The router redirects to login off the unauthenticated state; closing
+      // Settings first stops it animating out over the login page.
+      Navigator.of(context).pop();
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          widget.authController.errorMessage ??
+              'Your account could not be deleted.',
+        ),
+      ),
+    );
   }
 
   @override
@@ -140,7 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 20),
           Text(
-            'App Settings',
+            'About',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -154,18 +230,67 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Language'),
-                    subtitle: const Text('English'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () {},
+                    title: const Text('Privacy policy'),
+                    trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                    onTap: () => _openUrl(AppConfig.privacyPolicyUrl),
                   ),
                   const Divider(height: 1),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Notifications'),
-                    subtitle: const Text('Enabled'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () {},
+                    title: const Text('Terms of use'),
+                    trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                    onTap: () => _openUrl(AppConfig.termsUrl),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Account',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Sign out'),
+                    trailing: const Icon(Icons.logout_rounded, size: 18),
+                    onTap: _deleting
+                        ? null
+                        : () => widget.authController.logout(),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Delete account',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Permanently removes your account and everything in it.',
+                    ),
+                    trailing: _deleting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                    onTap: _deleting ? null : _confirmDelete,
                   ),
                 ],
               ),

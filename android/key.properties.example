@@ -1,0 +1,9 @@
+# Copy to android/key.properties (gitignored) and fill in with the values you
+# used when creating the upload keystore. See docs/store-release.md for the
+# keytool command. Never commit the real file or the .jks itself.
+storePassword=<the store password you chose>
+keyPassword=<the key password you chose>
+keyAlias=upload
+# Path relative to the android/ directory, or an absolute path. Keeping the
+# keystore outside the repo entirely is safest.
+storeFile=/Users/<you>/keys/swipe-eat-upload.jks

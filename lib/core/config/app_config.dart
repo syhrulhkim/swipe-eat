@@ -39,4 +39,19 @@ class AppConfig {
       String.fromEnvironment('SENTRY_ENVIRONMENT', defaultValue: 'development');
 
   static bool get hasCrashReporting => sentryDsn.isNotEmpty;
+
+  /// Where the public legal pages live. Both stores require a privacy policy
+  /// URL, and Google Play additionally requires a data-deletion URL that opens
+  /// without installing the app — see `supabase/functions/legal`. Overridable so
+  /// a custom domain can front the same pages later without a code change.
+  static const String legalBaseUrl = String.fromEnvironment(
+    'LEGAL_BASE_URL',
+    defaultValue: '$supabaseUrl/functions/v1/legal',
+  );
+
+  static String get privacyPolicyUrl => '$legalBaseUrl/privacy';
+
+  static String get termsUrl => '$legalBaseUrl/terms';
+
+  static String get accountDeletionUrl => '$legalBaseUrl/delete-account';
 }

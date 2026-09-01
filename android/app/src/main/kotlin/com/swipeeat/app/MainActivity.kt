@@ -1,4 +1,4 @@
-package com.example.swipe_eat
+package com.swipeeat.app
 
 import io.flutter.embedding.android.FlutterActivity
 

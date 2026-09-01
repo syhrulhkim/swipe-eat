@@ -119,6 +119,14 @@ class FakeAuthRepository implements AuthRepository {
     profile = null;
   }
 
+  @override
+  Future<void> deleteAccount() async {
+    calls.add('deleteAccount');
+    _maybeFail();
+    sessionPresent = false;
+    profile = null;
+  }
+
   void _maybeFail() {
     final failure = nextFailure;
     if (failure != null) {

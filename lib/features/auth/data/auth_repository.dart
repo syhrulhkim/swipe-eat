@@ -167,6 +167,30 @@ class AuthRepository {
     await _oauth.signOut();
   }
 
+  /// Permanently deletes the signed-in account.
+  ///
+  /// A client cannot delete its own `auth.users` row, so this calls the
+  /// `delete-account` edge function, which takes the user id from the caller's
+  /// own JWT and deletes with the service role. Everything user-scoped cascades
+  /// from `profiles`, so one delete removes the lot.
+  ///
+  /// Throws [AuthFailure] if the account still exists afterwards — the caller
+  /// must not report success on a failed delete.
+  Future<void> deleteAccount() async {
+    await _guard(() async {
+      final response = await _client.functions
+          .invoke('delete-account', method: HttpMethod.post)
+          .timeout(const Duration(seconds: 20));
+
+      if (response.status != 200) {
+        throw AuthFailure(
+          'Your account could not be deleted (error ${response.status}). '
+          'Try again, or email support if it keeps failing.',
+        );
+      }
+    });
+  }
+
   /// Runs a Supabase call and rewrites its errors as [AuthFailure].
   Future<T> _guard<T>(Future<T> Function() action) async {
     try {
@@ -175,6 +199,12 @@ class AuthRepository {
       throw AuthFailure(_messageFor(error));
     } on PostgrestException catch (error) {
       throw AuthFailure(error.message);
+    } on FunctionException catch (error) {
+      // `functions.invoke` throws on any non-2xx, so an edge function failure
+      // arrives here rather than as a status on the response.
+      throw AuthFailure(
+        'The server rejected the request (error ${error.status}).',
+      );
     } on AuthFailure {
       rethrow;
     } on TimeoutException {

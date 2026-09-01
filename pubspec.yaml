@@ -1,7 +1,9 @@
 name: swipe_eat
 description: Swipe Eat — a restaurant discovery app on a dark CREME-style design system, backed by Supabase.
 publish_to: "none"
-version: 0.1.0+1
+# The build number is what the stores order releases by, and neither store lets
+# you reuse one — bump `+N` on every upload, even a rejected one.
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -38,6 +40,25 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
+  # Generates every Android mipmap and iOS AppIcon size from the two source
+  # PNGs below. Run `dart run flutter_launcher_icons` after replacing them.
+  flutter_launcher_icons: ^0.14.4
+
+# Store icon requirements the two source files have to satisfy:
+#   * assets/icon/app_icon.png        1024×1024, no alpha channel, no rounded
+#                                     corners of its own — Apple rejects
+#                                     transparency and masks the corners itself.
+#   * assets/icon/app_icon_fg.png     1024×1024, transparent, artwork inside the
+#                                     centre ~66% so Android's adaptive mask
+#                                     cannot crop it.
+# See docs/store-release.md.
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: "ic_launcher"
+  adaptive_icon_background: "#16150F"
+  adaptive_icon_foreground: "assets/icon/app_icon_fg.png"
+  ios: true
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
