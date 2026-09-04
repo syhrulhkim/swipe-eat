@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swipe_eat/core/ui/app_buttons.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 
 import '../../support/widget_test_support.dart';
@@ -473,6 +474,196 @@ void main() {
 
         expect(taps, 1, reason: '${scrim.runtimeType}');
       }
+    });
+  });
+
+  group('Ngap palette', () {
+    test('every black is warm, never grey', () {
+      // "No grey blacks (#111, #222) — blacks stay warm" is a rule the palette
+      // can be checked against rather than eyeballed: a warm black has more red
+      // in it than blue. A retint that greys one of these fails here.
+      for (final entry in const <String, Color>{
+        'kBackgroundDeep': kBackgroundDeep,
+        'kBackgroundDark': kBackgroundDark,
+        'kSurfaceDark': kSurfaceDark,
+        'kSurfacePanel': kSurfacePanel,
+      }.entries) {
+        expect(
+          entry.value.r,
+          greaterThan(entry.value.b),
+          reason: '${entry.key} has gone grey',
+        );
+      }
+    });
+
+    test('the surfaces get lighter as they stack', () {
+      // Surfaces separate by colour rather than by shadow, so the order has to
+      // hold or a raised panel stops reading as raised.
+      expect(kBackgroundDeep.r, lessThan(kBackgroundDark.r));
+      expect(kBackgroundDark.r, lessThan(kSurfaceDark.r));
+      expect(kSurfaceDark.r, lessThan(kSurfacePanel.r));
+    });
+
+    test('fresh is the one non-orange accent', () {
+      // It means "open now" and nothing else; spending it elsewhere costs it
+      // its meaning. Green: more green than red.
+      expect(kFresh.g, greaterThan(kFresh.r));
+      for (final accent in const [kAccentEmber, kAccentLava, kAccentChar]) {
+        expect(accent.r, greaterThan(accent.g));
+      }
+    });
+
+    test('the app is round-cornered, and the pill is the roundest', () {
+      for (final radius in const [
+        kRadiusThumb,
+        kRadiusPanel,
+        kRadiusCard,
+        kRadiusSheet,
+      ]) {
+        expect(radius, greaterThan(0));
+      }
+      expect(kRadiusPill, greaterThan(kRadiusCard));
+      expect(kRadiusThumb, lessThan(kRadiusPanel));
+      expect(kRadiusPanel, lessThan(kRadiusCard));
+    });
+
+    test('both faces are declared and they are different', () {
+      expect(kDisplayFontFamily, 'BricolageGrotesque');
+      expect(kTextFontFamily, 'InstrumentSans');
+      expect(kDisplayFontFamily, isNot(kTextFontFamily));
+    });
+  });
+
+  group('AppEyebrow', () {
+    testWidgets('renders its label as given, never upper-cased',
+        (tester) async {
+      // The design forbids all-caps labels, and this widget was the app's only
+      // uppercasing call site — so this test is the rule.
+      await tester.pumpWidget(_host(const AppEyebrow(label: 'Open now')));
+
+      expect(find.text('Open now'), findsOneWidget);
+      expect(find.text('OPEN NOW'), findsNothing);
+    });
+
+    testWidgets('sets no letter spacing', (tester) async {
+      // Tracking exists to make caps readable; it goes with them.
+      await tester.pumpWidget(_host(const AppEyebrow(label: 'Crispy')));
+
+      expect(tester.widget<Text>(find.text('Crispy')).style?.letterSpacing, 0);
+    });
+  });
+
+  group('AppPrimaryButton', () {
+    testWidgets('fills with the ember gradient, not a flat colour',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(AppPrimaryButton(label: 'Ngap!', onPressed: () {})),
+      );
+
+      final decorated = tester.widget<DecoratedBox>(
+        find
+            .descendant(
+              of: find.byType(AppPrimaryButton),
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is DecoratedBox &&
+                    widget.decoration is BoxDecoration &&
+                    (widget.decoration as BoxDecoration).gradient != null,
+                description: 'DecoratedBox with a gradient',
+              ),
+            )
+            .first,
+      );
+
+      expect((decorated.decoration as BoxDecoration).gradient, kCtaGradient);
+    });
+
+    testWidgets('leaves the Material transparent so the gradient shows through',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(AppPrimaryButton(label: 'Ngap!', onPressed: () {})),
+      );
+
+      final material = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byType(AppPrimaryButton),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+
+      expect(material.color, Colors.transparent);
+    });
+
+    testWidgets('a secondary button keeps a flat fill', (tester) async {
+      await tester.pumpWidget(
+        _host(AppSecondaryButton(label: 'Skip', onPressed: () {})),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byType(AppSecondaryButton),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is DecoratedBox &&
+                widget.decoration is BoxDecoration &&
+                (widget.decoration as BoxDecoration).gradient != null,
+            description: 'DecoratedBox with a gradient',
+          ),
+        ),
+        findsNothing,
+      );
+    });
+  });
+
+  group('ScreenGlow', () {
+    testWidgets('hangs off both edges and sits above the top of the screen',
+        (tester) async {
+      await _pumpStack(tester, const [ScreenGlow()]);
+
+      final stackRect = tester.getRect(find.byKey(_hostStackKey));
+      final glowRect = tester.getRect(find.byType(ScreenGlow));
+
+      // 130% of the screen width, centred, so the ellipse's flanks fall off
+      // both sides rather than tapering inside them.
+      expect(glowRect.width, closeTo(stackRect.width * 1.3, 0.01));
+      expect(glowRect.left, lessThan(stackRect.left));
+      expect(glowRect.right, greaterThan(stackRect.right));
+
+      // Lifted above the top edge, so the screen shows the glow's falloff
+      // rather than its hot centre.
+      expect(glowRect.top, lessThan(stackRect.top));
+    });
+
+    testWidgets('never takes a tap', (tester) async {
+      // It is the one orange thing that is not tappable, so it must not
+      // intercept the controls it sits behind.
+      var taps = 0;
+      await _pumpStack(tester, [
+        Positioned.fill(
+          child: Center(
+            child: AppIconButton(
+              icon: Icons.favorite_rounded,
+              onTap: () => taps++,
+            ),
+          ),
+        ),
+        const ScreenGlow(),
+      ]);
+
+      expect(
+        find.descendant(
+          of: find.byType(ScreenGlow),
+          matching: find.byType(IgnorePointer),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byIcon(Icons.favorite_rounded));
+      await tester.pump();
+
+      expect(taps, 1);
     });
   });
 }

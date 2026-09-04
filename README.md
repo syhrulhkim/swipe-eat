@@ -3,8 +3,9 @@
 A Flutter app for finding places to eat by swiping through restaurant cards,
 backed by Supabase.
 
-- **UI**: forui components over a custom dark glassmorphic design system
-  (`lib/core/ui/glass_ui.dart`), Inter throughout.
+- **UI**: forui components under the custom **Ngap** design system
+  (`lib/core/ui/design_tokens.dart`) — warm blacks under a radial ember glow,
+  Bricolage Grotesque over Instrument Sans, rounded corners.
 - **Backend**: Supabase — Postgres with Row Level Security, Supabase Auth
   (email, Google, Apple), Storage for cached thumbnails, and edge functions.
 - **Routing**: go_router, with redirects driven by `AuthController`.

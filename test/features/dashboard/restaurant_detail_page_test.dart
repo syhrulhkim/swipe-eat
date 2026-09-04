@@ -16,6 +16,11 @@ import '../restaurants/fake_restaurant_repositories.dart';
 /// The accent used for active/selected state.
 const Color _kAccent = kAccentEmber;
 
+/// The icon colour of an unlit control — [AppIconButton]'s default. Asserted
+/// through the token rather than as a literal, so a retint does not fail a test
+/// that is really about lit-vs-unlit.
+const Color _kUnlit = kTextOnPhoto;
+
 /// Peserai, Batu Pahat — the same origin the production fallback uses, so a
 /// restaurant placed on these coordinates is "0 m away".
 const double _userLat = 1.85;
@@ -373,7 +378,7 @@ void main() {
         return tester.widget<Icon>(find.byIcon(Icons.favorite_rounded)).color;
       }
 
-      expect(likeColor(), Colors.white);
+      expect(likeColor(), _kUnlit);
 
       await tester.tap(find.byIcon(Icons.favorite_rounded));
       await tester.pumpAndSettle();
@@ -381,7 +386,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.favorite_rounded));
       await tester.pumpAndSettle();
-      expect(likeColor(), Colors.white);
+      expect(likeColor(), _kUnlit);
     });
 
     testWidgets('the reviews button scrolls the Top review card into view',
@@ -447,7 +452,7 @@ void main() {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      expect(heartColor(tester), Colors.white);
+      expect(heartColor(tester), _kUnlit);
     });
 
     testWidgets('starts lit when the backend already holds the like',
@@ -464,7 +469,7 @@ void main() {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      expect(heartColor(tester), Colors.white);
+      expect(heartColor(tester), _kUnlit);
     });
 
     testWidgets('tapping it records a liked swipe from the detail page',
@@ -508,14 +513,14 @@ void main() {
 
       // The optimistic fill must roll back — a lit heart over a write the
       // backend never saw would be a lie that survives until the next fetch.
-      expect(heartColor(tester), Colors.white);
+      expect(heartColor(tester), _kUnlit);
       expect(find.text('Could not save that change.'), findsOneWidget);
     });
 
     testWidgets('follows a like made elsewhere in the app', (tester) async {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
-      expect(heartColor(tester), Colors.white);
+      expect(heartColor(tester), _kUnlit);
 
       // Liked elsewhere (e.g. a right swipe on the deck) while this page is
       // still mounted: no pumpWidget, so only the controller listener can
@@ -526,7 +531,7 @@ void main() {
 
       await LikesController.instance.unlike(_detailRestaurantId);
       await tester.pumpAndSettle();
-      expect(heartColor(tester), Colors.white);
+      expect(heartColor(tester), _kUnlit);
     });
 
     testWidgets('relabels itself for screen readers when liked',

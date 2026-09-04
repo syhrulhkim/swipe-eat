@@ -268,13 +268,14 @@ class _DashboardBottomNav extends StatelessWidget {
       label: 'Explore',
       index: 1,
     ),
-    // A heart, not a thumbs-up: the deck's like button is a heart and the Liked
+    // A heart, not a thumbs-up: the deck's like button is a heart and the Bites
     // grid badges hearts, so the tab that collects them should be the same
-    // glyph.
+    // glyph. The design forbids a bare heart for the like *action*, not for the
+    // tab that collects them — its own Bites glyph is a heart too.
     (
       icon: Icons.favorite_border_rounded,
       activeIcon: Icons.favorite_rounded,
-      label: 'Liked',
+      label: 'Bites',
       index: 2,
     ),
     (
@@ -286,7 +287,7 @@ class _DashboardBottomNav extends StatelessWidget {
     (
       icon: Icons.person_outline_rounded,
       activeIcon: Icons.person_rounded,
-      label: 'Profile',
+      label: 'You',
       index: 4,
     ),
   ];

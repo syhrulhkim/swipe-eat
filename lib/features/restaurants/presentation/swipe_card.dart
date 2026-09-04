@@ -252,7 +252,7 @@ class _SwipeCardState extends State<SwipeCard> {
         const SizedBox(width: 10),
         Expanded(
           child: AppSecondaryButton(
-            label: 'Pass',
+            label: 'Skip',
             icon: Icons.close_rounded,
             expand: true,
             onPressed: widget.onPass,
@@ -271,8 +271,10 @@ class _SwipeCardState extends State<SwipeCard> {
         ),
         const SizedBox(width: 10),
         Expanded(
+          // "Ngap!" — never "Like", and never a bare heart. The word is the
+          // product's name for the action, so the button carries it.
           child: AppPrimaryButton(
-            label: 'Like',
+            label: 'Ngap!',
             icon: Icons.favorite_rounded,
             expand: true,
             onPressed: widget.onLike,

@@ -72,19 +72,29 @@ flutter:
   # no connection, and a first offline launch that falls back to the platform
   # font would undo the redesign.
   #
-  # Upstream ships Lexend as a variable font. The files here are static
-  # instances cut from it, because Flutter picks a face by the weights
+  # Upstream ships both of these as variable fonts. The files here are static
+  # instances cut from them, because Flutter picks a face by the weights
   # declared below and cannot instance a variable axis from a `fontWeight`
-  # alone. Licence sits next to them.
+  # alone — shipping the variable TTF silently breaks every weight above 400.
+  # Licences sit next to them.
   fonts:
-    # The design's single face: headlines, restaurant names, body copy, chips.
-    - family: Lexend
+    # Display: anything the user reads first — headings, restaurant names.
+    - family: BricolageGrotesque
       fonts:
-        - asset: assets/fonts/Lexend-400.ttf
-          weight: 400
-        - asset: assets/fonts/Lexend-500.ttf
-          weight: 500
-        - asset: assets/fonts/Lexend-600.ttf
+        - asset: assets/fonts/BricolageGrotesque-600.ttf
           weight: 600
-        - asset: assets/fonts/Lexend-700.ttf
+        - asset: assets/fonts/BricolageGrotesque-700.ttf
+          weight: 700
+        - asset: assets/fonts/BricolageGrotesque-800.ttf
+          weight: 800
+    # Body: everything else — copy, labels, chips, metadata.
+    - family: InstrumentSans
+      fonts:
+        - asset: assets/fonts/InstrumentSans-400.ttf
+          weight: 400
+        - asset: assets/fonts/InstrumentSans-500.ttf
+          weight: 500
+        - asset: assets/fonts/InstrumentSans-600.ttf
+          weight: 600
+        - asset: assets/fonts/InstrumentSans-700.ttf
           weight: 700

@@ -7,11 +7,14 @@ import 'design_tokens.dart';
 /// site guessing at padding.
 const double kPillButtonHeight = 46;
 
-/// The one primary action on a screen: a cream bar with dark ink.
+/// The one primary action on a screen: an ember-to-lava bar with dark ink.
 ///
 /// Deliberately loud, and deliberately rare — the design leans on exactly one
 /// of these per screen (Continue, Get directions, Reload deck). Everything
 /// else is an [AppSecondaryButton].
+///
+/// This is the app's only gradient fill. Orange is reserved for what the user
+/// can act on, and nothing acts more than this.
 class AppPrimaryButton extends StatelessWidget {
   const AppPrimaryButton({
     super.key,
@@ -45,7 +48,8 @@ class AppPrimaryButton extends StatelessWidget {
       expand: expand,
       busy: busy,
       onPressed: onPressed,
-      background: kAccentCream,
+      background: kAccentEmber,
+      gradient: kCtaGradient,
       foreground: kOnAccent,
       border: null,
     );
@@ -101,6 +105,7 @@ class _PillButton extends StatelessWidget {
     required this.background,
     required this.foreground,
     required this.border,
+    this.gradient,
   });
 
   final String label;
@@ -111,6 +116,10 @@ class _PillButton extends StatelessWidget {
   final Color background;
   final Color foreground;
   final Color? border;
+
+  /// Painted behind the button when set, with [background] left as the flat
+  /// fallback. The ink stays on top, so the ripple still reads over it.
+  final Gradient? gradient;
 
   @override
   Widget build(BuildContext context) {
@@ -148,35 +157,51 @@ class _PillButton extends StatelessWidget {
             ],
           );
 
+    final button = Material(
+      // Transparent over a gradient so the fill below shows through; the ink
+      // and the ripple still belong to the Material on top.
+      color: gradient == null ? background : Colors.transparent,
+      shape: shape,
+      child: InkWell(
+        customBorder: shape,
+        onTap: enabled
+            ? () {
+                HapticFeedback.selectionClick();
+                onPressed!();
+              }
+            : null,
+        child: Container(
+          height: kPillButtonHeight,
+          width: expand ? double.infinity : null,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          alignment: Alignment.center,
+          child: content,
+        ),
+      ),
+    );
+
     return Opacity(
       // Disabled reads as dimmed rather than as a different fill, so the button
       // keeps its identity while it waits for a valid form.
       opacity: enabled ? 1 : 0.45,
-      child: Material(
-        color: background,
-        shape: shape,
-        child: InkWell(
-          customBorder: shape,
-          onTap: enabled
-              ? () {
-                  HapticFeedback.selectionClick();
-                  onPressed!();
-                }
-              : null,
-          child: Container(
-            height: kPillButtonHeight,
-            width: expand ? double.infinity : null,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            alignment: Alignment.center,
-            child: content,
-          ),
-        ),
-      ),
+      child: gradient == null
+          ? button
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(kRadiusPill),
+              ),
+              child: button,
+            ),
     );
   }
 }
 
-/// The small warm label above a title — "CRISPY", "OPEN NOW", "OFFLINE".
+/// The small warm label above a title — "Crispy", "Open now", "Offline".
+///
+/// Sentence case, not caps: the design forbids all-caps labels outright, and
+/// this widget was the app's only uppercasing call site, so the rule is kept
+/// here rather than at each of the eight places that use it.
 class AppEyebrow extends StatelessWidget {
   const AppEyebrow({super.key, required this.label, this.color = kAccentEmber});
 
@@ -186,7 +211,7 @@ class AppEyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      label.toUpperCase(),
+      label,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: appEyebrowStyle(context, color: color),

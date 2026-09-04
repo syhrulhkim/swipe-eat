@@ -7,23 +7,63 @@ import 'package:flutter/services.dart';
 // (deck, explore, likes, detail, nav) reads from here so colors, radii, type
 // and control sizes stay consistent.
 //
-// The look is a near-black canvas with flat, opaque surfaces, one warm ember
-// accent for anything live or selected, and a cream fill reserved for the
-// single primary action on a screen. Surfaces used to be frosted glass; the
-// blur is gone, because flat dark panels read better behind video and cost no
-// render passes.
+// The Ngap look. One rule governs the whole palette:
+//
+//   Black carries the screen. Orange appears in exactly two roles — a radial
+//   glow at the top of every screen, and anything the user can act on or has
+//   selected. Nothing sits on flat white; nothing decorative is orange.
+//
+// Blacks stay *warm* (#0B0605, not #111): a grey black under this much orange
+// reads as a rendering fault rather than a choice.
+//
+// See docs/Redesign/NGAP-DESIGN-SYSTEM.md for the source of every value here.
 // ---------------------------------------------------------------------------
 
-/// Warm accent: active tabs, selected states, live indicators, eyebrow labels.
-const Color kAccentEmber = Color(0xFFFF7A33);
+/// Action + selected: CTAs, active tab, chosen day/chip, time pills.
+const Color kAccentEmber = Color(0xFFFF8A3D);
+
+/// The CTA gradient's far end, and the top-of-screen glow's core.
+const Color kAccentLava = Color(0xFFE8541C);
+
+/// Where the top-of-screen glow falls off before the background takes over.
+const Color kAccentChar = Color(0xFF5A160C);
 
 /// Ink used on top of [kAccentEmber] and [kAccentCream].
-const Color kOnAccent = Color(0xFF0B0B0B);
+const Color kOnAccent = Color(0xFF140A05);
 
-/// Cream fill, reserved for the one primary action on a screen (Cook, Continue,
-/// Get directions). Deliberately scarce: two cream buttons on a screen and
+/// Cream: the app's text colour, and the fill of the one primary action on a
+/// screen. Deliberately scarce as a fill — two cream buttons on a screen and
 /// neither reads as primary.
-const Color kAccentCream = Color(0xFFF3E3C3);
+const Color kAccentCream = Color(0xFFFFF3E8);
+
+/// Cream at reading weights. Secondary lines and muted metadata.
+const Color kCreamSecondary = Color(0xB8FFF3E8);
+const Color kCreamMuted = Color(0x73FFF3E8);
+
+/// The "open now" indicator, and nothing else. It is the one non-orange accent
+/// in the app, so spending it anywhere else costs it its meaning.
+const Color kFresh = Color(0xFF9DF2B8);
+
+/// The gradient every primary action is filled with.
+const LinearGradient kCtaGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [kAccentEmber, kAccentLava],
+);
+
+/// The app's signature: orange lives as a glow at the top of every screen, then
+/// the screen goes black. Painted behind content, never over it.
+///
+/// The CSS is `radial-gradient(130% 48% at 50% -6%, lava, char 42%, transparent
+/// 72%)`; [RadialGradient] takes a centre in fractional coordinates and one
+/// radius, so the ellipse is reproduced by drawing it into a box 130% wide and
+/// 96% as tall as it is wide — see [ScreenGlow].
+const RadialGradient kScreenGlow = RadialGradient(
+  center: Alignment.topCenter,
+  radius: 0.5,
+  colors: [kAccentLava, kAccentChar, Color(0x005A160C)],
+  stops: [0.0, 0.42, 0.72],
+);
 
 /// Tints for the three taste preferences. They have to be distinguishable from
 /// each other and from [kAccentEmber], which rules out a third orange, so the
@@ -32,18 +72,23 @@ const Color kTintMorning = Color(0xFFF6C664);
 const Color kTintSpice = Color(0xFFE8613C);
 const Color kTintNearby = Color(0xFF9ED8A6);
 
-/// App background behind full-bleed content (deck, likes, detail below-fold).
-const Color kBackgroundDark = Color(0xFF0B0B0B);
+/// The screen. Warm black, never grey.
+const Color kBackgroundDark = Color(0xFF0B0605);
 
 /// Deepest background, used behind the explore map.
-const Color kBackgroundDeep = Color(0xFF050505);
+const Color kBackgroundDeep = Color(0xFF050302);
 
-/// Base surface: cards sitting directly on the background.
-const Color kSurfaceDark = Color(0xFF141414);
+/// Base surface: cards, panels, the bottom nav.
+const Color kSurfaceDark = Color(0xFF171010);
 
-/// Raised surface: panels, list rows, anything that must separate from
-/// [kSurfaceDark] without a border. Matches the Figma's panel grey.
-const Color kSurfacePanel = Color(0xFF1E1E1E);
+/// Raised surface: elements sitting on top of a card, list rows, anything that
+/// must separate from [kSurfaceDark] without a border.
+const Color kSurfacePanel = Color(0xFF221614);
+
+/// Glass fills, for panels laid over photography where an opaque surface would
+/// punch a hole in the image.
+const Color kGlass = Color(0x12FFFFFF);
+const Color kGlassStrong = Color(0x1FFFFFFF);
 
 /// Stands in for a restaurant's own brand colour when the row has none or the
 /// stored value is unreadable. Matches [kSurfacePanel] so an unbranded card is
@@ -57,27 +102,44 @@ const Color kFillOnPhoto = Color(0x59000000);
 
 /// Hairline border. Barely visible by design — it separates two dark surfaces
 /// rather than drawing a frame.
-const Color kHairline = Color(0x14FFFFFF);
+const Color kHairline = Color(0x24FFFFFF);
 
-// The app is square-cornered. Every rounded shape in it resolves through one of
-// the five radii below — nothing hard-codes a corner — so the whole look is one
-// edit away in either direction. Restore 999 / 32 / 28 / 18 / 12 to get the
-// rounded app back.
+// Every rounded shape in the app resolves through one of the five radii below
+// — nothing hard-codes a corner — so the whole look is one edit away in either
+// direction. Set all five to 0 to get the square-cornered app back.
 
-/// Was the pill radius: chips, the nav indicator, round buttons.
-const double kRadiusPill = 0;
+/// Chips, the nav indicator, round buttons. A true pill: the shapes it is
+/// applied to clamp it to half their shortest side.
+const double kRadiusPill = 999;
 
-/// Was the radius of the large full-bleed cards (swipe deck bottom corners).
-const double kRadiusCard = 0;
+/// The large full-bleed cards (swipe deck).
+const double kRadiusCard = 28;
 
-/// Was the radius of the large bottom sheets (explore info card, browse-all).
-const double kRadiusSheet = 0;
+/// The large bottom sheets (explore info card, browse-all).
+const double kRadiusSheet = 28;
 
-/// Was the radius of panels and cards (info panel, review/detail cards).
-const double kRadiusPanel = 0;
+/// Panels, tiles and cards (info panel, review/detail cards, grid tiles).
+const double kRadiusPanel = 18;
 
-/// Was the radius of small image tiles (gallery thumbs, hero strip).
-const double kRadiusThumb = 0;
+/// Small image tiles (gallery thumbs, hero strip).
+const double kRadiusThumb = 10;
+
+/// One duration and one curve for interface motion, so transitions across the
+/// app agree. Gestural motion that carries its own physics — the card exit —
+/// keeps its longer timing; everything else uses these.
+const Duration kMotionDuration = Duration(milliseconds: 220);
+const Cubic kMotionEase = Cubic(0.2, 0.8, 0.2, 1);
+
+/// The one shadow in the app: a single deep, warm card shadow. There is no
+/// second elevation — surfaces separate by colour, not by stacking shadows.
+const List<BoxShadow> kCardShadow = [
+  BoxShadow(
+    color: Color(0x8C3C0C04),
+    blurRadius: 48,
+    offset: Offset(0, 24),
+    spreadRadius: -16,
+  ),
+];
 
 /// Side of the primary action buttons (like/pass/chat/route…). Square, so it
 /// is both the width and the height.
@@ -86,25 +148,32 @@ const double kActionButtonSize = 58;
 /// Side of the small utility buttons (settings, back, more).
 const double kUtilityButtonSize = 44;
 
-/// Primary/secondary text on photographic backgrounds.
-const Color kTextOnPhoto = Colors.white;
-const Color kTextOnPhotoMuted = Color(0x8CFFFFFF);
-const Color kTextOnPhotoSecondary = Color(0xE6FFFFFF);
+/// Primary/secondary text on photographic backgrounds. Cream rather than pure
+/// white, so overlaid text belongs to the same palette as the rest of the app.
+const Color kTextOnPhoto = kAccentCream;
+const Color kTextOnPhotoMuted = kCreamMuted;
+const Color kTextOnPhotoSecondary = kCreamSecondary;
 
-/// Font size for the small uppercase badges (category chips, eyebrows).
-const double kOverlineFontSize = 10;
+/// Font size for the small badges (category chips, state labels).
+const double kOverlineFontSize = 11;
 
-/// The one family the design uses, headlines and body alike. The Figma sets
-/// everything in Lexend and differentiates by size and weight only, so the
-/// display/text split collapses to a single face.
+/// Anything the user reads first: headings, restaurant names, hero copy.
 ///
-/// Two names are kept because call sites ask "display or text?", which is a
-/// role, not a family — if a second face ever returns, only these two lines
-/// change.
-const String kDisplayFontFamily = 'Lexend';
+/// The design runs two faces, which is why these two names exist — call sites
+/// ask "display or text?", which is a role, not a family.
+const String kDisplayFontFamily = 'BricolageGrotesque';
 
-/// See [kDisplayFontFamily]: same family, different role.
-const String kTextFontFamily = 'Lexend';
+/// Everything else: body copy, labels, chips, metadata.
+const String kTextFontFamily = 'InstrumentSans';
+
+/// The type scale. Left-aligned everywhere; no all-caps labels, no monospace
+/// for data.
+const double kFontSizeHero = 44;
+const double kFontSizeH1 = 30;
+const double kFontSizeH2 = 20;
+const double kFontSizeBody = 15;
+const double kFontSizeSmall = 13;
+const double kFontSizeMicro = 11;
 
 /// The large overlaid restaurant name, identical on the deck, the Like tab and
 /// the detail page so the three screens read as one design.
@@ -115,11 +184,11 @@ TextStyle appTitleStyle(BuildContext context) {
   return Theme.of(context).textTheme.headlineMedium!.copyWith(
         fontFamily: kDisplayFontFamily,
         color: kTextOnPhoto,
-        fontWeight: FontWeight.w600,
-        // The Figma sets Lexend at 105% line height and no tracking; the
-        // negative tracking the old grotesk needed would cramp it.
-        height: 1.05,
-        letterSpacing: 0,
+        // Bricolage is a display grotesk: it wants weight and tight tracking at
+        // headline sizes, where the previous face wanted neither.
+        fontWeight: FontWeight.w800,
+        height: 1.02,
+        letterSpacing: -0.5,
       );
 }
 
@@ -149,14 +218,16 @@ TextStyle appPanelTitleStyle(BuildContext context) {
       );
 }
 
-/// Small uppercase badge/eyebrow text. Warm by default: it is the line that
-/// labels what a card is ("CRISPY", "OPEN NOW") and reads as an accent, not as
-/// body copy.
+/// Small badge/label text. Warm by default: it is the line that labels what a
+/// card is ("Crispy", "Open now") and reads as an accent, not as body copy.
+///
+/// Sentence case with no tracking — the design forbids all-caps labels, and
+/// letter-spacing exists to make caps readable, so it goes with them.
 TextStyle appEyebrowStyle(BuildContext context, {Color color = kAccentEmber}) {
   return Theme.of(context).textTheme.labelSmall!.copyWith(
         color: color,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.1,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0,
         fontSize: kOverlineFontSize,
       );
 }
@@ -170,6 +241,43 @@ TextStyle appSectionTitleStyle(BuildContext context) {
         fontWeight: FontWeight.w600,
         letterSpacing: 0,
       );
+}
+
+/// The app's signature: a radial ember glow at the top of the screen, falling
+/// off to the background before the first third of the page.
+///
+/// Sits *behind* content — it is the one place orange appears without being
+/// tappable, and the exception is only granted because it never touches a
+/// control. Put it at the bottom of a [Stack], above the scaffold colour.
+///
+/// The design's ellipse is 130% of the screen wide and 48% tall, centred on the
+/// top edge and lifted 6%. Flutter's [RadialGradient] is circular, so the shape
+/// is produced by painting into a box of that aspect and letting it overflow
+/// the sides rather than by distorting the gradient.
+class ScreenGlow extends StatelessWidget {
+  const ScreenGlow({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width * 1.3;
+
+    return Positioned(
+      // Centres the over-wide ellipse: the overhang is split between sides.
+      left: -(width - MediaQuery.sizeOf(context).width) / 2,
+      width: width,
+      // The -6% lift, expressed against the ellipse's own height.
+      top: -width * 0.96 * 0.06,
+      height: width * 0.96,
+      child: const IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: kScreenGlow,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// A flat wash over a full-bleed photo. TikTok stills usually carry burnt-in

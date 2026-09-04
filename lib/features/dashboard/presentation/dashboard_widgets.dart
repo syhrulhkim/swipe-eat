@@ -27,35 +27,43 @@ class DashboardTabShell extends StatelessWidget {
 
     return DecoratedBox(
       decoration: const BoxDecoration(color: kBackgroundDark),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenPadding,
-                18,
-                AppSpacing.screenPadding,
-                12,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (eyebrowLabel != null) ...[
-                      AppEyebrow(label: eyebrowLabel),
-                      const SizedBox(height: 8),
-                    ],
-                    Text(title, style: appTitleStyle(context)),
-                  ],
+      // The glow is painted first and the content over it, because it is the
+      // one place orange appears without being tappable — an exception granted
+      // only because it never touches a control.
+      child: Stack(
+        children: [
+          const ScreenGlow(),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.screenPadding,
+                    18,
+                    AppSpacing.screenPadding,
+                    12,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (eyebrowLabel != null) ...[
+                          AppEyebrow(label: eyebrowLabel),
+                          const SizedBox(height: 8),
+                        ],
+                        Text(title, style: appTitleStyle(context)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                Expanded(child: child),
+              ],
             ),
-            Expanded(child: child),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
