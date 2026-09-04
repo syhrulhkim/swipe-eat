@@ -56,8 +56,10 @@ class _ProfileTabState extends State<ProfileTab> {
         final email = user?.email ?? 'Sign in to sync your picks';
 
         return DashboardTabShell(
-          eyebrow: signedIn ? 'Signed in' : 'Not signed in',
-          title: name,
+          // "You", not the user's name: the design titles the screen and puts
+          // the name in the identity row below, where the portrait is.
+          title: 'You',
+          subtitle: signedIn ? name : 'Not signed in',
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(

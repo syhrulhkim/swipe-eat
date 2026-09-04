@@ -12,9 +12,16 @@ class DashboardTabShell extends StatelessWidget {
     required this.title,
     required this.child,
     this.eyebrow,
+    this.subtitle,
   });
 
   final String title;
+
+  /// The quiet line **under** the title — a count, usually. The design puts
+  /// this below rather than above, which is what separates it from [eyebrow]:
+  /// an eyebrow names the screen before you read it, a subtitle qualifies the
+  /// title after you have.
+  final String? subtitle;
 
   /// The warm line above the title. Optional only so a tab can opt out; every
   /// tab that has something to say about itself should say it here.
@@ -24,6 +31,7 @@ class DashboardTabShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final eyebrowLabel = eyebrow;
+    final subtitleLine = subtitle;
 
     return DecoratedBox(
       decoration: const BoxDecoration(color: kBackgroundDark),
@@ -55,6 +63,16 @@ class DashboardTabShell extends StatelessWidget {
                           const SizedBox(height: 8),
                         ],
                         Text(title, style: appTitleStyle(context)),
+                        if (subtitleLine != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitleLine,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: kCreamSecondary),
+                          ),
+                        ],
                       ],
                     ),
                   ),

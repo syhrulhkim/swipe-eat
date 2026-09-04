@@ -5,7 +5,7 @@ Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Frontend/STACK.m
 
 # Testing Conventions
 
-**328 tests, all passing; `flutter analyze lib test` reports no issues**
+**333 tests, all passing; `flutter analyze lib test` reports no issues**
 (verified 2026-09-04).
 
 ## 1. Framework
@@ -44,7 +44,8 @@ test/
   features/
     auth/         app_user_test, auth_controller_test
                   fake_auth_repository.dart
-    dashboard/    dashboard_bottom_nav_test, likes_tab_view_test,
+    dashboard/    dashboard_bottom_nav_test, dashboard_tab_shell_test,
+                  likes_tab_view_test,
                   restaurant_detail_page_test
     onboarding/   onboarding_draft_test, onboarding_flow_test
                   fake_onboarding_repository.dart

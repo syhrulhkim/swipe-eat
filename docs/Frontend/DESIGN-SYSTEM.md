@@ -252,6 +252,25 @@ looking correct on screen and in the widget tree. The `Semantics` re-declares
 `onTap` itself. A test drives all five tabs through the semantics action alone,
 so the fix cannot be quietly undone (D83).
 
+## 7bb. Tab headers
+
+`DashboardTabShell` carries three lines, and which slot a line goes in is a
+statement about it:
+
+- **eyebrow** — above the title. Names the screen *before* you read it.
+- **title** — the screen's name.
+- **subtitle** — below the title. Qualifies it *after* you have read it; a
+  count, usually.
+
+The subtitle exists because the design puts "14 saved" under "Your bites",
+where an eyebrow could only ever put it over. Bites uses title + subtitle and
+no eyebrow; You is titled **"You"** with the signed-in name beneath, because
+the design titles the screen and puts the name in the identity row where the
+portrait is.
+
+The Bites count renders only once the list has loaded — "0 saved" while
+fetching would be a wrong answer rather than a missing one.
+
 ## 7c. The deck's action bar
 
 Three circles, centred as equals around the one that matters:

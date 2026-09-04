@@ -159,9 +159,15 @@ class _LikesTabState extends State<LikesTab> with UserPositionState {
     final likes = LikesController.instance;
     final error = _error;
 
+    final saved = likes.liked.length;
+
     return DashboardTabShell(
-      eyebrow: 'Your places',
       title: 'Your bites',
+      // The design's header is the title over a count, with no eyebrow. The
+      // count is only honest once the list has actually loaded.
+      subtitle: likes.isLoaded
+          ? (saved == 1 ? '1 saved' : '$saved saved')
+          : null,
       child: !likes.isLoaded || error != null
           ? (error == null
               ? const Center(
