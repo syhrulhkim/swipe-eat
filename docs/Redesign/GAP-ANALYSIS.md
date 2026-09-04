@@ -222,15 +222,39 @@ needed: the correct static instances and their licences were still in git
 history — deleted by `b627d27` when the app moved to Lexend — so they were
 restored from there, and Lexend was removed.
 
-### 4.5 Deck features that vanish
+### 4.5 Deck features that vanish — ✅ resolved 2026-09-04
 
 Rewind (D6), the 50-swipe daily limit (D16), the streak on the deck, the match
-celebration (D15) and super like (D5, D14) all have locked decisions and none
-appear in the new design. The profile keeps a streak — in **weeks**, not days.
+celebration (D15) and super like (D5, D14) all had locked decisions and none
+appear in the new design. Passport (absent from every screen) was in the same
+position.
 
-Either the design omitted them or it drops them. If it drops them, `undo_swipe`,
-`get_swipe_stats` and `swipes.super_like` all retire, and five decisions need
-superseding notes.
+**Resolved: the design drops them, and they are gone from the client** (D84).
+Removed, not hidden — a control for a retired feature is worse than a missing
+one, and a flag nothing sets is worse than no flag.
+
+| Retired | What went |
+|---|---|
+| Super like | The action, the star badge, the "Must try only" filter, the profile stat |
+| Rewind | The button, the empty-state affordances, `DeckController.rewind` |
+| Daily limit | The 50-swipe allowance, its gate, its empty state, the low-swipe chip |
+| Deck streak | The flame chip and `streakDays` |
+| Match moment | `_MatchOverlay` entirely |
+| Passport | The model, the sheet, the tile, the stat, `setPassport`, three `AppUser` fields |
+
+The up gesture is rebound to **Later** (D85). The client says `later`
+throughout; `swipes.super_like` is still its storage and `p_super_like` its
+wire name, so this shipped without a schema change. Renaming the column stays
+a separate migration — see §2.
+
+**Still on the database:** `undo_swipe`, `get_swipe_stats`,
+`get_super_liked_ids`, `set_passport` and `profiles.passport_*` are now unused
+by the client but not dropped. Dropping them destroys data (passport pins, the
+super-like flags) and is irreversible, so it wants an explicit decision rather
+than riding along with a client change.
+
+The profile's streak — in **weeks** — is a different statistic and is not
+built; it needs plans.
 
 ### 4.6 Auth: phone is primary, email is gone
 
@@ -310,23 +334,31 @@ Landed:
   tab fade, the screen crossfade, the press dip and the nav, replacing four
   hand-rolled durations.
 
-Not yet, and still Phase 3:
+Also landed, once §4.5 was resolved:
 
-- **Explore, Group and Profile tab bodies** are untouched. Only the frame
-  around them changed.
+- **The retired features are gone** (D84) — the table in §4.5 lists what went.
+- **The deck's action bar is the design's three circles**: a 56 px ghost Skip,
+  the 72 px gradient **Ngap!** button, a 56 px ghost Later (D86). It was five
+  controls; the design has three.
+- **The tabs carry the design's names** — Swipe · Nearby · Bites · Calendar ·
+  You (D87), and Bites is titled "Your bites".
+- **The tile bite is full size.** Retiring the star freed the corner, so
+  `kBiteNotchTileScale` is gone and tiles carry the prototype's 30 px.
+
+Not yet, and still Phase 3 and beyond:
+
+- **Nearby is still the cuisine grid, not a map**, and Calendar is still an
+  empty state. Both now say what is coming rather than describing the old
+  feature, but the map needs a package and the 474 ungeocoded rows, and the
+  calendar needs a `plans` table.
 - **The bite on the swipe card.** The deck deals unswiped restaurants, so the
   flag would be false at every call site — dead code rather than a reskin. It
   needs the deck to know which places are already saved, which is plumbing, not
   paint (D81).
-- **The super-like star** still sits on Bites tiles. §7 of the design system
-  says the notch replaces it, but the star means *"must try"*, not *"saved"* —
-  a different fact. Retiring it is §4.5's call, not a reskin's (D82).
-
-  This one has a measurable cost. Keeping the badge row forces the tile's bite
-  down to two thirds of the specified size: at the prototype's full 30 px the
-  notch reaches back past the row on a 320 pt phone and clips the "Remove from
-  likes" button. So §4.5's decision is not only tidying — it is what lets the
-  redesign's signature device appear at the size the design asked for.
+- **Bites still has the three Liked/Visited/Reviewed segments.** The design
+  replaces them with planned-state filters, which need `plans`.
+- **Later has nowhere of its own to land.** It writes the existing column; the
+  design's Wishlist screen is Phase 6.
 
 ## 7. What this is not
 

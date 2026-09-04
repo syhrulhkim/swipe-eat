@@ -45,10 +45,12 @@ class RestaurantGridCard extends StatelessWidget {
       button: true,
       child: GestureDetector(
         onTap: onTap,
+        // Full size, as the prototype specifies for tiles as well as cards.
+        // The scale factor that used to sit here existed only to clear the
+        // super-like star; the star went with the feature.
         child: BiteNotch(
           bitten: isSaved,
           borderRadius: BorderRadius.circular(kRadiusPanel),
-          radius: kBiteNotchRadius * kBiteNotchTileScale,
           child: Stack(
             fit: StackFit.expand,
             children: [

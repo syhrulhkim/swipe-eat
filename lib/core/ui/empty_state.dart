@@ -32,7 +32,8 @@ class AppEmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
-  /// A quieter second way out (the deck's "Rewind" under "Reload deck").
+  /// A quieter second way out, under the primary action. Unused by the deck
+  /// since rewind was retired; still offered for states that have two exits.
   /// Same both-or-nothing rule as the primary pair.
   final String? secondaryActionLabel;
   final VoidCallback? onSecondaryAction;

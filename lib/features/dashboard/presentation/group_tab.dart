@@ -11,17 +11,17 @@ class GroupTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DashboardTabShell(
-      eyebrow: 'Swipe together',
-      title: 'Group',
+      eyebrow: 'Your plans',
+      title: 'Calendar',
       child: ListView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: const [
           EmptyTabMessage(
             eyebrow: 'Coming soon',
-            title: 'Nothing here yet',
-            subtitle: 'Group sessions — where you and your friends swipe the '
-                'same deck and the places you all like win — are on the way.',
+            title: 'No plans yet',
+            subtitle: 'Pick a day for somewhere you have bitten and it lands '
+                'here. Scheduling is on the way.',
           ),
         ],
       ),

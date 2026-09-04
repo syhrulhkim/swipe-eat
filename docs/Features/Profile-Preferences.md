@@ -5,6 +5,12 @@ Cross-references: [Onboarding-Taste.md](Onboarding-Taste.md), [Swipe-Deck.md](Sw
 
 # Profile, Preferences, Filters & Passport
 
+> **Changed 2026-09-04.** **Passport is removed** — it appears nowhere in the
+> new design, so the model, the sheet, the tile, the stat, `setPassport` and the
+> three `AppUser` fields are gone (D84). `set_passport` and
+> `profiles.passport_*` remain on the database, unused. The "Must try" stat went
+> with the super like; "Liked" is now **Bites**.
+
 Tab index 4. Who is signed in, what they have collected, and the switches that
 shape their deck.
 

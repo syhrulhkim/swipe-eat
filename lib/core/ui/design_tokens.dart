@@ -132,18 +132,6 @@ const double kBiteNotchRadius = 30;
 /// a large bite and a small one are the same shape rather than two shapes.
 const double kBiteNotchInset = 6;
 
-/// What a grid tile scales the bite by.
-///
-/// The prototype uses the full 30 on tiles as well as cards. This app cannot,
-/// yet: its tiles still carry the badge row — the super-like star and the two
-/// row actions — that the design deletes in favour of the notch. At the full
-/// radius the bite reaches back past that row on a 320 pt phone and clips the
-/// "Remove from likes" button.
-///
-/// So this is a **compensation, not a rule**, and it goes away with D82. A
-/// test asserts the clearance it buys, so the two cannot drift into each other
-/// unnoticed.
-const double kBiteNotchTileScale = 0.66;
 
 /// One duration and one curve for interface motion, so transitions across the
 /// app agree. Gestural motion that carries its own physics — the card exit —
@@ -164,7 +152,13 @@ const List<BoxShadow> kCardShadow = [
 
 /// Side of the primary action buttons (like/pass/chat/route…). Square, so it
 /// is both the width and the height.
-const double kActionButtonSize = 58;
+const double kActionButtonSize = 56;
+
+/// The Ngap button: the deck's one primary action, and the largest control in
+/// the app. Bigger than the two ghosts flanking it because it is the gesture
+/// the product is named after, and the size is the only thing that says so
+/// before the word is read.
+const double kNgapButtonSize = 72;
 
 /// Side of the small utility buttons (settings, back, more).
 const double kUtilityButtonSize = 44;
@@ -501,6 +495,76 @@ class PhotoTopScrim extends StatelessWidget {
 /// Shaped by [kRadiusPill] rather than by a [CircleBorder], so it follows the
 /// app's corner radius: square today, and a true circle again the moment that
 /// token goes back to its pill value, because the box is always a square.
+/// The deck's right-swipe action: a gradient circle carrying the **word**.
+///
+/// Not an icon. The design forbids a bare heart here — "Ngap" is the product's
+/// name for the action, and a button that says it teaches the word to a new
+/// user in a way no glyph can. It is the app's only circular gradient fill and
+/// the only control that is larger than a touch target needs to be, both for
+/// the same reason: on this screen it is the only thing worth doing.
+class AppNgapButton extends StatelessWidget {
+  const AppNgapButton({super.key, required this.onTap, this.enabled = true});
+
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final live = enabled && onTap != null;
+
+    return Semantics(
+      label: 'Ngap',
+      button: true,
+      enabled: live,
+      // The Text inside says "Ngap!" and would merge into this node, so the
+      // child's semantics are excluded to keep the announced name exactly
+      // one thing. Excluding them drops the InkWell's tap action too, so the
+      // action is re-declared here — see D83.
+      excludeSemantics: true,
+      onTap: live ? onTap : null,
+      child: Opacity(
+        opacity: live ? 1 : 0.45,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: kCtaGradient,
+            boxShadow: kCardShadow,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: live
+                  ? () {
+                      HapticFeedback.mediumImpact();
+                      onTap!();
+                    }
+                  : null,
+              child: SizedBox(
+                width: kNgapButtonSize,
+                height: kNgapButtonSize,
+                child: Center(
+                  child: Text(
+                    'Ngap!',
+                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                          fontFamily: kDisplayFontFamily,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.15,
+                          color: kOnAccent,
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AppIconButton extends StatelessWidget {
   const AppIconButton({
     super.key,

@@ -58,20 +58,6 @@ class ProfileRepository {
     });
   }
 
-  /// Pins the deck to another place, or clears the pin. Both coordinates set
-  /// = pin there; both null = back to the real location.
-  Future<AppUser> setPassport({
-    double? latitude,
-    double? longitude,
-    String? placeName,
-  }) {
-    return _rpc('set_passport', {
-      'p_latitude': latitude,
-      'p_longitude': longitude,
-      if (placeName != null) 'p_place_name': placeName,
-    });
-  }
-
   Future<AppUser> _rpc(String function, Map<String, dynamic> params) async {
     final response =
         await _client.rpc<dynamic>(function, params: params).timeout(_timeout);

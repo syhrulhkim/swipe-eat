@@ -28,7 +28,6 @@ class LikesTabView extends StatefulWidget {
     required this.reviewedController,
     required this.distanceLabel,
     required this.distanceMeters,
-    required this.isSuperLiked,
     required this.onOpenRestaurant,
     required this.onUnlike,
     required this.onMarkVisited,
@@ -49,7 +48,6 @@ class LikesTabView extends StatefulWidget {
   /// which is the honest behaviour when nothing is actually nearer.
   final double Function(Restaurant restaurant) distanceMeters;
 
-  final bool Function(int restaurantId) isSuperLiked;
   final void Function(Restaurant restaurant) onOpenRestaurant;
   final void Function(Restaurant restaurant) onUnlike;
   final void Function(Restaurant restaurant) onMarkVisited;
@@ -64,10 +62,9 @@ class _LikesTabViewState extends State<LikesTabView> {
 
   /// The filter sheet's two switches. Client-side: they narrow what is
   /// already on screen, they do not refetch.
-  bool _superOnly = false;
   bool _withVideoOnly = false;
 
-  bool get _filtersActive => _superOnly || _withVideoOnly;
+  bool get _filtersActive => _withVideoOnly;
 
   void _showSegment(LikedSegment segment) {
     setState(() {
@@ -88,12 +85,6 @@ class _LikesTabViewState extends State<LikesTabView> {
 
   List<Restaurant> _visibleRows(List<Restaurant> source) {
     var rows = source;
-    if (_superOnly) {
-      rows = [
-        for (final r in rows)
-          if (widget.isSuperLiked(r.id)) r,
-      ];
-    }
     if (_withVideoOnly) {
       rows = [
         for (final r in rows)
@@ -141,16 +132,6 @@ class _LikesTabViewState extends State<LikesTabView> {
                   children: [
                     Text('Filters', style: appPanelTitleStyle(sheetContext)),
                     const SizedBox(height: 4),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      activeThumbColor: kAccentEmber,
-                      title: Text(
-                        'Must try only',
-                        style: Theme.of(sheetContext).textTheme.bodyMedium,
-                      ),
-                      value: _superOnly,
-                      onChanged: (value) => update(() => _superOnly = value),
-                    ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       activeThumbColor: kAccentEmber,
@@ -339,10 +320,7 @@ class _LikesTabViewState extends State<LikesTabView> {
             title: 'Nothing matches your filters',
             subtitle: 'Loosen them to see this list again.',
             actionLabel: 'Clear filters',
-            onAction: () => setState(() {
-              _superOnly = false;
-              _withVideoOnly = false;
-            }),
+            onAction: () => setState(() => _withVideoOnly = false),
           ),
         ],
       );
@@ -365,8 +343,6 @@ class _LikesTabViewState extends State<LikesTabView> {
       itemCount: rows.length,
       itemBuilder: (context, index) {
         final restaurant = rows[index];
-        final isSuper = widget.isSuperLiked(restaurant.id);
-
         return RestaurantGridCard(
           restaurant: restaurant,
           distanceText: widget.distanceLabel(restaurant),
@@ -375,10 +351,6 @@ class _LikesTabViewState extends State<LikesTabView> {
           badge: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isSuper) ...[
-                const _SuperLikeBadge(),
-                const SizedBox(width: 6),
-              ],
               if (likedActions) ...[
                 AppIconButton(
                   icon: Icons.check_rounded,
@@ -399,27 +371,6 @@ class _LikesTabViewState extends State<LikesTabView> {
           ),
         );
       },
-    );
-  }
-}
-
-/// The ember star in a grid card's corner: this like was a "must try".
-class _SuperLikeBadge extends StatelessWidget {
-  const _SuperLikeBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Must try',
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: kAccentEmber,
-          borderRadius: BorderRadius.circular(kRadiusPill),
-        ),
-        child: const Icon(Icons.star_rounded, size: 18, color: kOnAccent),
-      ),
     );
   }
 }

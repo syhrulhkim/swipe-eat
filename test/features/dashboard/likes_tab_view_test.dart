@@ -84,7 +84,6 @@ Future<void> _pumpLikesTab(
   TextScaler textScaler = TextScaler.noScaling,
   String Function(Restaurant restaurant)? distanceLabel,
   double Function(Restaurant restaurant)? distanceMeters,
-  bool Function(int restaurantId)? isSuperLiked,
   void Function(Restaurant restaurant)? onOpenRestaurant,
   void Function(Restaurant restaurant)? onUnlike,
   void Function(Restaurant restaurant)? onMarkVisited,
@@ -106,7 +105,6 @@ Future<void> _pumpLikesTab(
           reviewedController: reviewed ?? _listController(),
           distanceLabel: distanceLabel ?? (_) => _distanceLabel,
           distanceMeters: distanceMeters ?? (_) => double.infinity,
-          isSuperLiked: isSuperLiked ?? (_) => false,
           onOpenRestaurant: onOpenRestaurant ?? (_) {},
           onUnlike: onUnlike ?? (_) {},
           onMarkVisited: onMarkVisited ?? (_) {},
@@ -202,24 +200,20 @@ void main() {
       expect(find.text('@johorfoodie'), findsOneWidget);
     });
 
-    testWidgets('stars only the super-liked cards', (tester) async {
+    testWidgets('no tile carries a star', (tester) async {
+      // The super like is gone and the bite replaces every badge that marked
+      // a saved place. A star here would be a control for a feature that no
+      // longer exists.
       await _pumpLikesTab(
         tester,
         liked: [
-          _restaurant(id: 1, name: 'Starred Stall'),
-          _restaurant(id: 2, name: 'Plain Stall'),
+          _restaurant(id: 1, name: 'Satu Stall'),
+          _restaurant(id: 2, name: 'Dua Stall'),
         ],
-        isSuperLiked: (id) => id == 1,
       );
 
-      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
-      expect(
-        find.descendant(
-          of: _card('Starred Stall'),
-          matching: find.byIcon(Icons.star_rounded),
-        ),
-        findsOneWidget,
-      );
+      expect(find.byIcon(Icons.star_rounded), findsNothing);
+      expect(find.bySemanticsLabel('Must try'), findsNothing);
     });
   });
 
@@ -393,21 +387,24 @@ void main() {
       await _pumpLikesTab(
         tester,
         liked: [
-          _restaurant(id: 1, name: 'Starred Stall'),
+          _restaurant(
+            id: 1,
+            name: 'Clipped Stall',
+            videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
+          ),
           _restaurant(id: 2, name: 'Plain Stall'),
         ],
-        isSuperLiked: (id) => id == 1,
       );
 
       await tester.tap(find.bySemanticsLabel('Filters'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Must try only'));
+      await tester.tap(find.text('With TikTok review'));
       await tester.pumpAndSettle();
       // Close the sheet.
       await tester.tapAt(const Offset(195, 100));
       await tester.pumpAndSettle();
 
-      expect(find.text('Starred Stall'), findsOneWidget);
+      expect(find.text('Clipped Stall'), findsOneWidget);
       expect(find.text('Plain Stall'), findsNothing);
     });
 
@@ -420,7 +417,7 @@ void main() {
 
       await tester.tap(find.bySemanticsLabel('Filters'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Must try only'));
+      await tester.tap(find.text('With TikTok review'));
       await tester.pumpAndSettle();
       await tester.tapAt(const Offset(195, 100));
       await tester.pumpAndSettle();
@@ -460,7 +457,6 @@ void main() {
             (restaurant) => _restaurant(id: restaurant.id + 1),
           ),
         ],
-        isSuperLiked: (_) => true,
       );
     }
 

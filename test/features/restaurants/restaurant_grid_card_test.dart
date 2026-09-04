@@ -15,9 +15,10 @@ const double _narrowScreen = 320;
 const double _tileWidth = (_narrowScreen - 12 * 2 - 10) / 2;
 const double _tileHeight = _tileWidth / 0.78;
 
-/// The badge row a bitten tile carries today: the super-like star and the two
-/// row actions, each 30 pt with 6 pt between them.
-const double _badgeRowWidth = 30 * 3 + 6 * 2;
+/// The badge row a bitten tile carries: the two row actions, each 30 pt with
+/// 6 pt between them. The super-like star used to make it a third wider — it
+/// went with the feature, which is what let the bite go to full size.
+const double _badgeRowWidth = 30 * 2 + 6;
 const double _badgeInset = 8;
 
 /// Where the bite's left edge falls on a tile of [width].
@@ -92,26 +93,22 @@ void main() {
       expect(badge.left, closeTo(tile.left + _badgeInset, 0.01));
     });
 
-    test('the bite clears the badge row on the narrowest tile', () {
-      // This is the invariant kBiteNotchTileScale exists to hold. It is thin —
-      // about 8 pt — and it is the only thing standing between the notch and
-      // the "Remove from likes" button, so it is asserted rather than left to
-      // whoever next changes either number.
-      final biteEdge = _biteLeftEdge(
-        _tileWidth,
-        kBiteNotchRadius * kBiteNotchTileScale,
-      );
+    test('the full-size bite clears the badge row on the narrowest tile', () {
+      // The tile now carries the prototype's full 30 pt bite. That only fits
+      // because the super-like star is gone; the assertion is what stops a
+      // third badge from quietly reintroducing the collision.
+      final biteEdge = _biteLeftEdge(_tileWidth, kBiteNotchRadius);
 
       expect(biteEdge, greaterThan(_badgeInset + _badgeRowWidth));
     });
 
-    test('the prototype radius is what the badge row is costing us', () {
-      // Not a wish: the full-size bite the design actually specifies for tiles
-      // *would* clip the badge row. This documents the price of keeping the
-      // badges the design deletes, and fails the day D82 makes it wrong.
-      final fullBiteEdge = _biteLeftEdge(_tileWidth, kBiteNotchRadius);
+    test('a third badge would collide with the bite', () {
+      // The margin is real but not generous, and it is the reason the star
+      // could not simply have been left in place next to a full-size notch.
+      const withThirdBadge = _badgeInset + _badgeRowWidth + 6 + 30;
 
-      expect(fullBiteEdge, lessThan(_badgeInset + _badgeRowWidth));
+      expect(_biteLeftEdge(_tileWidth, kBiteNotchRadius),
+          lessThan(withThirdBadge));
     });
   });
 }

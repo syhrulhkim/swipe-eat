@@ -5,8 +5,14 @@ Cross-references: [General/PLAN.md](../General/PLAN.md), [Backend-Schema.md](Bac
 
 # Swipe Deck
 
-The product's core surface: a Tinder-shaped card stack of restaurants, each
-fronted by its TikTok video. Tab index 0.
+The product's core surface: a card stack of restaurants, each fronted by its
+TikTok video. Tab index 0.
+
+> **Retired 2026-09-04 (D84).** Super like, rewind, the 50-swipe daily limit,
+> the deck streak and the match moment are **gone** — the new design has none
+> of them, and a control for a retired feature is worse than a missing one. The
+> up gesture is rebound to **Later** (D85). Sections 3, 4 and "The match
+> moment" are kept below as history, struck through.
 
 Files: `lib/features/restaurants/presentation/swipe_deck.dart` (gesture and
 motion), `swipe_card.dart` (one card), `state/deck_controller.dart` (all state),
@@ -19,21 +25,25 @@ motion), `swipe_card.dart` (one card), `state/deck_controller.dart` (all state),
 |---|---|---|
 | Drag right | `dx > 110` | Like |
 | Drag left | `dx < -110` | Pass |
-| Drag up | `dy < -140` **and** `|dx| < 110` | Super like |
+| Drag up | `dy < -140` **and** `|dx| < 110` | **Later** — save without deciding |
 | Release below threshold | — | Springs back |
 | Tap the card | — | Full-screen TikTok player |
 | Action bar buttons | — | Same path as a drag, via `_triggerAction` |
 
 The up-swipe guard on `|dx|` matters: without it a diagonal fling reads as a
-super like, and a super like is the scarce signal — it must be deliberate.
+Later, and Later is a decision to make later — it must be deliberate (D14).
+
+The action bar is the design's **three circles**: a 56 px ghost Skip, the 72 px
+gradient **Ngap!** button carrying the word, and a 56 px ghost Later. It was
+five controls — rewind, Pass, the super-like star, Like — until D84.
 
 ### Motion
 
 One `AnimationController` at **640ms**, easing `easeInOutCubic`, interpolating
 `_animationStartOffset → _animationEndOffset`.
 
-- Exit offset: `(±460, -220)` for like/pass, `(0, -900)` for a super like —
-  straight up, so the gesture and the animation agree.
+- Exit offset: `(±460, -220)` for Ngap/Skip, `(0, -900)` for Later — straight
+  up, so the gesture and the animation agree.
 - Rotation: `dx / 900`.
 - Like/Nope stamp opacity: `dragPercentage = |travel| / 260`, clamped 0–1. The
   stamp only shows past 20px of travel, so a resting card is clean.
@@ -41,14 +51,17 @@ One `AnimationController` at **640ms**, easing `easeInOutCubic`, interpolating
 - A button press seeds a small offset (`±14`) before animating, so a tap and a
   drag leave along the same arc rather than the tap looking teleported.
 
-### The match moment
+### ~~The match moment~~ — removed 2026-09-04 (D84)
 
-A celebration overlay fires on every super like, and on **1 in 4** ordinary
-likes (`_random.nextInt(4) == 0`). Not every like — a celebration that always
-fires stops being one.
+~~A celebration overlay fires on every super like, and on 1 in 4 ordinary
+likes.~~ `_MatchOverlay` is gone. A restaurant cannot swipe back, so there was
+never a match to celebrate, and the new design does not stop the flow to say
+otherwise.
 
-A rewind cancels any pending celebration: taking a swipe back is a "wait, no",
-and celebrating the thing being undone reads as a bug.
+It was also the deck's only route to **Get directions**. That affordance
+survives on the card itself and on the detail page, which is where the
+visit-prompt feature is triggered from — so removing the overlay did not take
+the visit prompt with it.
 
 ## 2. Ranking
 
@@ -81,7 +94,11 @@ Two deliberate details in the ranker:
 The seed is derived from the current date in `Asia/Kuala_Lumpur`, so the order
 is stable for a day and rerolls at midnight for free.
 
-## 3. Daily limit and streak
+## 3. ~~Daily limit and streak~~ — removed 2026-09-04 (D84)
+
+> History. None of the code below exists any more: the constant, the
+> `get_swipe_stats` call, `swipesLeft`, `outOfSwipes`, the flame chip and the
+> out-of-swipes empty state are all gone.
 
 `DeckController.dailySwipeLimit = 50`, enforced **client-side** off
 `get_swipe_stats`.
@@ -95,7 +112,10 @@ is stable for a day and rerolls at midnight for free.
 - Out of swipes, the deck stops dealing but **rewind stays offered** — taking a
   swipe back refunds it.
 
-## 4. Rewind
+## 4. ~~Rewind~~ — removed 2026-09-04 (D84)
+
+> History. `DeckController.rewind`, `canRewind` and every affordance that
+> offered it are gone. `undo_swipe` still exists on the database, unused.
 
 `DeckController.rewind()` → `undo_swipe`, which **deletes** the row rather than
 writing `liked = false`. `get_deck` excludes every restaurant with any swipe

@@ -4,7 +4,6 @@ import 'package:swipe_eat/features/restaurants/data/restaurant_repository.dart';
 import 'package:swipe_eat/features/restaurants/data/swipe_repository.dart';
 import 'package:swipe_eat/features/restaurants/models/cuisine_count.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
-import 'package:swipe_eat/features/restaurants/models/swipe_stats.dart';
 
 /// A minimal but real [Restaurant] for list/like fixtures.
 Restaurant testRestaurant(int id, {String? name}) {
@@ -39,11 +38,10 @@ class FakeRestaurantRepository implements RestaurantRepository {
   /// `get_super_liked_ids` would return.
   List<Restaurant> visitedRows = const [];
   List<Restaurant> reviewedRows = const [];
-  Set<int> superLikedRows = const {};
+  Set<int> laterRows = const {};
 
   /// What `get_top_picks` / `get_swipe_stats` would return.
   List<Restaurant> topPicksRows = const [];
-  SwipeStats statsRow = const SwipeStats(swipesToday: 0, streakDays: 0);
 
   bool failDeck = false;
   bool failLiked = false;
@@ -54,7 +52,6 @@ class FakeRestaurantRepository implements RestaurantRepository {
   bool failReviewed = false;
   bool failSuperLiked = false;
   bool failTopPicks = false;
-  bool failStats = false;
 
   /// The cuisineId of the latest [search] call, null included.
   int? lastSearchCuisineId;
@@ -149,19 +146,11 @@ class FakeRestaurantRepository implements RestaurantRepository {
   }
 
   @override
-  Future<SwipeStats> swipeStats() async {
-    if (failStats) {
-      throw Exception('stats unavailable');
-    }
-    return statsRow;
-  }
-
-  @override
-  Future<Set<int>> superLikedIds() async {
+  Future<Set<int>> laterIds() async {
     if (failSuperLiked) {
       throw Exception('super likes unavailable');
     }
-    return Set.of(superLikedRows);
+    return Set.of(laterRows);
   }
 }
 
@@ -170,14 +159,14 @@ class SwipeCall {
     required this.restaurantId,
     required this.liked,
     required this.source,
-    this.superLike = false,
+    this.later = false,
     this.latitude,
     this.longitude,
   });
 
   final int restaurantId;
   final bool liked;
-  final bool superLike;
+  final bool later;
   final String source;
   final double? latitude;
   final double? longitude;
@@ -186,23 +175,18 @@ class SwipeCall {
 class FakeSwipeRepository implements SwipeRepository {
   final List<SwipeCall> calls = [];
 
-  /// Restaurant ids handed to [undo], in call order.
-  final List<int> undoCalls = [];
-
   bool fail = false;
-  bool failUndo = false;
 
   /// Lets a test act as the backend: e.g. mirror a successful swipe into a
   /// [FakeRestaurantRepository.likedRows] so the follow-up refresh agrees
   /// with the optimistic update, the way the real swipes table would.
   void Function(SwipeCall call)? onRecord;
-  void Function(int restaurantId)? onUndo;
 
   @override
   Future<void> record({
     required int restaurantId,
     required bool liked,
-    bool superLike = false,
+    bool later = false,
     String source = 'deck',
     double? latitude,
     double? longitude,
@@ -213,22 +197,13 @@ class FakeSwipeRepository implements SwipeRepository {
     final call = SwipeCall(
       restaurantId: restaurantId,
       liked: liked,
-      superLike: superLike,
+      later: later,
       source: source,
       latitude: latitude,
       longitude: longitude,
     );
     calls.add(call);
     onRecord?.call(call);
-  }
-
-  @override
-  Future<void> undo({required int restaurantId}) async {
-    if (failUndo) {
-      throw Exception('undo refused');
-    }
-    undoCalls.add(restaurantId);
-    onUndo?.call(restaurantId);
   }
 
   /// Restaurant ids handed to [markVisited], in call order.
@@ -264,8 +239,5 @@ void wireFakeBackend(
     restaurants.likedRows = call.liked
         ? [testRestaurant(call.restaurantId), ...without(call.restaurantId)]
         : without(call.restaurantId);
-  };
-  swipes.onUndo = (restaurantId) {
-    restaurants.likedRows = without(restaurantId);
   };
 }

@@ -161,7 +161,7 @@ class _LikesTabState extends State<LikesTab> with UserPositionState {
 
     return DashboardTabShell(
       eyebrow: 'Your places',
-      title: 'Liked',
+      title: 'Your bites',
       child: !likes.isLoaded || error != null
           ? (error == null
               ? const Center(
@@ -186,7 +186,6 @@ class _LikesTabState extends State<LikesTab> with UserPositionState {
               reviewedController: _reviewed,
               distanceLabel: _distanceLabel,
               distanceMeters: _distanceMeters,
-              isSuperLiked: likes.isSuperLiked,
               onOpenRestaurant: _openRestaurant,
               onUnlike: (restaurant) => unawaited(_unlike(restaurant)),
               onMarkVisited: (restaurant) =>

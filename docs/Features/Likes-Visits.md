@@ -5,6 +5,12 @@ Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Sc
 
 # Likes, Visits & Reviews
 
+> **Changed 2026-09-04.** The tab is titled **"Your bites"**. The super-like
+> star, the "Must try only" filter and `isSuperLiked` are gone with the feature
+> (D84); the **bite notch** marks a saved tile instead, on the Liked segment
+> only — Visited and Reviewed are keyed on `visited_at` and on the existence of
+> a review, neither of which means "saved".
+
 Tab index 2 ("Liked"). Three collections over one grid, plus the loop that
 closes the product: the app sent you somewhere, so it asks whether you went.
 

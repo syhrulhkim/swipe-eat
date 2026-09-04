@@ -5,7 +5,7 @@ Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Frontend/STACK.m
 
 # Testing Conventions
 
-**319 tests, all passing; `flutter analyze lib test` reports no issues**
+**324 tests, all passing; `flutter analyze lib test` reports no issues**
 (verified 2026-09-04).
 
 ## 1. Framework
@@ -68,7 +68,7 @@ test/
 - **Controllers** — `auth_controller_test`, `likes_controller_test`.
 - **The router** — `app_router_test` covers the redirect matrix and the splash
   hold, which is the cold-start correctness property (D56).
-- **Design tokens** — 37 tests, including the palette rules themselves (warm
+- **Design tokens** — 42 tests, including the palette rules themselves (warm
   blacks, surface stacking order, one non-orange accent). That is what made the
   Ngap retint safe to land in one commit.
 - **Widget layout under stress** — `restaurant_detail_page_test` asserts no

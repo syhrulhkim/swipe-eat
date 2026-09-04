@@ -30,16 +30,22 @@ const double _barHeight = 64;
 const double _tabHeight = 52;
 
 /// The tabs in bar order, as the design system lists them.
-const List<String> _tabLabels = ['Swipe', 'Explore', 'Bites', 'Group', 'You'];
+const List<String> _tabLabels = [
+  'Swipe',
+  'Nearby',
+  'Bites',
+  'Calendar',
+  'You',
+];
 
 /// The outline glyph each tab rests at, and the solid one it switches to when
 /// it becomes the current tab. Asserted as a pair because "filled means here"
 /// is the marker that survives being read without colour.
 const List<(IconData resting, IconData active)> _tabIcons = [
   (Icons.style_outlined, Icons.style_rounded),
-  (Icons.explore_outlined, Icons.explore_rounded),
+  (Icons.place_outlined, Icons.place_rounded),
   (Icons.favorite_border_rounded, Icons.favorite_rounded),
-  (Icons.groups_outlined, Icons.groups_rounded),
+  (Icons.calendar_today_outlined, Icons.calendar_month_rounded),
   (Icons.person_outline_rounded, Icons.person_rounded),
 ];
 
@@ -356,7 +362,7 @@ void main() {
       final handle = tester.ensureSemantics();
       await _pumpLiveNav(tester);
 
-      await tester.tap(find.bySemanticsLabel('Group'));
+      await tester.tap(find.bySemanticsLabel('Calendar'));
       // Half way through the shared motion duration the tween is still on its
       // way — the pill grows out of the icon that was tapped.
       await tester.pump();
@@ -432,7 +438,7 @@ void main() {
 
       // `excludeSemantics` is what keeps the pill's own Text out of the tree:
       // without it the current tab would be announced twice.
-      expect(find.bySemanticsLabel('Explore'), findsOneWidget);
+      expect(find.bySemanticsLabel('Nearby'), findsOneWidget);
 
       handle.dispose();
     });
@@ -540,7 +546,7 @@ void main() {
       final handle = tester.ensureSemantics();
       await _pumpLiveNav(tester);
 
-      await tester.tap(find.bySemanticsLabel('Explore'));
+      await tester.tap(find.bySemanticsLabel('Nearby'));
       // Walk the whole tween: the pill is narrower than its content for most
       // of it, which is what the clip is for.
       for (var step = 0; step < 8; step++) {
@@ -613,12 +619,12 @@ void main() {
 
       expect(_visibleTabIndex(tester), 0);
 
-      await tester.tap(find.bySemanticsLabel('Group'));
+      await tester.tap(find.bySemanticsLabel('Calendar'));
       await tester.pump();
       await tester.pump(kMotionDuration);
 
       expect(_visibleTabIndex(tester), 3);
-      expect(_drawnLabels(tester), ['Group']);
+      expect(_drawnLabels(tester), ['Calendar']);
       expect(_pillColor(tester, 3), kAccentEmber);
       expect(tester.takeException(), isNull);
 

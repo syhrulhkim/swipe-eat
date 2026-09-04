@@ -14,7 +14,6 @@ import '../data/deck_cache.dart';
 import '../data/restaurant_repository.dart';
 import '../data/swipe_repository.dart';
 import '../models/restaurant_card.dart';
-import '../models/swipe_stats.dart';
 import 'likes_controller.dart';
 import 'tiktok_player_cache.dart';
 
@@ -44,11 +43,6 @@ class DeckController extends ChangeNotifier {
     _appliedDeckSignature = _deckSignature(authController.user);
     authController.addListener(_onAuthChanged);
   }
-
-  /// The Tinder-style daily allowance. Enforced client-side off
-  /// `get_swipe_stats`; when the count is unknown (the stats call failed)
-  /// swiping stays open — a stats hiccup must never brick the deck.
-  static const int dailySwipeLimit = 50;
 
   final AuthController authController;
   final RestaurantRepository _restaurants;
@@ -89,39 +83,10 @@ class DeckController extends ChangeNotifier {
     return savedAt == null ? null : 'Offline · saved ${describeAge(savedAt)}';
   }
 
-  /// What the header chip says: the passport pin while one is set — the deck
-  /// is dealing that city, and the chip must not claim the user's real town —
-  /// otherwise the reverse-geocoded name of the last stored fix, or 'Nearby'
-  /// for an account that has never granted location.
-  String get locationLabel {
-    final user = authController.user;
-    if (user != null && user.hasPassport) {
-      return user.passportPlaceName ?? 'Passport';
-    }
-    return user?.lastPlaceName ?? 'Nearby';
-  }
-
-  /// Swipes spent today, from `get_swipe_stats` plus local bookkeeping.
-  /// Null while unknown (never loaded, or the stats call failed).
-  int? _swipesToday;
-
-  int _streakDays = 0;
-
-  /// Consecutive days with at least one swipe, for the header flame.
-  int get streakDays => _streakDays;
-
-  /// How many swipes remain today, or null when the count is unknown.
-  int? get swipesLeft {
-    final spent = _swipesToday;
-    if (spent == null) {
-      return null;
-    }
-    final left = dailySwipeLimit - spent;
-    return left < 0 ? 0 : left;
-  }
-
-  /// True only when the count is known and spent — unknown stays swipeable.
-  bool get outOfSwipes => swipesLeft == 0;
+  /// What the header chip says: the reverse-geocoded name of the last stored
+  /// fix, or 'Nearby' for an account that has never granted location.
+  String get locationLabel =>
+      authController.user?.lastPlaceName ?? 'Nearby';
 
   /// True once every dealt card has been swiped.
   bool get isExhausted => _index >= _cards.length;
@@ -136,7 +101,7 @@ class DeckController extends ChangeNotifier {
   int _loadGeneration = 0;
 
   /// The deck-shaping profile state the current deck was dealt under: radius,
-  /// discovery filters and passport. The tabs live in an IndexedStack that
+  /// discovery filters. The tabs live in an IndexedStack that
   /// never re-inits, so a change to any of them has to be listened for — they
   /// are server-side filters, and stale cards would break their promises.
   ///
@@ -154,8 +119,6 @@ class DeckController extends ChangeNotifier {
       user.filterMinRating,
       user.filterCuisineIds.join(','),
       user.filterDietaryTagIds.join(','),
-      user.passportLatitude,
-      user.passportLongitude,
     ].join('|');
   }
 
@@ -164,10 +127,8 @@ class DeckController extends ChangeNotifier {
   final StreamController<String> _messages = StreamController<String>.broadcast();
   Stream<String> get messages => _messages.stream;
 
-  /// Swipe writes still in flight, by restaurant id. [rewind] must wait for
-  /// the write it is undoing: swipes are optimistic, so an undo fired before
-  /// its write lands would delete nothing — and then the write would put the
-  /// row right back.
+  /// Swipe writes still in flight, by restaurant id. Swipes are optimistic,
+  /// so anything that needs a row to exist must wait for its write to land.
   final Map<int, Future<void>> _pendingWrites = {};
 
   @override
@@ -193,16 +154,6 @@ class DeckController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Best-effort and concurrent with the deck fetch: a failed stats read
-      // costs the chip and the limit gate, never the cards.
-      final statsFuture = _restaurants
-          .swipeStats()
-          .then<SwipeStats?>((stats) => stats)
-          .catchError((Object error) {
-        debugPrint('Swipe stats load failed: $error');
-        return null;
-      });
-
       // The position is an input to the server-side ranking, so it is resolved
       // first. It is session-cached, so only the very first load pays for the
       // permission dialog and the GPS fix. A fallback position is not a real
@@ -222,15 +173,10 @@ class DeckController extends ChangeNotifier {
         latitude: hasRealPosition ? position.latitude : null,
         longitude: hasRealPosition ? position.longitude : null,
       );
-      final stats = await statsFuture;
       if (generation != _loadGeneration) {
         return;
       }
 
-      if (stats != null) {
-        _swipesToday = stats.swipesToday;
-        _streakDays = stats.streakDays;
-      }
       _cards = restaurants.map(RestaurantCard.fromRestaurant).toList();
       _index = 0;
       _loading = false;
@@ -324,21 +270,12 @@ class DeckController extends ChangeNotifier {
   Future<void> recordSwipe(
     RestaurantCard card, {
     required bool liked,
-    bool superLike = false,
+    bool later = false,
   }) {
-    // Optimistic, like the write itself; only when the count is known, so a
-    // failed stats read never fabricates a nearly-full allowance from zero.
-    final spent = _swipesToday;
-    if (spent != null) {
-      _swipesToday = spent + 1;
-      notifyListeners();
-    }
-
     late final Future<void> write;
-    write = _writeSwipe(card, liked: liked, superLike: superLike)
-        .whenComplete(() {
-      // Identity check: a re-swipe of the same restaurant (rewind, then swipe
-      // again) may already own the slot by the time this one settles.
+    write = _writeSwipe(card, liked: liked, later: later).whenComplete(() {
+      // Identity check: a re-swipe of the same restaurant may already own the
+      // slot by the time this one settles.
       if (identical(_pendingWrites[card.id], write)) {
         _pendingWrites.remove(card.id);
       }
@@ -350,7 +287,7 @@ class DeckController extends ChangeNotifier {
   Future<void> _writeSwipe(
     RestaurantCard card, {
     required bool liked,
-    required bool superLike,
+    required bool later,
   }) async {
     final position = _userPosition;
     final hasRealPosition =
@@ -364,7 +301,7 @@ class DeckController extends ChangeNotifier {
         // page update without their own round trip.
         await _likes.like(
           card.id,
-          superLike: superLike,
+          later: later,
           latitude: latitude,
           longitude: longitude,
         );
@@ -382,68 +319,6 @@ class DeckController extends ChangeNotifier {
         _messages.add('Could not save that swipe.');
       }
     }
-  }
-
-  /// Whether there is a swipe to take back: something swiped from this deal,
-  /// and no reload in progress (a reload is about to re-deal from index 0).
-  bool get canRewind => _index > 0 && !_loading;
-
-  /// Takes back the most recent swipe: deletes its row server-side, then steps
-  /// the deck back so the card is on top again.
-  ///
-  /// Not optimistic, unlike the swipes themselves: stepping back before the
-  /// delete confirms would show a card the server still considers swiped, and
-  /// re-swiping it from that state gets confusing fast. Returns whether the
-  /// card came back.
-  Future<bool> rewind() async {
-    if (!canRewind) {
-      return false;
-    }
-    final generation = _loadGeneration;
-    final card = _cards[_index - 1];
-
-    // Wait out the optimistic write being undone (see [_pendingWrites]); it
-    // catches its own errors, so this await cannot throw.
-    final pending = _pendingWrites[card.id];
-    if (pending != null) {
-      await pending;
-    }
-
-    try {
-      await _swipes.undo(restaurantId: card.id);
-    } on Object catch (error) {
-      debugPrint('Undo swipe failed: $error');
-      if (!_messages.isClosed) {
-        _messages.add('Could not undo that swipe.');
-      }
-      return false;
-    }
-
-    // A reload may have re-dealt the deck during the awaits above; the delete
-    // still landed (the card will be dealt again), but this rewind's index no
-    // longer means anything.
-    if (generation != _loadGeneration) {
-      return false;
-    }
-
-    if (_index > 0) {
-      _index -= 1;
-    }
-    // `undo_swipe` deletes the row, so today's server-side count really did
-    // go down with it.
-    final spent = _swipesToday;
-    if (spent != null && spent > 0) {
-      _swipesToday = spent - 1;
-    }
-    notifyListeners();
-
-    // The undone swipe may have been a like; the Like tab must forget it.
-    // Refreshed rather than surgically removed, because only the server knows
-    // whether the row existed at all.
-    unawaited(_likes.refresh().catchError((Object error) {
-      debugPrint('Likes refresh after rewind failed: $error');
-    }));
-    return true;
   }
 
   /// Writes the discovery filter sheet's state to the profile. The returned
@@ -472,14 +347,9 @@ class DeckController extends ChangeNotifier {
   }
 
   /// How far the user is from [card], phrased for the card's location row.
-  /// With a passport pinned, "the user" is the pin — the whole deck is dealt
-  /// from there, and measuring from the real fix would caption every card
-  /// with the distance home.
   String distanceLabelFor(RestaurantCard card) {
-    final user = authController.user;
-    final passportActive = user != null && user.hasPassport;
     final position = _userPosition;
-    if (!passportActive && position == null) {
+    if (position == null) {
       return 'Distance loading';
     }
 
@@ -490,8 +360,8 @@ class DeckController extends ChangeNotifier {
     }
 
     final meters = Geolocator.distanceBetween(
-      passportActive ? user.passportLatitude! : position!.latitude,
-      passportActive ? user.passportLongitude! : position!.longitude,
+      position.latitude,
+      position.longitude,
       card.latitude,
       card.longitude,
     );

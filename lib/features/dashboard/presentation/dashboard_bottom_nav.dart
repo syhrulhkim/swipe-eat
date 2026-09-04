@@ -75,9 +75,10 @@ class DashboardBottomNav extends StatelessWidget {
       index: 0,
     ),
     (
-      icon: Icons.explore_outlined,
-      activeIcon: Icons.explore_rounded,
-      label: 'Explore',
+      // A map pin, not a compass: the tab is about what is around you.
+      icon: Icons.place_outlined,
+      activeIcon: Icons.place_rounded,
+      label: 'Nearby',
       index: 1,
     ),
     // A heart, not a thumbs-up: the deck's like button is a heart and the Bites
@@ -91,9 +92,9 @@ class DashboardBottomNav extends StatelessWidget {
       index: 2,
     ),
     (
-      icon: Icons.groups_outlined,
-      activeIcon: Icons.groups_rounded,
-      label: 'Group',
+      icon: Icons.calendar_today_outlined,
+      activeIcon: Icons.calendar_month_rounded,
+      label: 'Calendar',
       index: 3,
     ),
     (

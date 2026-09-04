@@ -59,7 +59,7 @@ class _GatedSwipeRepository extends FakeSwipeRepository {
   Future<void> record({
     required int restaurantId,
     required bool liked,
-    bool superLike = false,
+    bool later = false,
     String source = 'deck',
     double? latitude,
     double? longitude,
@@ -68,7 +68,7 @@ class _GatedSwipeRepository extends FakeSwipeRepository {
     return super.record(
       restaurantId: restaurantId,
       liked: liked,
-      superLike: superLike,
+      later: later,
       source: source,
       latitude: latitude,
       longitude: longitude,

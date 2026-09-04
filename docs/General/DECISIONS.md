@@ -32,8 +32,8 @@ not the row number.
 
 | ID | Decision | Owner doc | Status |
 |---|---|---|---|
-| D5 | `swipes.liked` stays boolean; `super_like` is a second flag, not an enum — an enum would break `get_deck`'s exhaustion branch, `get_liked_restaurants`, and a partial index for no gain. | [Backend-Schema](../Features/Backend-Schema.md) | locked 2026-08-31 |
-| D6 | Rewind **deletes** the swipe row; unlike writes `liked = false`. Only a deleted row is dealt again. | [Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-08-31 |
+| D5 | ~~`swipes.liked` stays boolean; `super_like` is a second flag~~ — **superseded 2026-09-04 by D84.** The super like is gone; the column now stores "save for later". | superseded by D84 |
+| D6 | ~~Rewind **deletes** the swipe row~~ — **superseded 2026-09-04 by D84.** Rewind is gone; the design has no undo. Unlike still writes `liked = false`. | superseded by D84 |
 | D9 | `haversine_km` in SQL, not PostGIS. | [Backend-Schema](../Features/Backend-Schema.md) | locked 2026-08-23 |
 | D11 | Profile write RPCs return the whole `profiles` row, so the client never needs a follow-up read. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-23 |
 | D13 | `get_super_liked_ids` is a separate call rather than widening `get_liked_restaurants`, to preserve PostgREST embeds. | [Likes-Visits](../Features/Likes-Visits.md) | locked 2026-08-31 |
@@ -48,9 +48,9 @@ not the row number.
 | ID | Decision | Owner doc | Status |
 |---|---|---|---|
 | D12 | Passport resolves server-side in `deck_scored`, so the client's per-load GPS fix cannot override it. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-31 |
-| D14 | The up-swipe super like is guarded on `\|dx\| < 110` so a diagonal fling cannot spend the scarce signal. | [Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-08-31 |
-| D15 | Celebrate every super like but only 1 in 4 likes — an always-on celebration stops being one. | [Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-08-31 |
-| D16 | An unknown swipe count stays swipeable; only a known-and-spent count blocks. A stats failure must not brick the deck. | [Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-08-31 |
+| D14 | The up gesture is guarded on `\|dx\| < 110` so a diagonal fling cannot trigger it. Still true — the gesture now means **Later** rather than super like (D84). | locked 2026-08-31, rebound 2026-09-04 |
+| D15 | ~~Celebrate every super like but only 1 in 4 likes~~ — **superseded 2026-09-04 by D84.** The match moment is gone; a restaurant cannot swipe back, and the design does not stop the flow to say so. | superseded by D84 |
+| D16 | ~~An unknown swipe count stays swipeable~~ — **superseded 2026-09-04 by D84.** There is no daily limit, so there is nothing to gate and no stats call to fail. | superseded by D84 |
 | D17 | A stale (cached) deck is always labelled as stale, never presented as live. | [Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-08-30 |
 | D18 | `DeckRanker` gives unlocated rows neutral half-credit rather than excluding them. | [Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-08-31 |
 | D34 | Filters are applied in `deck_scored`'s `candidates` CTE so they bind the exhaustion fallback too, not just the fresh-cards query. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-31 |
@@ -129,8 +129,12 @@ not the row number.
 | D79 | The saved-marker is a notch **clipped out of** the surface, not a badge drawn on it — a mark that is part of the silhouette cannot be mistaken for a button. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 | D80 | Only the current bottom-nav tab is labelled, and three signals — fill, ink, filled-vs-outline glyph — mark it without relying on colour. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 | D81 | The bite is not wired to the swipe card: the deck deals only unswiped places, so the flag would be dead code. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
-| D82 | The super-like star survives the bite — "must try" and "saved" are different facts. | [Redesign/GAP-ANALYSIS](../Redesign/GAP-ANALYSIS.md) §4.5 | open |
+| D82 | ~~The super-like star survives the bite~~ — **resolved 2026-09-04 by D84.** The star went with the feature, which is what let the tile's bite go to the specified full size. | resolved by D84 |
 | D83 | A `Semantics` that sets `excludeSemantics` re-declares its own `onTap`, and accessibility claims are asserted by driving the semantics action rather than by reading the widget tree. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
+| D84 | The features the new design does not have are **removed, not hidden**: super like, rewind, the daily swipe limit, the deck streak, the match moment and passport. A control for a retired feature is worse than a missing one, and a flag nothing sets is worse than a flag that is gone. | [Redesign/GAP-ANALYSIS](../Redesign/GAP-ANALYSIS.md) §4.5 | locked 2026-09-04 |
+| D85 | The up gesture means **Later** — save without deciding. The client speaks of `later` throughout; `swipes.super_like` remains its storage and `p_super_like` its wire name until a database migration renames them, so a client change never needs a schema change to ship. | [Features/Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-09-04 |
+| D86 | The deck's primary action is a 72 px gradient circle carrying the **word** "Ngap!", not a heart. It is the largest control in the app because it is the only thing worth doing on that screen, and the word teaches itself. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
+| D87 | Tabs 2 and 4 are named **Nearby** and **Calendar** per the design, ahead of the map and the plans they will hold. This reverses the earlier reading of D7: the design's names are the target, and the empty states now say plainly what is coming rather than describing the old feature. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 
 ## Testing
 
@@ -164,4 +168,4 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D83**.
+   ID must keep meaning the same thing. The highest ID in use is **D87**.

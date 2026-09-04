@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../../core/location/open_directions.dart';
-import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
@@ -28,8 +27,7 @@ class SwipeCard extends StatefulWidget {
     this.videoHiddenForFullscreen = false,
     this.onPass,
     this.onLike,
-    this.onSuperLike,
-    this.onRewind,
+    this.onLater,
     this.isBehind = false,
     this.likeOpacity = 0,
     this.nopeOpacity = 0,
@@ -54,11 +52,9 @@ class SwipeCard extends StatefulWidget {
   final VoidCallback? onPass;
   final VoidCallback? onLike;
 
-  /// The Tinder extras. [onSuperLike] follows the same rule as [onPass];
-  /// [onRewind] is null both on the card behind and when there is nothing
-  /// swiped yet to take back — the button then renders dimmed and inert.
-  final VoidCallback? onSuperLike;
-  final VoidCallback? onRewind;
+  /// The up gesture: save the place for later without deciding on it. Follows
+  /// the same rule as [onPass] — absent on the card behind.
+  final VoidCallback? onLater;
 
   final bool isBehind;
   final double likeOpacity;
@@ -224,61 +220,38 @@ class _SwipeCardState extends State<SwipeCard> {
     );
   }
 
-  /// The Figma's "✕ Pass | Like" bar, flanked by the two Tinder extras:
-  /// rewind on the far left, the super-like star between the buttons.
+  /// The design's three-button bar: a ghost Skip, the Ngap button, a ghost
+  /// Later, centred as equals around the one that matters.
+  ///
+  /// Three, not five. Rewind and the super-like star are gone with the
+  /// features behind them — the design has neither, and a control for a
+  /// feature that no longer exists is worse than a missing one.
   Widget _buildActionBar() {
-    final rewind = widget.onRewind;
-
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Inert-but-visible when there is nothing to take back, so the
-        // control keeps its place in the bar instead of popping in after the
-        // first swipe.
-        IgnorePointer(
-          ignoring: rewind == null,
-          child: Opacity(
-            opacity: rewind == null ? 0.4 : 1,
-            child: AppIconButton(
-              icon: Icons.replay_rounded,
-              size: kUtilityButtonSize,
-              iconSize: 20,
-              onPhoto: false,
-              background: kSurfaceDark,
-              semanticLabel: 'Rewind',
-              onTap: rewind ?? () {},
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: AppSecondaryButton(
-            label: 'Skip',
-            icon: Icons.close_rounded,
-            expand: true,
-            onPressed: widget.onPass,
-          ),
-        ),
-        const SizedBox(width: 10),
         AppIconButton(
-          icon: Icons.star_rounded,
-          size: kUtilityButtonSize,
+          icon: Icons.close_rounded,
+          size: kActionButtonSize,
           iconSize: 22,
-          iconColor: kAccentEmber,
           onPhoto: false,
           background: kSurfaceDark,
-          semanticLabel: 'Must try',
-          onTap: widget.onSuperLike ?? () {},
+          semanticLabel: 'Skip',
+          onTap: widget.onPass ?? () {},
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          // "Ngap!" — never "Like", and never a bare heart. The word is the
-          // product's name for the action, so the button carries it.
-          child: AppPrimaryButton(
-            label: 'Ngap!',
-            icon: Icons.favorite_rounded,
-            expand: true,
-            onPressed: widget.onLike,
-          ),
+        const SizedBox(width: 20),
+        AppNgapButton(onTap: widget.onLike),
+        const SizedBox(width: 20),
+        // A clock, not a bookmark: "later" here is about when you eat, not
+        // about filing the place away.
+        AppIconButton(
+          icon: Icons.schedule_rounded,
+          size: kActionButtonSize,
+          iconSize: 22,
+          onPhoto: false,
+          background: kSurfaceDark,
+          semanticLabel: 'Save for later',
+          onTap: widget.onLater ?? () {},
         ),
       ],
     );

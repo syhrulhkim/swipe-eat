@@ -1,22 +1,16 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/location/open_directions.dart';
-import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_lottie.dart';
-import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/rating_label.dart';
-import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../../auth/state/auth_controller.dart';
 import '../models/restaurant_card.dart';
 import '../state/deck_controller.dart';
-import '../state/visit_prompt_controller.dart';
 import 'discovery_filter_sheet.dart';
 import 'swipe_card.dart';
 import 'tiktok_player.dart';
@@ -53,18 +47,6 @@ class _SwipeDeckState extends State<SwipeDeck>
   Offset _dragOffset = Offset.zero;
   bool _infoExpanded = false;
 
-  /// Drives the intermittent match moment on ordinary likes.
-  final math.Random _random = math.Random();
-
-  /// Decided when the fly-out starts, published to [_matchCard] when it
-  /// finishes — the overlay must not appear over a card still in flight.
-  RestaurantCard? _pendingMatchCard;
-  bool _pendingMatchSuper = false;
-
-  /// The restaurant the match overlay is celebrating, if it is up.
-  RestaurantCard? _matchCard;
-  bool _matchIsSuper = false;
-
   /// The clip the fullscreen route is currently showing, if any. The card
   /// underneath must not mount the same controller at the same time.
   String? _fullscreenVideoUrl;
@@ -90,11 +72,6 @@ class _SwipeDeckState extends State<SwipeDeck>
         _infoExpanded = false;
         _reviewInteractionActive = false;
         _motionType = _SwipeMotionType.idle;
-        if (_pendingMatchCard != null) {
-          _matchCard = _pendingMatchCard;
-          _matchIsSuper = _pendingMatchSuper;
-          _pendingMatchCard = null;
-        }
       });
 
       _motionController.reset();
@@ -128,76 +105,41 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
-  void _animateOut({required bool liked, bool superLike = false}) {
+  void _animateOut({required bool liked, bool later = false}) {
     final card = _deck.current;
-    if (card == null ||
-        _motionType != _SwipeMotionType.idle ||
-        _deck.outOfSwipes) {
+    if (card == null || _motionType != _SwipeMotionType.idle) {
       return;
     }
 
     // Optimistic: the card flies out immediately and the write follows behind
     // it.
-    unawaited(_deck.recordSwipe(card, liked: liked, superLike: superLike));
-
-    // A super like always earns the moment — it is the emphatic yes. An
-    // ordinary like gets it roughly one time in four: Tinder does not stop
-    // the flow on every right-swipe, and neither should the deck.
-    final celebrate = superLike || (liked && _random.nextInt(4) == 0);
-    _pendingMatchCard = celebrate ? card : null;
-    _pendingMatchSuper = superLike;
+    unawaited(_deck.recordSwipe(card, liked: liked, later: later));
 
     setState(() {
       _motionType = _SwipeMotionType.swipeOut;
       _animationStartOffset = _dragOffset;
-      // A super like flies up, off the top — its gesture's direction.
+      // Later flies up, off the top — its gesture's direction.
       _animationEndOffset =
-          superLike ? const Offset(0, -900) : Offset(liked ? 460 : -460, -220);
+          later ? const Offset(0, -900) : Offset(liked ? 460 : -460, -220);
     });
 
     _motionController.forward(from: 0);
   }
 
-  /// A tap on the pass/like/super-like button, which starts from a resting
-  /// card rather than a drag, so it nudges the card first to give the fly-out
-  /// a direction.
-  void _triggerAction({required bool liked, bool superLike = false}) {
-    if (_deck.current == null ||
-        _motionType != _SwipeMotionType.idle ||
-        _deck.outOfSwipes) {
+  /// A tap on Skip / Ngap / Later, which starts from a resting card rather
+  /// than a drag, so it nudges the card first to give the fly-out a direction.
+  void _triggerAction({required bool liked, bool later = false}) {
+    if (_deck.current == null || _motionType != _SwipeMotionType.idle) {
       return;
     }
 
     setState(() {
       _motionController.stop();
       _motionType = _SwipeMotionType.idle;
-      _dragOffset =
-          superLike ? const Offset(0, -14) : Offset(liked ? 14 : -14, -1);
+      _dragOffset = later ? const Offset(0, -14) : Offset(liked ? 14 : -14, -1);
     });
 
-    _animateOut(liked: liked, superLike: superLike);
-  }
-
-  /// Takes back the last swipe. The await chain lives in the controller; here
-  /// only the drag state is reset so the returning card lands at rest.
-  Future<void> _rewind() async {
-    if (_motionType != _SwipeMotionType.idle) {
-      return;
-    }
-
-    final restored = await _deck.rewind();
-    if (!restored || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _dragOffset = Offset.zero;
-      _infoExpanded = false;
-      // A rewind is a "wait, no" — any celebration of the swipe it undoes
-      // would ring false.
-      _pendingMatchCard = null;
-      _matchCard = null;
-    });
+    _animateOut(liked: liked, later: later);
   }
 
   Future<void> _openVideoPlayer(RestaurantCard data) async {
@@ -301,8 +243,6 @@ class _SwipeDeckState extends State<SwipeDeck>
     return DeckHeader(
       locationLabel: _deck.locationLabel,
       stalenessLabel: _deck.stalenessLabel,
-      streakDays: _deck.streakDays,
-      swipesLeft: _deck.swipesLeft,
       activeFilterCount:
           widget.authController.user?.activeFilterCount ?? 0,
       onFilterTap: () => unawaited(_openFilters()),
@@ -357,23 +297,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     return AnimatedBuilder(
       animation: _deck,
       builder: (context, _) {
-        final matchCard = _matchCard;
-
-        // The overlay sits above whatever the deck is showing — including
-        // the exhausted state, which the last card's like may have caused.
-        return Stack(
-          children: [
-            _buildDeck(context),
-            if (matchCard != null)
-              Positioned.fill(
-                child: _MatchOverlay(
-                  card: matchCard,
-                  isSuperLike: _matchIsSuper,
-                  onDismiss: () => setState(() => _matchCard = null),
-                ),
-              ),
-          ],
-        );
+        return _buildDeck(context);
       },
     );
   }
@@ -390,22 +314,6 @@ class _SwipeDeckState extends State<SwipeDeck>
         title: 'Something went wrong',
         subtitle: deckError,
         actionLabel: 'Try again',
-      );
-    }
-
-    // Checked before the cards: the limit is about the user's day, not the
-    // deck's supply. Rewind stays offered — taking a swipe back refunds it.
-    if (_deck.outOfSwipes) {
-      return _messageCard(
-        eyebrow: 'Daily limit',
-        title: 'Out of swipes for today',
-        subtitle: 'All ${DeckController.dailySwipeLimit} swipes are spent. '
-            'Come back tomorrow — the streak keeps counting.',
-        actionLabel: 'Refresh',
-        secondaryActionLabel: _deck.canRewind ? 'Rewind last swipe' : null,
-        onSecondaryAction:
-            _deck.canRewind ? () => unawaited(_rewind()) : null,
-        art: AppMotion.heart,
       );
     }
 
@@ -430,11 +338,6 @@ class _SwipeDeckState extends State<SwipeDeck>
         title: 'No more cards',
         subtitle: 'Reload to keep swiping.',
         actionLabel: 'Reload deck',
-        // Rewind still works from the empty deck: it brings the very last
-        // card back, exactly as Tinder does.
-        secondaryActionLabel: _deck.canRewind ? 'Rewind last swipe' : null,
-        onSecondaryAction:
-            _deck.canRewind ? () => unawaited(_rewind()) : null,
         art: AppMotion.heart,
       );
     }
@@ -526,10 +429,10 @@ class _SwipeDeckState extends State<SwipeDeck>
       onPanEnd: gesturesLocked
           ? null
           : (details) {
-              // Up-swipe is the super like, as on Tinder. Checked first, and
-              // only when the drag is not already a committed left/right.
+              // Up-swipe saves the place for later. Checked first, and only
+              // when the drag is not already a committed left/right.
               if (_dragOffset.dy < -140 && _dragOffset.dx.abs() < 110) {
-                _animateOut(liked: true, superLike: true);
+                _animateOut(liked: true, later: true);
                 return;
               }
 
@@ -598,8 +501,7 @@ class _SwipeDeckState extends State<SwipeDeck>
           onReviewInteractionChanged: _setReviewInteractionActive,
           onPass: () => _triggerAction(liked: false),
           onLike: () => _triggerAction(liked: true),
-          onSuperLike: () => _triggerAction(liked: true, superLike: true),
-          onRewind: _deck.canRewind ? () => unawaited(_rewind()) : null,
+          onLater: () => _triggerAction(liked: true, later: true),
         ),
       ),
     );
@@ -613,8 +515,6 @@ class DeckHeader extends StatelessWidget {
     super.key,
     required this.locationLabel,
     this.stalenessLabel,
-    this.streakDays = 0,
-    this.swipesLeft,
     this.activeFilterCount = 0,
     this.onFilterTap,
   });
@@ -626,14 +526,6 @@ class DeckHeader extends StatelessWidget {
   /// Set when the deck came off the device instead of the server. Shown under
   /// the location chip so saved cards are never mistaken for fresh ones.
   final String? stalenessLabel;
-
-  /// Consecutive swipe days; the flame chip appears from 2 up — a one-day
-  /// "streak" is just today.
-  final int streakDays;
-
-  /// Today's remaining allowance, or null when unknown. The chip only appears
-  /// once it runs low; a full counter would nag every swipe.
-  final int? swipesLeft;
 
   /// How many discovery filters are on — the badge on the filter button.
   final int activeFilterCount;
@@ -714,36 +606,13 @@ class DeckHeader extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (stalenessLabel != null ||
-                      streakDays >= 2 ||
-                      (swipesLeft != null && swipesLeft! <= 10)) ...[
+                  // Only the offline chip survives: the streak and the swipe
+                  // allowance are gone with the features behind them.
+                  if (stalenessLabel != null) ...[
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (stalenessLabel != null)
-                          AppChip(
-                            icon: Icons.cloud_off_rounded,
-                            label: stalenessLabel!,
-                          ),
-                        if (streakDays >= 2)
-                          AppChip(
-                            icon: Icons.local_fire_department_rounded,
-                            label: '$streakDays-day streak',
-                            tint: kTintMorning,
-                          ),
-                        if (swipesLeft != null && swipesLeft! <= 10)
-                          AppChip(
-                            icon: Icons.hourglass_bottom_rounded,
-                            label: swipesLeft == 0
-                                ? 'No swipes left today'
-                                : swipesLeft == 1
-                                    ? '1 swipe left today'
-                                    : '$swipesLeft swipes left today',
-                            tint: kAccentEmber,
-                          ),
-                      ],
+                    AppChip(
+                      icon: Icons.cloud_off_rounded,
+                      label: stalenessLabel!,
                     ),
                   ],
                 ],
@@ -751,130 +620,6 @@ class DeckHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// The match moment: a full-screen take-over after a like the deck decides to
-/// celebrate, and after every super like. A restaurant cannot swipe back, so
-/// this is honest about what it is — a nudge to actually go — rather than a
-/// faked reciprocity.
-class _MatchOverlay extends StatelessWidget {
-  const _MatchOverlay({
-    required this.card,
-    required this.isSuperLike,
-    required this.onDismiss,
-  });
-
-  final RestaurantCard card;
-  final bool isSuperLike;
-  final VoidCallback onDismiss;
-
-  Future<void> _openDirections(BuildContext context) async {
-    final opened = await openDirections(
-      latitude: card.latitude,
-      longitude: card.longitude,
-      label: card.title,
-    );
-    if (opened) {
-      unawaited(VisitPromptController.instance.recordDirections(
-        restaurantId: card.id,
-        name: card.title,
-      ));
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open maps for this place.')),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final canRoute = hasMapFix(card.latitude, card.longitude);
-
-    // Fades and settles in once; a finite animation, so tests can pump it to
-    // rest.
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 360),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, child) => Opacity(opacity: t, child: child),
-      // Opaque and gesture-absorbing: nothing under it may take a tap.
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {},
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const ColoredBox(color: kBackgroundDark),
-            if (card.imageUrls.isNotEmpty)
-              Image.network(
-                card.imageUrls.first,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    TikTokThumbnailPlaceholder(
-                  creatorHandle: tiktokCreatorHandle(card.videoUrl),
-                ),
-              )
-            else
-              TikTokThumbnailPlaceholder(
-                creatorHandle: tiktokCreatorHandle(card.videoUrl),
-              ),
-            const PhotoWash(),
-            const PhotoBottomScrim(),
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Spacer(),
-                    AppEyebrow(
-                      label: isSuperLike ? 'Must try' : "It's a match",
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      card.title,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: appTitleStyle(context),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      isSuperLike
-                          ? 'Starred and saved to your likes — this one jumps '
-                              'the queue.'
-                          : 'Saved to your likes. Go while the craving is hot.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: kTextOnPhotoSecondary,
-                            height: 1.35,
-                          ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (canRoute) ...[
-                      AppPrimaryButton(
-                        label: 'Get directions',
-                        icon: Icons.directions_rounded,
-                        expand: true,
-                        onPressed: () => unawaited(_openDirections(context)),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                    ],
-                    AppSecondaryButton(
-                      label: 'Keep swiping',
-                      expand: true,
-                      onPressed: onDismiss,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

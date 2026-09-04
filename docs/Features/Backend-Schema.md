@@ -5,6 +5,13 @@ Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](..
 
 # Backend Schema (as built)
 
+> **Client drift, 2026-09-04.** The client no longer uses `undo_swipe`,
+> `get_swipe_stats`, `get_super_liked_ids`, `set_passport` or
+> `profiles.passport_*`, and reads `swipes.super_like` as **"save for later"**
+> (D84, D85). Nothing has been dropped: dropping destroys data and is
+> irreversible, so it wants its own decision rather than riding along with a
+> client change. This document still describes the database as it is.
+
 The **as-built** state of the Supabase project `vpcldlhqpvunnuexecgn`, read from
 the live database on 2026-09-03. Where this disagrees with
 [History/backend-plan.md](../History/backend-plan.md), this doc is right — that

@@ -1,9 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/supabase/single_row.dart';
 import '../models/cuisine_count.dart';
 import '../models/restaurant.dart';
-import '../models/swipe_stats.dart';
 
 class RestaurantRepository {
   RestaurantRepository({SupabaseClient? client}) : _injected = client;
@@ -140,9 +138,11 @@ class RestaurantRepository {
     return rows.map(Restaurant.fromJson).toList();
   }
 
-  /// Which liked rows carry the super-like flag — the Liked grid's star
-  /// badges.
-  Future<Set<int>> superLikedIds() async {
+  /// Which liked rows are saved for later — the up-swipe's rows.
+  ///
+  /// `get_super_liked_ids` is the wire name; see [SwipeRepository.record] for
+  /// why the old one is still on the wire.
+  Future<Set<int>> laterIds() async {
     final rows = await _client
         .rpc<dynamic>('get_super_liked_ids')
         .timeout(_timeout) as List<dynamic>;
@@ -152,8 +152,8 @@ class RestaurantRepository {
 
   /// Today's shortlist: the head of the deck ranking, unswiped rows only.
   /// The rail thins out as the user swipes, and reshuffles at midnight with
-  /// the deck seed. No coordinates passed — the RPC resolves passport, then
-  /// the stored fix, server-side. Server caps the limit at 20.
+  /// the deck seed. No coordinates passed — the RPC resolves the profile's
+  /// stored fix server-side. Server caps the limit at 20.
   Future<List<Restaurant>> topPicks({int limit = 10}) async {
     final rows = await _client
         .rpc<dynamic>('get_top_picks', params: {'p_limit': limit})
@@ -161,14 +161,6 @@ class RestaurantRepository {
         .timeout(_timeout);
 
     return rows.map(Restaurant.fromJson).toList();
-  }
-
-  /// The daily-limit and streak chip.
-  Future<SwipeStats> swipeStats() async {
-    final response =
-        await _client.rpc<dynamic>('get_swipe_stats').timeout(_timeout);
-
-    return SwipeStats.fromJson(asSingleRow(response));
   }
 
   /// The Explore grid: every active cuisine, its restaurant count and a cover

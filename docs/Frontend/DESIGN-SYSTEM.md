@@ -186,25 +186,20 @@ button — which every badge, heart and star it replaces could be (D79).
 `bitten: false` returns a plain `ClipRRect`, so a caller hands it a saved or
 unsaved restaurant without branching.
 
-**Where it is:** every tile in the **Liked** segment of Bites, at
-`kBiteNotchTileScale` (two thirds) of the card radius.
+**Where it is:** every tile in the **Liked** segment of Bites, at the
+prototype's full 30 px.
 
-Two corrections to what that sentence used to say, both found in review:
+**Not the whole Bites grid.** Bites has three segments and they share one grid
+builder. Visited is keyed on `visited_at` and Reviewed on the existence of a
+review — *neither predicate mentions `liked`*. A place swiped left and later
+marked visited belongs in Visited and is not saved, so it must not carry the
+bite. The flag is per-segment, not per-grid.
 
-- **Not the whole Bites grid.** Bites has three segments and they share one
-  grid builder. Visited is keyed on `visited_at` and Reviewed on the existence
-  of a review — *neither predicate mentions `liked`*. A place swiped left and
-  later marked visited belongs in Visited and is not saved, so it must not
-  carry the bite. The flag is per-segment, not per-grid.
-- **The two-thirds scale is a compensation, not a rule.** It was justified here
-  as "the bite is a proportion of what it marks"; the prototype says otherwise,
-  applying the same 30 px to cards and tiles alike, with only the map blob
-  overriding it. The real reason a tile's bite is smaller is that our tiles
-  still carry the badge row the design deletes, and at full size the notch
-  clips the "Remove from likes" button on a 320 pt phone. Two tests hold the
-  line: one asserts the clearance the scale buys, and one asserts that the full
-  radius *would* collide — so the day D82 retires the badges, the second test
-  fails and tells you the scale can go.
+The tile bite was briefly two thirds size, to clear the super-like star. The
+star is retired (D84), so the corner is free and the scale factor is gone. A
+test asserts the clearance the full notch has over the two remaining row
+buttons, and a second asserts that a *third* badge would collide — which is
+why the star could not simply have stayed.
 
 **Where it is not, yet:**
 
@@ -257,9 +252,30 @@ looking correct on screen and in the widget tree. The `Semantics` re-declares
 `onTap` itself. A test drives all five tabs through the semantics action alone,
 so the fix cannot be quietly undone (D83).
 
+## 7c. The deck's action bar
+
+Three circles, centred as equals around the one that matters:
+
+| Control | Size | Fill | Gesture |
+|---|---|---|---|
+| Skip | 56 | `kSurfaceDark` + hairline | left |
+| **`AppNgapButton`** | **72** | `kCtaGradient` | right |
+| Later | 56 | `kSurfaceDark` + hairline | up |
+
+`AppNgapButton` carries the **word**, not a glyph. The design forbids a bare
+heart here: "Ngap" is the product's name for the action, and a button that says
+it teaches the word to a new user in a way no icon can. It is the app's only
+circular gradient fill and the only control larger than a touch target needs to
+be, both for the same reason — on this screen it is the only thing worth doing
+(D86).
+
+It was five controls before: rewind on the far left, a super-like star between
+the two, and Pass/Like as wide pills. All three of those features are retired
+(D84), and the bar is the design's three.
+
 ## 8. Testing
 
-`test/core/ui/design_tokens_test.dart` — 37 tests. Beyond the widget cases, the
+`test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the
 palette itself is asserted, which is what makes a retint safe:
 
 - **Every black is warm** — more red than blue, for all four surfaces.

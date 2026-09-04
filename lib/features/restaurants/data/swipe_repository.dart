@@ -18,7 +18,7 @@ class SwipeRepository {
   Future<void> record({
     required int restaurantId,
     required bool liked,
-    bool superLike = false,
+    bool later = false,
     String source = 'deck',
     double? latitude,
     double? longitude,
@@ -27,21 +27,17 @@ class SwipeRepository {
       'p_restaurant_id': restaurantId,
       'p_liked': liked,
       'p_source': source,
-      // The backend only stores a super like on a liked row, so sending it on
-      // a pass is harmless — but only sent at all when set, to keep the
-      // payload identical to before for every ordinary swipe.
-      if (superLike) 'p_super_like': true,
+      // `p_super_like` is the wire name for "save for later". The design
+      // retired the super like and rebound the up gesture to Later, so the
+      // client speaks of `later` everywhere and this is the one place the old
+      // column name survives. Renaming `swipes.super_like` to `later` is a
+      // migration against the live database, so it is deliberately not
+      // bundled with a client change — see docs/Redesign/GAP-ANALYSIS.md §2.
+      //
+      // Only sent when set, so an ordinary swipe's payload is unchanged.
+      if (later) 'p_super_like': true,
       if (latitude != null) 'p_latitude': latitude,
       if (longitude != null) 'p_longitude': longitude,
-    }).timeout(_timeout);
-  }
-
-  /// Deletes the swipe row outright. This is rewind, not unlike: an unlike
-  /// keeps the row (still "seen", never re-dealt), while an undo makes the
-  /// restaurant swipeable again as if it had never been served.
-  Future<void> undo({required int restaurantId}) async {
-    await _client.rpc<dynamic>('undo_swipe', params: {
-      'p_restaurant_id': restaurantId,
     }).timeout(_timeout);
   }
 

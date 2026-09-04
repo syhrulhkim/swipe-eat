@@ -18,9 +18,6 @@ class AppUser {
     this.filterCuisineIds = const [],
     this.filterDietaryTagIds = const [],
     this.filterMinRating,
-    this.passportLatitude,
-    this.passportLongitude,
-    this.passportPlaceName,
   });
 
   final String id;
@@ -48,15 +45,9 @@ class AppUser {
   final List<int> filterDietaryTagIds;
   final double? filterMinRating;
 
-  /// Passport: a manually pinned location that beats the GPS fix while set.
-  /// All three null when the passport is off.
-  final double? passportLatitude;
-  final double? passportLongitude;
-  final String? passportPlaceName;
 
   bool get needsOnboarding => onboardedAt == null;
 
-  bool get hasPassport => passportLatitude != null && passportLongitude != null;
 
   /// How many discovery constraints are switched on — the filter button's
   /// badge.
@@ -93,9 +84,6 @@ class AppUser {
       filterCuisineIds: _intList(row['filter_cuisine_ids']),
       filterDietaryTagIds: _intList(row['filter_dietary_tag_ids']),
       filterMinRating: _double(row['filter_min_rating']),
-      passportLatitude: _double(row['passport_latitude']),
-      passportLongitude: _double(row['passport_longitude']),
-      passportPlaceName: _string(row['passport_place_name']),
     );
   }
 
@@ -114,9 +102,6 @@ class AppUser {
       filterCuisineIds: _intList(json['filter_cuisine_ids']),
       filterDietaryTagIds: _intList(json['filter_dietary_tag_ids']),
       filterMinRating: _double(json['filter_min_rating']),
-      passportLatitude: _double(json['passport_latitude']),
-      passportLongitude: _double(json['passport_longitude']),
-      passportPlaceName: _string(json['passport_place_name']),
     );
   }
 
@@ -132,9 +117,6 @@ class AppUser {
       'filter_cuisine_ids': filterCuisineIds,
       'filter_dietary_tag_ids': filterDietaryTagIds,
       'filter_min_rating': filterMinRating,
-      'passport_latitude': passportLatitude,
-      'passport_longitude': passportLongitude,
-      'passport_place_name': passportPlaceName,
     };
   }
 
@@ -157,14 +139,11 @@ class AppUser {
       onboardedAt: onboardedAt ?? this.onboardedAt,
       searchRadiusKm: searchRadiusKm ?? this.searchRadiusKm,
       lastPlaceName: lastPlaceName ?? this.lastPlaceName,
-      // Filters and passport only change through RPCs that return the whole
+      // Filters only change through RPCs that return the whole
       // profile row, so copyWith always carries them through unchanged.
       filterCuisineIds: filterCuisineIds,
       filterDietaryTagIds: filterDietaryTagIds,
       filterMinRating: filterMinRating,
-      passportLatitude: passportLatitude,
-      passportLongitude: passportLongitude,
-      passportPlaceName: passportPlaceName,
     );
   }
 

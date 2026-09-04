@@ -770,4 +770,104 @@ void main() {
       expect(kBiteNotchInset, lessThan(kBiteNotchRadius));
     });
   });
+
+  group('AppNgapButton', () {
+    Future<void> pumpNgap(
+      WidgetTester tester, {
+      VoidCallback? onTap,
+      bool enabled = true,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AppNgapButton(onTap: onTap, enabled: enabled),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('carries the word, not a glyph', (tester) async {
+      // The design forbids a bare heart here: the word is the product's name
+      // for the action, and the button is how a new user learns it.
+      await pumpNgap(tester, onTap: () {});
+
+      expect(find.text('Ngap!'), findsOneWidget);
+      expect(find.byType(Icon), findsNothing);
+    });
+
+    testWidgets('is the app\'s largest control and a gradient circle',
+        (tester) async {
+      await pumpNgap(tester, onTap: () {});
+
+      expect(
+        tester.getSize(find.byType(AppNgapButton)),
+        const Size(kNgapButtonSize, kNgapButtonSize),
+      );
+      // Larger than the ghosts flanking it — that difference is the only
+      // thing that says "this one" before the word is read.
+      expect(kNgapButtonSize, greaterThan(kActionButtonSize));
+
+      final decorated = tester.widget<DecoratedBox>(
+        find
+            .descendant(
+              of: find.byType(AppNgapButton),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      final decoration = decorated.decoration as BoxDecoration;
+      expect(decoration.shape, BoxShape.circle);
+      expect(decoration.gradient, kCtaGradient);
+    });
+
+    testWidgets('reports itself to a screen reader as a button named Ngap',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpNgap(tester, onTap: () {});
+
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Ngap')),
+        matchesSemantics(
+          label: 'Ngap',
+          isButton: true,
+          isEnabled: true,
+          hasEnabledState: true,
+          hasTapAction: true,
+        ),
+      );
+
+      handle.dispose();
+    });
+
+    testWidgets('a null handler dims it and swallows the tap', (tester) async {
+      var taps = 0;
+      await pumpNgap(tester, onTap: null);
+
+      await tester.tap(find.byType(AppNgapButton));
+      await tester.pump();
+
+      expect(taps, 0);
+      final opacity = tester.widget<Opacity>(
+        find
+            .descendant(
+              of: find.byType(AppNgapButton),
+              matching: find.byType(Opacity),
+            )
+            .first,
+      );
+      expect(opacity.opacity, lessThan(1));
+    });
+
+    testWidgets('fires once when tapped', (tester) async {
+      var taps = 0;
+      await pumpNgap(tester, onTap: () => taps++);
+
+      await tester.tap(find.byType(AppNgapButton));
+      await tester.pump();
+
+      expect(taps, 1);
+    });
+  });
 }
