@@ -5,6 +5,14 @@ Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Sc
 
 # Explore & Search
 
+> **Changed 2026-09-04.** The tab is called **Nearby** (D87) — still the
+> cuisine grid, not the design's map, which needs a package and the 474
+> ungeocoded rows. **Emoji are gone** (D88): `cuisines.emoji` is no longer read
+> anywhere, the field is off both models so it cannot come back by accident,
+> and a cuisine with no cover photo shows its **name on a chip**. That is the
+> common case — roughly four fifths of the catalogue has no photo — so §4.2 of
+> the gap analysis is resolved in the design's favour.
+
 Tab index 1. The catalogue arranged **by craving rather than by distance** — the
 deliberate counterpart to the deck, which is ordered by proximity and ranking.
 

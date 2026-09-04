@@ -144,9 +144,17 @@ Uri tikTokPlayerUrl(String videoUrl) {
     return Uri.parse(videoUrl);
   }
 
+  // muted=1 is the design's call: a clip that starts silent and says "tap to
+  // unmute" (D89). It is also the only autoplay a browser engine will honour
+  // without a gesture, so the first frame no longer depends on
+  // setMediaPlaybackRequiresUserGesture winning on every device.
+  //
+  // `controls=1` with `volume_control=1` is what makes the promise keepable:
+  // the sound is turned on through TikTok's own control, because D4 forbids
+  // this app from driving their player.
   return Uri.parse(
     'https://www.tiktok.com/player/v1/$videoId?autoplay=1&controls=1'
-    '&volume_control=1&muted=0&music_info=1&description=1&timestamp=1'
+    '&volume_control=1&muted=1&music_info=1&description=1&timestamp=1'
     '&rel=0&loop=1',
   );
 }

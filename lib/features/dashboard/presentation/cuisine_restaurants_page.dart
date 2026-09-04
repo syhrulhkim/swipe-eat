@@ -106,7 +106,7 @@ class _CuisineRestaurantsPageState extends State<CuisineRestaurantsPage>
     final cuisine = widget.cuisine;
     final title = cuisine == null
         ? 'Explore'
-        : '${cuisine.emoji} ${cuisine.label}'.trim();
+        : cuisine.label;
     final error = _error;
 
     return Scaffold(

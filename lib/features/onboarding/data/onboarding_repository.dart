@@ -24,7 +24,7 @@ class OnboardingRepository {
     final results = await Future.wait([
       _client
           .from('cuisines')
-          .select('id, slug, label, emoji')
+          .select('id, slug, label')
           .eq('is_active', true)
           .order('position')
           .timeout(_timeout),

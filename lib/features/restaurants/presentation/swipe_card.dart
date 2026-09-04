@@ -272,10 +272,26 @@ class _SwipeCardState extends State<SwipeCard> {
             videoUrl != null &&
             videoUrl.isNotEmpty) {
           return IgnorePointer(
-            child: TikTokPlayerView(
-              key: ValueKey(videoUrl),
-              videoUrl: videoUrl,
-              playerFuture: widget.tiktokPlayerFuture,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                TikTokPlayerView(
+                  key: ValueKey(videoUrl),
+                  videoUrl: videoUrl,
+                  playerFuture: widget.tiktokPlayerFuture,
+                ),
+                // The clip starts silent (D89), so the card says so.
+                //
+                // "Tap for sound", not the design's "tap to unmute": on the
+                // card a tap opens the fullscreen player, which is where
+                // TikTok's own volume control lives. Promising an unmute here
+                // would be promising something this tap does not do.
+                const Positioned(
+                  left: 14,
+                  bottom: 0,
+                  child: _MutedHint(),
+                ),
+              ],
             ),
           );
         }
@@ -574,6 +590,41 @@ class _RatingBlock extends StatelessWidget {
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Says the clip is playing without sound, and where to get it.
+class _MutedHint extends StatelessWidget {
+  const _MutedHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: kFillOnPhoto,
+        borderRadius: BorderRadius.circular(kRadiusPill),
+        border: Border.all(color: kHairline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.volume_off_rounded,
+            size: 13,
+            color: kTextOnPhotoMuted,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Tap for sound',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: kTextOnPhotoMuted,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
         ],
       ),

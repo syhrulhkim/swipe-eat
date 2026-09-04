@@ -209,8 +209,13 @@ class _TopPicksRail extends StatelessWidget {
   }
 }
 
-/// One craving: the cuisine's best cover photo under a scrim, the emoji and
-/// label on top, the count as the small line under them.
+/// One craving: the cuisine's best cover photo under a scrim, its name and
+/// count on top.
+///
+/// No emoji. The design forbids emoji as food imagery, so a cuisine with no
+/// cover photo yet falls back to its **name on a chip** rather than to a
+/// pictograph standing in for a dish (D88). Roughly four fifths of the
+/// catalogue has no photo, so the fallback is the common case, not the edge.
 class _CuisineTile extends StatelessWidget {
   const _CuisineTile({required this.cuisine, required this.onTap});
 
@@ -235,7 +240,7 @@ class _CuisineTile extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (coverUrl == null)
-                const ColoredBox(color: kSurfacePanel)
+                _CuisineChipFallback(label: cuisine.label)
               else
                 Image.network(
                   coverUrl,
@@ -254,7 +259,7 @@ class _CuisineTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${cuisine.emoji} ${cuisine.label}'.trim(),
+                      cuisine.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: appPanelTitleStyle(context),
@@ -283,6 +288,46 @@ class _CuisineTile extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What a cuisine tile shows before anything in it has a photo: its name, set
+/// as a chip on the panel colour.
+///
+/// The chip is centred and dimmed rather than bottom-left like the real label,
+/// because the label still draws over the top of it — the two must not stack
+/// into one another. It reads as "no photo yet", which is true, instead of as
+/// a decorative glyph, which the design forbids.
+class _CuisineChipFallback extends StatelessWidget {
+  const _CuisineChipFallback({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: kSurfacePanel,
+      child: Align(
+        alignment: const Alignment(0, -0.35),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: kGlass,
+            borderRadius: BorderRadius.circular(kRadiusPill),
+            border: Border.all(color: kHairline),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: kCreamMuted,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
         ),
       ),

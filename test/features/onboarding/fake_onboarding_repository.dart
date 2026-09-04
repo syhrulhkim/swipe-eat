@@ -10,8 +10,8 @@ class FakeOnboardingRepository implements OnboardingRepository {
       : catalog = catalog ??
             const TasteCatalog(
               cuisines: [
-                TasteOption(id: 1, slug: 'malay', label: 'Malay', emoji: '🍛'),
-                TasteOption(id: 2, slug: 'cafe', label: 'Cafe', emoji: '☕'),
+                TasteOption(id: 1, slug: 'malay', label: 'Malay'),
+                TasteOption(id: 2, slug: 'cafe', label: 'Cafe'),
               ],
               dietaryTags: [
                 TasteOption(id: 7, slug: 'halal', label: 'Halal'),

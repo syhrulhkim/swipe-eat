@@ -5,6 +5,12 @@ Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Restaurant-Data.md](Restauran
 
 # TikTok Video & Thumbnails
 
+> **Changed 2026-09-04.** The player URL now sets `muted=1` (D89). The card
+> carries a "Tap for sound" chip — deliberately *not* the design's "tap to
+> unmute", because on the card a tap opens the fullscreen player, which is
+> where TikTok's own volume control is. D4 still stands: this app does not
+> drive their player, so the unmute is theirs to perform.
+
 The video *is* the card. 1,606 of 1,607 restaurants carry a `video_url`, and
 the deck's whole premise is that you decide by watching food, not by reading a
 listing.

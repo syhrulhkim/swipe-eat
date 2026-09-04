@@ -358,7 +358,6 @@ class _TasteChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emoji = option.emoji;
 
     return Semantics(
       selected: selected,
@@ -376,7 +375,7 @@ class _TasteChip extends StatelessWidget {
             ),
           ),
           child: Text(
-            emoji == null ? option.label : '$emoji  ${option.label}',
+            option.label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: selected ? kOnAccent : kTextOnPhotoSecondary,
                   fontWeight: FontWeight.w700,

@@ -189,13 +189,20 @@ Places where the new design contradicts either itself or a locked decision.
 
 One field, three representations. Pick one before implementing either screen.
 
-### 4.2 "No emoji" vs. `cuisines.emoji`
+### 4.2 "No emoji" vs. `cuisines.emoji` — ✅ resolved 2026-09-04
 
-The brand reference forbids emoji as food imagery. `cuisines.emoji` is a
-shipped column and Explore's tiles render it today. The design's replacement is
-a photo tile with a text-chip fallback — which means **every cuisine needs a
-cover photo**, and `get_cuisine_counts()` already returns a `cover_url`, so the
-plumbing exists and the photos do not.
+The brand reference forbids emoji as food imagery. `cuisines.emoji` was a
+shipped column that Explore's tiles, the cuisine page title, the discovery
+filter chips and the onboarding taste chips all rendered.
+
+**Resolved in the design's favour** (D88). The column is no longer read
+anywhere, and the field is off both `CuisineCount` and `TasteOption` so a call
+site cannot reintroduce it. A cuisine with no cover photo falls back to its
+**name on a chip**, which is the design's stated replacement.
+
+`get_cuisine_counts()` already returned `cover_url`, so the photo path needed
+no plumbing — but the photos still mostly do not exist, so the chip is the
+common case rather than the edge. That is a data gap (§3), not a design one.
 
 ### 4.3 "Real 9:16 clips" vs. D4
 
@@ -207,9 +214,12 @@ If that means self-hosted clips, **it violates D4 and TikTok's terms.** If it
 means the embed continues and 9:16 describes the framing, D4 is safe. This must
 be settled before any player work: it is a legal question, not a design one.
 
-Related: the detail screen says *"tap to unmute"*, so video starts **muted** —
-whereas today's player fires timed `unMute` + `play` messages at the iframe.
-That is a straightforward simplification, and a welcome one.
+Related, and **done 2026-09-04**: the player URL sets `muted=1`, so video
+starts silent as the design asks (D89). The card says "Tap for sound" rather
+than "tap to unmute", because on the card a tap opens fullscreen — which is
+where TikTok's volume control is, and D4 forbids driving it from here. Muting
+also removed a fragility: a muted autoplay is the only kind a browser engine
+honours without a gesture.
 
 ### 4.4 Google-hosted fonts vs. D8 — ✅ resolved 2026-09-04
 

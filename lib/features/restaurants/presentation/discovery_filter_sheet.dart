@@ -297,9 +297,7 @@ class _OptionWrap extends StatelessWidget {
       children: [
         for (final option in options)
           _FilterPill(
-            label: option.emoji == null
-                ? option.label
-                : '${option.emoji} ${option.label}',
+            label: option.label,
             selected: isSelected(option.id),
             onTap: () => onToggle(option.id),
           ),

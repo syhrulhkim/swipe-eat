@@ -86,7 +86,7 @@ void main() {
   }
 
   Future<void> completeTasteStep(WidgetTester tester) async {
-    await tester.tap(find.text('🍛  Malay'));
+    await tester.tap(find.text('Malay'));
     await tester.pump();
     await tester.tap(primaryButton('Continue'));
     await tester.pumpAndSettle();
@@ -139,7 +139,7 @@ void main() {
       expect(find.text('What do you like to eat?'), findsOneWidget);
       expect(isEnabled(tester, primaryButton('Continue')), isFalse);
 
-      await tester.tap(find.text('🍛  Malay'));
+      await tester.tap(find.text('Malay'));
       await tester.pump();
 
       expect(isEnabled(tester, primaryButton('Continue')), isTrue);
