@@ -1,3 +1,10 @@
+Status: ACTIVE
+Owner: Swipe Eat team
+Last updated: 2026-09-03
+Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Features/Account-Deletion-Legal.md](../Features/Account-Deletion-Legal.md), [Features/Auth.md](../Features/Auth.md)
+
+> Outstanding work is tracked in this doc's own "Still needed from you" section.
+
 # Shipping Swipe Eat to Google Play and the App Store
 
 Everything in this document is either already done in the repo (marked **done**)

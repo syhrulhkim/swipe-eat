@@ -1,3 +1,15 @@
+Status: SHIPPED
+Owner: Swipe Eat team
+Last updated: 2026-08-31 (historical — not maintained)
+Cross-references: [Features/Swipe-Deck.md](../Features/Swipe-Deck.md), [Features/Likes-Visits.md](../Features/Likes-Visits.md), [Features/Group-Dining.md](../Features/Group-Dining.md)
+
+> **Historical, and still the best statement of why four Tinder features are
+> permanently out of scope** — a restaurant never swipes back. Everything it
+> scopes (Rewind, Super Like, the match moment, Top Picks, discovery filters,
+> the daily limit and streak, Passport, the Matches-shaped Likes surface) was
+> built. As-built behaviour is in
+> [Features/Swipe-Deck.md](../Features/Swipe-Deck.md).
+
 # Tinder feature parity, mapped onto restaurants
 
 Tinder is a two-sided market: two people swipe, and a match is the moment both

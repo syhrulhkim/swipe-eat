@@ -12,7 +12,7 @@
 // the database, so there is nothing here to protect.
 //
 // The wording is a plain-language description of what the app actually does. It
-// has not been reviewed by a lawyer; see docs/store-release.md.
+// has not been reviewed by a lawyer; see docs/Release/STORE.md.
 const CONTACT_EMAIL = Deno.env.get("LEGAL_CONTACT_EMAIL") ??
   "support@swipeeat.app";
 const LAST_UPDATED = "31 August 2026";

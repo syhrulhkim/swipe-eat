@@ -52,7 +52,7 @@ supplied with `--dart-define`:
 
 Both Google ids are required for native Google sign-in; with them unset the
 Google button is hidden rather than failing at tap time. See
-`docs/auth-setup.md` for how to obtain them and how Apple sign-in is wired.
+`docs/Features/Auth.md` for how to obtain them and how Apple sign-in is wired.
 
 Crash reporting is off unless `SENTRY_DSN` is passed, so local runs and CI
 report nothing. Release builds should pass it along with the environment:
@@ -78,15 +78,21 @@ flutter run \
 lib/
   app/          MaterialApp, theme, router
   core/         config, location, Supabase helpers, design system
-  features/     auth, onboarding, dashboard, restaurants, quiz, profile, settings
+  features/     auth, onboarding, dashboard, restaurants, profile, settings
   dev/          standalone demo entrypoints, not shipped
 supabase/
   migrations/   schema, RLS policies, RPCs — mirrors the remote project
   functions/    edge functions
   seed.sql      idempotent catalogue seed
-docs/           backend plan, auth setup, dashboard spec, improvement plan
+docs/           see docs/README.md — General, Features, Frontend, Tests,
+                Release, History
 scripts/        TikTok metadata scraping helpers
 ```
+
+Full documentation is in [`docs/`](docs/README.md): `General/PLAN.md` for the
+product and architecture, `General/RUNBOOK.md` for commands,
+`Features/` for one spec per feature, and `General/DECISIONS.md` for every
+decision in one place.
 
 Each feature follows the same shape: `data/` repositories, `models/`,
 `state/` controllers, `presentation/` widgets.
@@ -112,8 +118,8 @@ supabase db push
 ```
 
 `supabase/seed.sql` is idempotent and safe to re-run. See
-`docs/backend-plan.md` for the schema's design and `supabase/README.md` for
-operational notes.
+`docs/Features/Backend-Schema.md` for the as-built schema and
+`supabase/README.md` for operational notes.
 
 ## Standalone demos
 

@@ -1,3 +1,20 @@
+Status: SUPERSEDED
+Owner: Swipe Eat team
+Last updated: 2026-08-22 (historical — not maintained)
+Cross-references: [Features/Swipe-Deck.md](../Features/Swipe-Deck.md), [Features/Explore-Search.md](../Features/Explore-Search.md), [Features/Likes-Visits.md](../Features/Likes-Visits.md), [Features/Quiz.md](../Features/Quiz.md)
+
+> **Do not cite this as current behaviour.** It describes the pre-Supabase
+> build: hardcoded card data, a dummy GPS position, a dead search bar, a static
+> Like tab and a **Quiz tab that no longer exists** (nav index 3 is now Group).
+> Almost every "known gap" it lists has since been fixed.
+>
+> Kept because it is the only record of what the app was, and because §4's
+> TikTok-player notes explain why the current player looks the way it does.
+> Current behaviour lives in
+> [Features/Swipe-Deck.md](../Features/Swipe-Deck.md),
+> [Features/Explore-Search.md](../Features/Explore-Search.md) and
+> [Features/Likes-Visits.md](../Features/Likes-Visits.md).
+
 # Dashboard Feature Spec
 
 Source: `lib/features/dashboard/presentation/dashboard_page.dart`

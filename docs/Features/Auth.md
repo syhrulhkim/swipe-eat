@@ -1,3 +1,8 @@
+Status: ACTIVE
+Owner: Swipe Eat team
+Last updated: 2026-09-03
+Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Onboarding-Taste.md](Onboarding-Taste.md), [Account-Deletion-Legal.md](Account-Deletion-Legal.md), [Backend-Schema.md](Backend-Schema.md)
+
 # Auth setup
 
 The app authenticates against Supabase Auth (project `vpcldlhqpvunnuexecgn`).

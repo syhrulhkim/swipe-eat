@@ -1,3 +1,15 @@
+Status: SHIPPED
+Owner: Swipe Eat team
+Last updated: 2026-08-30 (historical — not maintained)
+Cross-references: [General/PLAN.md](../General/PLAN.md), [Tests/CONVENTIONS.md](../Tests/CONVENTIONS.md), [Features/TikTok-Video.md](../Features/TikTok-Video.md)
+
+> **Historical.** An audit of the app on 29 August 2026 plus a six-phase plan;
+> all six phases were delivered on 29–30 August (see its own §7 Status table).
+> Its "297 tests" figure is now **269** after the suite was reorganised.
+>
+> Still useful for the reasoning behind CI, the dashboard decomposition, the
+> TikTok player rewrite and the offline cache — and for its Sources list.
+
 # Swipe Eat — implementation improvement plan
 
 Audit of the app as it stands on 29 August 2026, and a phased plan to improve

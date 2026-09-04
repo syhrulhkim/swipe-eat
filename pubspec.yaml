@@ -51,7 +51,7 @@ dev_dependencies:
 #   * assets/icon/app_icon_fg.png     1024×1024, transparent, artwork inside the
 #                                     centre ~66% so Android's adaptive mask
 #                                     cannot crop it.
-# See docs/store-release.md.
+# See docs/Release/STORE.md.
 flutter_launcher_icons:
   image_path: "assets/icon/app_icon.png"
   android: "ic_launcher"

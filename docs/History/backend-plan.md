@@ -1,3 +1,15 @@
+Status: SHIPPED
+Owner: Swipe Eat team
+Last updated: 2026-08-23 (historical — not maintained)
+Cross-references: [Features/Backend-Schema.md](../Features/Backend-Schema.md)
+
+> **Historical.** This was the original plan for replacing the hardcoded UI data
+> with Supabase, and all six of its phases were delivered. The schema has since
+> grown well past the DDL below — cuisines, dietary tags, onboarding, Passport,
+> super likes, visits. **For the current schema read
+> [Features/Backend-Schema.md](../Features/Backend-Schema.md);** this file is
+> kept for its reasoning, especially §0 on dropping the Laravel API.
+
 # Swipe Eat — Supabase Backend Plan
 
 Plan for replacing every hardcoded data source in the current UI with Supabase
