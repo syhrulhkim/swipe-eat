@@ -419,3 +419,120 @@ class AppOnboardingGaps {
   static const double item = 10;
   static const double section = 20;
 }
+
+/// The design's "Three moves" step: what the three gestures do, before the
+/// user meets a card that expects them.
+///
+/// Teaching the gestures is the whole point of the screen, so each row names
+/// the gesture, gives it the word the app uses for it, and says what it means
+/// in plain language. The words matter more than the arrows — "Ngap" is the
+/// product's own verb, and this is where it is learned.
+class OnboardingHowToSwipeStep extends StatelessWidget {
+  const OnboardingHowToSwipeStep({super.key});
+
+  /// Kept in the order the thumb learns them: the yes first, then the no,
+  /// then the one that defers.
+  static const _moves = <({IconData icon, String label, String meaning})>[
+    (
+      icon: Icons.arrow_forward_rounded,
+      label: 'Ngap!',
+      meaning: 'I want this',
+    ),
+    (
+      icon: Icons.arrow_back_rounded,
+      label: 'Skip',
+      meaning: 'Not tonight',
+    ),
+    (
+      icon: Icons.arrow_upward_rounded,
+      label: 'Later',
+      meaning: 'Save without deciding',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        const _StepHeading(
+          title: 'Three moves',
+          subtitle: 'Every card is a short video from the restaurant. Watch, '
+              'then flick.',
+        ),
+        const SizedBox(height: AppOnboardingGaps.section),
+        for (final move in _moves) ...[
+          _MoveRow(icon: move.icon, label: move.label, meaning: move.meaning),
+          const SizedBox(height: 10),
+        ],
+        const SizedBox(height: AppOnboardingGaps.section),
+        Text(
+          'Bitten places land in Your bites. Set a date from there.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: kCreamMuted,
+                height: 1.35,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One gesture: its arrow, the app's word for it, and what it means.
+class _MoveRow extends StatelessWidget {
+  const _MoveRow({
+    required this.icon,
+    required this.label,
+    required this.meaning,
+  });
+
+  final IconData icon;
+  final String label;
+  final String meaning;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      // One node per row: read as a sentence rather than as an arrow glyph
+      // followed by two unrelated fragments.
+      label: '$label — $meaning',
+      excludeSemantics: true,
+      child: AppPanel(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: kGlass,
+                  borderRadius: BorderRadius.circular(kRadiusPill),
+                  border: Border.all(color: kHairline),
+                ),
+                child: Icon(icon, size: 19, color: kAccentEmber),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: appPanelTitleStyle(context)),
+                    const SizedBox(height: 2),
+                    Text(
+                      meaning,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: kCreamSecondary,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

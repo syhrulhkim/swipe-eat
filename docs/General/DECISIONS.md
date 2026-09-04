@@ -137,6 +137,7 @@ not the row number.
 | D87 | Tabs 2 and 4 are named **Nearby** and **Calendar** per the design, ahead of the map and the plans they will hold. This reverses the earlier reading of D7: the design's names are the target, and the empty states now say plainly what is coming rather than describing the old feature. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 | D88 | **No emoji anywhere as food imagery.** `cuisines.emoji` is not read at all — the field is gone from both models, so a call site cannot reintroduce it. A cuisine with no cover photo falls back to its **name on a chip**. | [Features/Explore-Search](../Features/Explore-Search.md) | locked 2026-09-04 |
 | D89 | Video starts **muted**, and the card says so. It is also the only autoplay a browser engine honours without a gesture, so the first frame stops depending on `setMediaPlaybackRequiresUserGesture`. Sound is turned on through TikTok's own control, because D4 forbids driving their player. | [Features/TikTok-Video](../Features/TikTok-Video.md) | locked 2026-09-04 |
+| D90 | Onboarding ends on a **gesture primer** — "Three moves" — and its button says **"Show me dinner"** rather than "Finish". The three words the deck expects (Ngap!, Skip, Later) are taught before the user meets a card that expects them. | [Features/Onboarding-Taste](../Features/Onboarding-Taste.md) | locked 2026-09-04 |
 
 ## Testing
 
@@ -170,4 +171,4 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D89**.
+   ID must keep meaning the same thing. The highest ID in use is **D90**.

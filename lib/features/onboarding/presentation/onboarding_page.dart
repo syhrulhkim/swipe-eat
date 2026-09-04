@@ -42,7 +42,7 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  static const _stepCount = 4;
+  static const _stepCount = 5;
 
   late final OnboardingRepository _repository;
   late final OnboardingDraft _draft;
@@ -121,7 +121,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
     if (_saving) {
       return 'Setting up...';
     }
-    return _step == _stepCount - 1 ? 'Finish' : 'Continue';
+    // The design's words, not "Finish": the last step teaches the gestures,
+    // so the button that leaves it should name what is on the other side.
+    return _step == _stepCount - 1 ? 'Show me dinner' : 'Continue';
   }
 
   void _goToStep(int step) {
@@ -284,6 +286,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 onUseLocation: _useLocation,
                 onSkip: _skipLocation,
               ),
+              const OnboardingHowToSwipeStep(),
             ],
           ),
         ),

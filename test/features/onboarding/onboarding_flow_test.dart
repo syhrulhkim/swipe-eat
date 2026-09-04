@@ -7,6 +7,7 @@ import 'package:swipe_eat/core/ui/app_buttons.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
+import 'package:swipe_eat/features/onboarding/presentation/onboarding_steps.dart';
 
 import '../auth/fake_auth_repository.dart';
 import 'fake_onboarding_repository.dart';
@@ -177,7 +178,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Peserai, Batu Pahat'), findsOneWidget);
 
-      await tester.tap(primaryButton('Finish'));
+      // Location is no longer the last step: the gesture primer sits after it,
+      // and its button names what comes next rather than saying "Finish".
+      await tester.tap(primaryButton('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Three moves'), findsOneWidget);
+
+      await tester.tap(primaryButton('Show me dinner'));
       await tester.pumpAndSettle();
 
       expect(onboarding.sentParams, isNotNull);
@@ -207,7 +214,10 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
 
-      await tester.tap(primaryButton('Finish'));
+      await tester.tap(primaryButton('Continue'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(primaryButton('Show me dinner'));
       await tester.pumpAndSettle();
 
       expect(onboarding.sentParams!['p_location_source'], 'denied');
@@ -273,6 +283,72 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('What should we call you?'), findsOneWidget);
+    });
+  });
+
+  group('the gesture primer', () {
+    Future<void> pumpPrimer(WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Padding(
+              padding: EdgeInsets.all(16),
+              child: OnboardingHowToSwipeStep(),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('names all three moves and what each means', (tester) async {
+      // The screen exists to teach the words. If the words are not on it, it
+      // has no reason to be a step.
+      await pumpPrimer(tester);
+
+      expect(find.text('Three moves'), findsOneWidget);
+      for (final pair in const [
+        ('Ngap!', 'I want this'),
+        ('Skip', 'Not tonight'),
+        ('Later', 'Save without deciding'),
+      ]) {
+        expect(find.text(pair.$1), findsOneWidget, reason: pair.$1);
+        expect(find.text(pair.$2), findsOneWidget, reason: pair.$2);
+      }
+    });
+
+    testWidgets('reads each move as one sentence, not three fragments',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpPrimer(tester);
+
+      // One node per row: an arrow glyph announced on its own tells a screen
+      // reader user nothing.
+      expect(find.bySemanticsLabel('Ngap! — I want this'), findsOneWidget);
+      expect(find.bySemanticsLabel('Skip — Not tonight'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Later — Save without deciding'),
+        findsOneWidget,
+      );
+
+      handle.dispose();
+    });
+
+    testWidgets('says where a bite ends up', (tester) async {
+      await pumpPrimer(tester);
+
+      expect(
+        find.textContaining('land in Your bites'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('promises no super like', (tester) async {
+      // Up is Later now. A primer that still taught a super like would be
+      // teaching a gesture the app no longer has.
+      await pumpPrimer(tester);
+
+      expect(find.textContaining('Super'), findsNothing);
+      expect(find.textContaining('Must try'), findsNothing);
     });
   });
 }

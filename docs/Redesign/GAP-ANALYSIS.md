@@ -299,7 +299,9 @@ three offline caches, the router's splash-hold, and the whole test approach.
   vocabulary, and `AppEyebrow` + `appOverlineStyle` deleted outright.
 - **All five tab presentations.** Two change purpose (Explore → map,
   Group → calendar), one gains a sub-screen (Bites → wishlist).
-- **`onboarding/`** — 4 steps → 6, with two entirely new ones.
+- **`onboarding/`** — 4 steps → 6. **5 of 6 as of 2026-09-04**: the gesture
+  primer (§01g) is built (D90). Diet & budget (§01e) and Friends (§01f) are the
+  two still missing, and each needs schema — a price band and a social graph.
 - **`restaurants/presentation/`** — new action bar, "Ngap!"/"Skip" stamps, the
   bite notch, muted-by-default video, dishes instead of reviews.
 

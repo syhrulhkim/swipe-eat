@@ -5,6 +5,16 @@ Cross-references: [Auth.md](Auth.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-P
 
 # Onboarding & the Taste Signal
 
+> **Changed 2026-09-04.** The wizard is **five steps**, not four: a gesture
+> primer ("Three moves") closes it, and the final button reads **"Show me
+> dinner"** (D90). It teaches Ngap! / Skip / Later — the words the deck's three
+> controls use — before the user meets a card that expects them. Taste chips no
+> longer carry emoji (D88).
+>
+> The design specifies six steps; Diet & budget and Friends are the two that
+> are missing, and both need schema the app does not have — a price band and a
+> social graph.
+
 The four-step wizard every account walks **exactly once**. It exists to solve
 one problem: a deck ranked on nothing is a random deck, and the first session
 is the one that decides whether there is a second.
