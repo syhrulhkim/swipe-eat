@@ -150,7 +150,14 @@ saved place — including the Liked tab's super-like star.
 
 ## 8. Navigation
 
-A **black pill bottom nav**; the active tab expands into a labelled cream pill.
+A **black pill bottom nav**; the active tab expands into a labelled **ember**
+pill with dark `--on-ember` ink, and the other four stay icon-only at
+`--cream-70`.
+
+> Corrected 2026-09-04. This line read "labelled cream pill" until the
+> prototype was checked against it: `.nav button[aria-current="page"]` sets
+> `background:var(--ember);color:var(--on-ember)`. Cream is the *resting* ink,
+> not the active fill.
 
 | Order | id | Label | Today |
 |---|---|---|---|

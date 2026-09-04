@@ -258,6 +258,7 @@ class _LikesTabViewState extends State<LikesTabView> {
     return _buildGrid(
       _visibleRows(widget.liked),
       likedActions: true,
+      bitten: true,
     );
   }
 
@@ -308,12 +309,25 @@ class _LikesTabViewState extends State<LikesTabView> {
           );
         }
 
-        return _buildGrid(_visibleRows(controller.rows), likedActions: false);
+        return _buildGrid(
+          _visibleRows(controller.rows),
+          likedActions: false,
+          bitten: false,
+        );
       },
     );
   }
 
-  Widget _buildGrid(List<Restaurant> rows, {required bool likedActions}) {
+  /// [bitten] marks the grid's restaurants as saved. It is **not** the same
+  /// question as [likedActions]: Visited and Reviewed are keyed on
+  /// `visited_at` and on the existence of a review, neither of which mentions
+  /// `liked`. A place swiped left and later marked visited belongs in Visited
+  /// and is not saved, so it must not carry the bite (D79).
+  Widget _buildGrid(
+    List<Restaurant> rows, {
+    required bool likedActions,
+    required bool bitten,
+  }) {
     if (rows.isEmpty) {
       // Non-empty source, empty view: the filters hid everything.
       return ListView(
@@ -357,6 +371,7 @@ class _LikesTabViewState extends State<LikesTabView> {
           restaurant: restaurant,
           distanceText: widget.distanceLabel(restaurant),
           onTap: () => widget.onOpenRestaurant(restaurant),
+          isSaved: bitten,
           badge: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

@@ -126,6 +126,11 @@ not the row number.
 | D76 | The palette is asserted in tests — warm blacks, stacking order, one non-orange accent — so a retint cannot quietly break the rule that governs it. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 | D77 | All-caps is forbidden, and the rule lives in `AppEyebrow` because that was the app's only uppercasing call site. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 | D78 | `ScreenGlow` is the single exception to "nothing decorative is orange", granted only because it is `IgnorePointer` and never touches a control. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
+| D79 | The saved-marker is a notch **clipped out of** the surface, not a badge drawn on it — a mark that is part of the silhouette cannot be mistaken for a button. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
+| D80 | Only the current bottom-nav tab is labelled, and three signals — fill, ink, filled-vs-outline glyph — mark it without relying on colour. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
+| D81 | The bite is not wired to the swipe card: the deck deals only unswiped places, so the flag would be dead code. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
+| D82 | The super-like star survives the bite — "must try" and "saved" are different facts. | [Redesign/GAP-ANALYSIS](../Redesign/GAP-ANALYSIS.md) §4.5 | open |
+| D83 | A `Semantics` that sets `excludeSemantics` re-declares its own `onTap`, and accessibility claims are asserted by driving the semantics action rather than by reading the widget tree. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 
 ## Testing
 
@@ -159,4 +164,4 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D78**.
+   ID must keep meaning the same thing. The highest ID in use is **D83**.

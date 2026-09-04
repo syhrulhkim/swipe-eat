@@ -290,13 +290,43 @@ Each phase is independently shippable and each unblocks the next.
 | **0** | Settle §4 — the seven conflicts. Especially **4.3 (D4/legal)** and the KL-vs-Johor catalogue question | Two of these can invalidate later work entirely |
 | **1** | Opening hours: schema + keep what the scraper already parses + backfill | Cheapest real win; the data is already in the captions. Unblocks 5 screens |
 | ~~**2**~~ | ~~The design system: tokens, both fonts bundled, radii, buttons, drop eyebrows~~ | ✅ **Delivered 2026-09-04.** See [Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md) |
-| **3** | Reskin the existing five tabs in place, no new features | Ships a coherent Ngap look with today's features |
+| **3** | Reskin the existing five tabs in place, no new features | Ships a coherent Ngap look with today's features. **Partly delivered 2026-09-04** — see below |
 | **4** | Price band + neighbourhood + dishes, and the new detail screen | The detail screen is where the product argues for itself |
 | **5** | Nearby: the map replaces the cuisine grid | Needs coordinates; the 474 gap becomes urgent here |
 | **6** | Wishlist + the up-swipe rebind + retire super like | Small, self-contained, completes the three-gesture story |
 | **7** | Plans + Calendar (solo only, no friends) | Delivers "pick a day" — the tagline's third verb — without the social graph |
 | **8** | Friends, invites, time voting, and the RLS work | Largest and riskiest; the only phase that relaxes `profiles` |
 | **9** | KL catalogue scrape, if §0 decided that way | Can run in parallel from phase 1 |
+
+### Phase 3 progress (2026-09-04)
+
+Landed:
+
+- **The bite** (§7 of the design system) — a `BiteNotch` clip in
+  `core/ui/design_tokens.dart`, carried by every tile in the Bites grid.
+- **The pill nav** (§8) — the current tab widens into a labelled ember pill;
+  the other four are icon-only.
+- **The motion tokens adopted** — `kMotionDuration`/`kMotionEase` now drive the
+  tab fade, the screen crossfade, the press dip and the nav, replacing four
+  hand-rolled durations.
+
+Not yet, and still Phase 3:
+
+- **Explore, Group and Profile tab bodies** are untouched. Only the frame
+  around them changed.
+- **The bite on the swipe card.** The deck deals unswiped restaurants, so the
+  flag would be false at every call site — dead code rather than a reskin. It
+  needs the deck to know which places are already saved, which is plumbing, not
+  paint (D81).
+- **The super-like star** still sits on Bites tiles. §7 of the design system
+  says the notch replaces it, but the star means *"must try"*, not *"saved"* —
+  a different fact. Retiring it is §4.5's call, not a reskin's (D82).
+
+  This one has a measurable cost. Keeping the badge row forces the tile's bite
+  down to two thirds of the specified size: at the prototype's full 30 px the
+  notch reaches back past the row on a 320 pt phone and clips the "Remove from
+  likes" button. So §4.5's decision is not only tidying — it is what lets the
+  redesign's signature device appear at the size the design asked for.
 
 ## 7. What this is not
 

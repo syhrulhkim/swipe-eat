@@ -666,4 +666,108 @@ void main() {
       expect(taps, 1);
     });
   });
+
+  group('BiteNotch', () {
+    // The notch is a clip, not a painted circle, so its correctness is the
+    // shape of the path — which is assertable directly and cheaply.
+    Future<Path> pumpAndClip(
+      WidgetTester tester, {
+      required bool bitten,
+      double radius = kBiteNotchRadius,
+      Size size = const Size(200, 260),
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: BiteNotch(
+                bitten: bitten,
+                radius: radius,
+                borderRadius: BorderRadius.circular(kRadiusPanel),
+                child: const ColoredBox(color: kSurfacePanel),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final clipPath = tester.widget<ClipPath>(find.byType(ClipPath));
+      return clipPath.clipper!.getClip(size);
+    }
+
+    testWidgets('an unsaved surface is a plain rounded rect', (tester) async {
+      // The caller passes `bitten: false` rather than branching, so the
+      // unbitten case must stay an ordinary clip with no notch in it.
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 200,
+            height: 260,
+            child: BiteNotch(
+              bitten: false,
+              borderRadius: BorderRadius.zero,
+              child: ColoredBox(color: kSurfacePanel),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(ClipPath), findsNothing);
+      expect(find.byType(ClipRRect), findsOneWidget);
+    });
+
+    testWidgets('takes the bite out of the top-right corner', (tester) async {
+      const size = Size(200, 260);
+      final path = await pumpAndClip(tester, bitten: true, size: size);
+
+      // The corner itself is gone...
+      expect(path.contains(Offset(size.width - 1, 1)), isFalse);
+      // ...and so is the notch's centre, which sits just inside it.
+      expect(
+        path.contains(
+          const Offset(200 - kBiteNotchInset, kBiteNotchInset),
+        ),
+        isFalse,
+      );
+
+      // The other three corners and the body are untouched. A bite that ate
+      // more than one corner would be a rounded card, not a signature.
+      //
+      // Probed inside the 18 px corner radius rather than at the very corner,
+      // which the rounding itself already removes.
+      expect(path.contains(const Offset(10, 10)), isTrue);
+      expect(path.contains(Offset(10, size.height - 10)), isTrue);
+      expect(
+        path.contains(Offset(size.width - 10, size.height - 10)),
+        isTrue,
+      );
+      expect(path.contains(size.center(Offset.zero)), isTrue);
+    });
+
+    testWidgets('the bite scales with the surface', (tester) async {
+      const size = Size(200, 260);
+      // A point that a card-sized bite removes and a tile-sized one leaves.
+      final justInside = Offset(size.width - 26, 26);
+
+      final large = await pumpAndClip(tester, bitten: true, size: size);
+      final small = await pumpAndClip(
+        tester,
+        bitten: true,
+        radius: kBiteNotchRadius * 0.66,
+        size: size,
+      );
+
+      expect(large.contains(justInside), isFalse);
+      expect(small.contains(justInside), isTrue);
+    });
+
+    test('the notch is inset, not centred on the corner', () {
+      // Centring the circle on the corner would shave one edge; sitting it
+      // inside is what makes the shape read as a bite out of two.
+      expect(kBiteNotchInset, greaterThan(0));
+      expect(kBiteNotchInset, lessThan(kBiteNotchRadius));
+    });
+  });
 }

@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// How long a screen takes to arrive. Deliberately the same order as the
-/// bottom bar's own 220 ms `easeOutCubic`, so a screen change reads as the
-/// same piece of motion as a tap, not as an effect of its own.
-const Duration kScreenFadeDuration = Duration(milliseconds: 240);
+import 'design_tokens.dart';
+
+/// How long a screen takes to arrive: the app's one interface duration, so a
+/// screen change reads as the same piece of motion as a tap rather than as an
+/// effect of its own. These were 240 ms and `easeOutCubic`, chosen to be "the
+/// same order as" the bottom bar — now they are simply the same values.
+const Duration kScreenFadeDuration = kMotionDuration;
 
 /// The app's one screen-change curve.
-const Curve kScreenFadeCurve = Curves.easeOutCubic;
+const Curve kScreenFadeCurve = kMotionEase;
 
 /// Zero when the platform is set to reduce motion, so the crossfade becomes an
 /// instant cut rather than a slower one.

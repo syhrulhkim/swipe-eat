@@ -5,8 +5,8 @@ Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Frontend/STACK.m
 
 # Testing Conventions
 
-**281 tests, all passing; `flutter analyze` reports no issues** (verified
-2026-09-04).
+**319 tests, all passing; `flutter analyze lib test` reports no issues**
+(verified 2026-09-04).
 
 ## 1. Framework
 
@@ -44,13 +44,14 @@ test/
   features/
     auth/         app_user_test, auth_controller_test
                   fake_auth_repository.dart
-    dashboard/    likes_tab_view_test, restaurant_detail_page_test
+    dashboard/    dashboard_bottom_nav_test, likes_tab_view_test,
+                  restaurant_detail_page_test
     onboarding/   onboarding_draft_test, onboarding_flow_test
                   fake_onboarding_repository.dart
     profile/      fake_profile_repository.dart
     restaurants/  deck_ranker_test, likes_controller_test,
-                  likes_migration_test, restaurant_repository_test,
-                  restaurant_test
+                  likes_migration_test, restaurant_grid_card_test,
+                  restaurant_repository_test, restaurant_test
                   fake_restaurant_repositories.dart
     settings/     settings_page_test
   support/
@@ -67,12 +68,18 @@ test/
 - **Controllers** — `auth_controller_test`, `likes_controller_test`.
 - **The router** — `app_router_test` covers the redirect matrix and the splash
   hold, which is the cold-start correctness property (D56).
-- **Design tokens** — 33 tests, including the palette rules themselves (warm
+- **Design tokens** — 37 tests, including the palette rules themselves (warm
   blacks, surface stacking order, one non-orange accent). That is what made the
   Ngap retint safe to land in one commit.
 - **Widget layout under stress** — `restaurant_detail_page_test` asserts no
   overflow on a small phone, a narrow phone and a tablet, plus a long title at
-  a huge text scale. That pattern is worth copying to any new screen.
+  a huge text scale. That pattern is worth copying to any new screen;
+  `dashboard_bottom_nav_test` is the copy, extended to the tween's
+  intermediate frames.
+- **The bottom nav** — `dashboard_bottom_nav_test` covers the one-current-tab
+  contract (fill, ink, filled-vs-outline glyph, the single drawn label), the
+  flex tween, the 1.3x text-scale clamp, and the semantics of all five tabs
+  including that each one can actually be *activated* by a screen reader.
 
 ### Gaps
 

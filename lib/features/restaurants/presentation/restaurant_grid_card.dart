@@ -14,15 +14,25 @@ class RestaurantGridCard extends StatelessWidget {
     required this.distanceText,
     required this.onTap,
     this.badge,
+    this.isSaved = false,
   });
 
   final Restaurant restaurant;
   final String distanceText;
   final VoidCallback onTap;
 
-  /// Sits in the top-right corner over the photo — the Liked grid puts the
-  /// super-like star here. Null for plain tiles.
+  /// Sits in a top corner over the photo — the Liked grid puts the super-like
+  /// star and its two row actions here. Null for plain tiles.
+  ///
+  /// Which corner depends on [isSaved]: the bite owns the top right, and these
+  /// are buttons, so on a bitten tile they move left rather than being cut in
+  /// half by the notch.
   final Widget? badge;
+
+  /// Bites the top-right corner out of the tile. Every tile in Bites is saved,
+  /// so the whole grid carries it; a mixed grid uses it to tell saved from
+  /// unsaved without adding a second badge.
+  final bool isSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +45,10 @@ class RestaurantGridCard extends StatelessWidget {
       button: true,
       child: GestureDetector(
         onTap: onTap,
-        child: ClipRRect(
+        child: BiteNotch(
+          bitten: isSaved,
           borderRadius: BorderRadius.circular(kRadiusPanel),
+          radius: kBiteNotchRadius * kBiteNotchTileScale,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -85,6 +97,14 @@ class RestaurantGridCard extends StatelessWidget {
               ),
               // IgnorePointer, or this full-card overlay swallows every tap
               // meant for the badge buttons underneath it.
+              // No clip of its own: this sits inside the tile's own BiteNotch
+              // at the same size, so the notch has already removed the border
+              // wherever it bites. A second identical clip would cost another
+              // path union per tile and, on an unbitten tile, nest two equal
+              // ClipRRects around a 1 px hairline — which thins it.
+              //
+              // There is no stroke along the notch arc, by design: the border
+              // stops where the clip does, as the prototype's mask does.
               IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -94,7 +114,12 @@ class RestaurantGridCard extends StatelessWidget {
                 ),
               ),
               if (badge != null)
-                Positioned(top: 8, right: 8, child: badge!),
+                Positioned(
+                  top: 8,
+                  left: isSaved ? 8 : null,
+                  right: isSaved ? null : 8,
+                  child: badge!,
+                ),
             ],
           ),
         ),

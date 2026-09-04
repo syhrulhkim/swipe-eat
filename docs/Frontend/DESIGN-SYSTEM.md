@@ -8,7 +8,8 @@ Cross-references: [STACK.md](STACK.md), [Redesign/NGAP-DESIGN-SYSTEM.md](../Rede
 **The Ngap design system, as built.** Phase 2 of
 [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md) landed on 2026-09-04:
 the token layer, both faces, the radii, the CTA gradient and the screen glow are
-in the app. The target spec is
+in the app. Part of Phase 3 followed the same day — the bite, the pill nav and
+the motion tokens in use. The target spec is
 [Redesign/NGAP-DESIGN-SYSTEM.md](../Redesign/NGAP-DESIGN-SYSTEM.md); this
 records what the code actually does.
 
@@ -168,9 +169,97 @@ tappable, and the exception is granted only because it never touches a control.
 
 Wired into `DashboardTabShell`, so all five tabs get it.
 
+## 7a. The bite
+
+> A circular notch out of the top-right corner of any restaurant surface the
+> user has saved. The app's **only** decorative device, and it means one thing.
+
+`BiteNotch` is a `ClipPath`, not a painted circle: whatever sits behind the
+surface shows through the notch, which is what makes it read as a bite rather
+than as a dot someone put in the corner. Geometry is the prototype's mask —
+a circle of `kBiteNotchRadius` (30) centred `kBiteNotchInset` (6) inside the
+corner, so it takes a bite out of *two* edges instead of shaving one.
+
+Because the mark is part of the silhouette, it cannot be mistaken for a
+button — which every badge, heart and star it replaces could be (D79).
+
+`bitten: false` returns a plain `ClipRRect`, so a caller hands it a saved or
+unsaved restaurant without branching.
+
+**Where it is:** every tile in the **Liked** segment of Bites, at
+`kBiteNotchTileScale` (two thirds) of the card radius.
+
+Two corrections to what that sentence used to say, both found in review:
+
+- **Not the whole Bites grid.** Bites has three segments and they share one
+  grid builder. Visited is keyed on `visited_at` and Reviewed on the existence
+  of a review — *neither predicate mentions `liked`*. A place swiped left and
+  later marked visited belongs in Visited and is not saved, so it must not
+  carry the bite. The flag is per-segment, not per-grid.
+- **The two-thirds scale is a compensation, not a rule.** It was justified here
+  as "the bite is a proportion of what it marks"; the prototype says otherwise,
+  applying the same 30 px to cards and tiles alike, with only the map blob
+  overriding it. The real reason a tile's bite is smaller is that our tiles
+  still carry the badge row the design deletes, and at full size the notch
+  clips the "Remove from likes" button on a 320 pt phone. Two tests hold the
+  line: one asserts the clearance the scale buys, and one asserts that the full
+  radius *would* collide — so the day D82 retires the badges, the second test
+  fails and tells you the scale can go.
+
+**Where it is not, yet:**
+
+- **The swipe card.** The deck only ever deals unswiped places, so the flag
+  would be false at every call site. Wiring it needs the deck to know what is
+  already saved, which is plumbing rather than paint (D81).
+- **Replacing the super-like star.** The design says the notch replaces it; the
+  star means "must try" and the notch means "saved", which are different facts.
+  Retiring super like is a decision the redesign has not taken (D82). Until it
+  does, a bitten tile moves its badge row to the *left* corner so the notch
+  does not clip a button.
+
+## 7b. Navigation
+
+A dark pill bar, 64 high, in which the **current tab widens into a labelled
+ember pill** and the other four are icons at `kCreamSecondary`.
+
+Only the selected tab carries a word. That is the point: the bar spends its
+width on the one question the user is asking — "where am I?" — instead of
+spreading it across five answers they already have (D80). Three signals say it
+independently, so the bar survives being read without colour: the ember fill,
+the dark `kOnAccent` ink, and the filled-vs-outline glyph.
+
+The width is animated, not switched, because the pill growing out of the icon
+is what ties the new screen to the tap that asked for it. Flutter's `flex` is
+an integer, so the tween runs 100 → 230 — finer than a pixel at these widths.
+
+**230 is a ceiling, not a constant.** The pill takes its width as a *share* of
+the bar, so a fixed ratio squeezes the four inactive tabs: at 320 pt they came
+out 43.8 wide, under Material's 48 and under the iOS HIG's 44 — a real miss on
+an iPhone SE and in any split-screen or foldable width. `selectedFlexFor` now
+derives the ratio from the bar's own width, growing the pill only as far as the
+inactive tabs can afford. The first version of the touch-target test asserted
+the *height*, which was never in doubt; it asserts both axes now.
+
+Lives in `features/dashboard/presentation/dashboard_bottom_nav.dart`, split
+out of the page for the same reason `LikesTabView` is split out of `LikesTab`:
+the tabs draw their own headings, so "only the current tab is labelled" is not
+assertable while the tab bodies are on screen, and five idle animations mean a
+`pumpAndSettle` never settles.
+
+Every tab keeps its name in the semantics tree whether or not the label is
+drawn; four of five show only a glyph, and a glyph is not a name.
+
+**The trap, and it bit once:** `Semantics(excludeSemantics: true)` drops the
+child's tap **action** along with its labels. Naming the tabs that way and
+stopping there produced five buttons a screen reader could read and announce as
+selected but could not activate — the whole nav, unusable with TalkBack, while
+looking correct on screen and in the widget tree. The `Semantics` re-declares
+`onTap` itself. A test drives all five tabs through the semantics action alone,
+so the fix cannot be quietly undone (D83).
+
 ## 8. Testing
 
-`test/core/ui/design_tokens_test.dart` — 33 tests. Beyond the widget cases, the
+`test/core/ui/design_tokens_test.dart` — 37 tests. Beyond the widget cases, the
 palette itself is asserted, which is what makes a retint safe:
 
 - **Every black is warm** — more red than blue, for all four surfaces.
@@ -198,6 +287,8 @@ Three migrations, all still legible in the code:
 3. **Flat/Lexend/square → Ngap** (2026-09-04). Warm blacks, ember/lava/char, the
    CTA gradient, the screen glow, radii back to 28/18/pill, and Lexend replaced
    by Bricolage Grotesque + Instrument Sans.
+4. **The bite and the pill nav** (2026-09-04, Phase 3). The first Ngap devices
+   that are shapes rather than colours.
 
 The Bricolage and Instrument files were **restored from git history** — they had
 been deleted by `b627d27` when the app moved to Lexend, so the correct static
@@ -206,10 +297,10 @@ instances and their licences already existed. Lexend was removed in turn.
 ## 10. Known gaps
 
 - **`kFresh` has no call site.** It needs opening hours; the schema has none.
-- **The nav is not yet a black pill** with a cream expanding label, and the
-  bite notch is not built. Both are Phase 3 work.
-- **`kMotionDuration`/`kMotionEase` are not yet adopted** by existing
-  transitions — they are defined, not yet applied everywhere.
+- **The Explore, Group and Profile tab bodies are untouched.** Phase 3 changed
+  the frame around them, not their contents.
+- **The bite is on Bites tiles only** — not the swipe card (D81), and not yet
+  in place of the super-like star (D82).
 - **No light theme**, and the tokens are literal dark values rather than
   semantic pairs, so this stays a one-way door.
 - **`kBackgroundDeep` still has no user** — it is "behind the explore map" and
@@ -241,3 +332,8 @@ instances and their licences already existed. Lexend was removed in turn.
 | D76 | The palette is asserted in tests — warm blacks, stacking order, one non-orange accent — so a retint cannot quietly break the rule that governs it. | locked 2026-09-04 |
 | D77 | All-caps is forbidden, and the rule lives in `AppEyebrow` because that was the app's only uppercasing call site. | locked 2026-09-04 |
 | D78 | `ScreenGlow` is the single exception to "nothing decorative is orange", granted only because it is `IgnorePointer` and never touches a control. | locked 2026-09-04 |
+| D79 | The saved-marker is a notch **clipped out of** the surface, not a badge drawn on it. A mark that is part of the silhouette cannot be mistaken for a button; the heart, star and badge it replaces all could. | locked 2026-09-04 |
+| D80 | Only the current tab is labelled. The bar spends its width on the one question the user is asking, and three independent signals — fill, ink, filled-vs-outline glyph — say which tab is current without relying on colour. | locked 2026-09-04 |
+| D81 | The bite is not wired to the swipe card. The deck deals only unswiped places, so the flag would be false everywhere — an always-false switch is dead code, not a reskin. | locked 2026-09-04 |
+| D82 | The super-like star survives the bite. "Must try" and "saved" are different facts; retiring super like is [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md) §4.5's call. A bitten tile moves its badges to the left corner instead. | open, pending §4.5 |
+| D83 | Any `Semantics` using `excludeSemantics` re-declares its own `onTap`, and an accessibility claim is asserted by driving the semantics action, never by reading the widget tree. | locked 2026-09-04 |

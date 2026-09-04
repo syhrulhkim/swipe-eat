@@ -124,6 +124,27 @@ const double kRadiusPanel = 18;
 /// Small image tiles (gallery thumbs, hero strip).
 const double kRadiusThumb = 10;
 
+/// The bite notch on a full-size card. Tiles pass something smaller; the notch
+/// is a proportion of the surface it marks, not a fixed dot.
+const double kBiteNotchRadius = 30;
+
+/// How far the notch's centre sits inside the corner. Shared by every size, so
+/// a large bite and a small one are the same shape rather than two shapes.
+const double kBiteNotchInset = 6;
+
+/// What a grid tile scales the bite by.
+///
+/// The prototype uses the full 30 on tiles as well as cards. This app cannot,
+/// yet: its tiles still carry the badge row — the super-like star and the two
+/// row actions — that the design deletes in favour of the notch. At the full
+/// radius the bite reaches back past that row on a 320 pt phone and clips the
+/// "Remove from likes" button.
+///
+/// So this is a **compensation, not a rule**, and it goes away with D82. A
+/// test asserts the clearance it buys, so the two cannot drift into each other
+/// unnoticed.
+const double kBiteNotchTileScale = 0.66;
+
 /// One duration and one curve for interface motion, so transitions across the
 /// app agree. Gestural motion that carries its own physics — the card exit —
 /// keeps its longer timing; everything else uses these.
@@ -278,6 +299,81 @@ class ScreenGlow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The bite: a circular notch out of the top-right corner of a restaurant
+/// surface the user has saved.
+///
+/// The app's **only** decorative device, and it means exactly one thing. It
+/// replaces the heart, star and badge vocabulary that marked a saved place
+/// before — a mark that is part of the card's silhouette cannot be mistaken
+/// for a button, which every previous marker could.
+///
+/// The notch is cut, not drawn: whatever sits behind the surface shows
+/// through it. That is what makes it read as a bite rather than as a circle
+/// someone put in the corner.
+class BiteNotch extends StatelessWidget {
+  const BiteNotch({
+    super.key,
+    required this.child,
+    required this.borderRadius,
+    this.radius = kBiteNotchRadius,
+    this.bitten = true,
+  });
+
+  final Widget child;
+
+  /// The corners of the surface being bitten, so the notch composes with a
+  /// card, a tile or a sheet without any of them hard-coding the other's
+  /// shape.
+  final BorderRadius borderRadius;
+
+  /// Scales with the surface: [kBiteNotchRadius] on a card, less on a tile.
+  final double radius;
+
+  /// False leaves the surface whole, so a caller can hand the same widget an
+  /// unsaved restaurant without branching around it.
+  final bool bitten;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!bitten) {
+      return ClipRRect(borderRadius: borderRadius, child: child);
+    }
+
+    return ClipPath(
+      clipper: _BiteClipper(borderRadius: borderRadius, radius: radius),
+      child: child,
+    );
+  }
+}
+
+class _BiteClipper extends CustomClipper<Path> {
+  const _BiteClipper({required this.borderRadius, required this.radius});
+
+  final BorderRadius borderRadius;
+  final double radius;
+
+  @override
+  Path getClip(Size size) {
+    final surface = Path()
+      ..addRRect(borderRadius.toRRect(Offset.zero & size));
+    // Centred just inside the corner rather than on it, so the notch takes a
+    // bite out of two edges instead of shaving one.
+    final bite = Path()
+      ..addOval(
+        Rect.fromCircle(
+          center: Offset(size.width - kBiteNotchInset, kBiteNotchInset),
+          radius: radius,
+        ),
+      );
+
+    return Path.combine(PathOperation.difference, surface, bite);
+  }
+
+  @override
+  bool shouldReclip(_BiteClipper oldClipper) =>
+      oldClipper.borderRadius != borderRadius || oldClipper.radius != radius;
 }
 
 /// A flat wash over a full-bleed photo. TikTok stills usually carry burnt-in
