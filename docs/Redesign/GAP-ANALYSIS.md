@@ -179,7 +179,7 @@ directly — that is the good news — but the data does not.
 
 Places where the new design contradicts either itself or a locked decision.
 
-### 4.1 Spice has three different scales
+### 4.1 Spice has three different scales — ✅ resolved 2026-09-05
 
 | Where | Scale |
 |---|---|
@@ -187,7 +187,16 @@ Places where the new design contradicts either itself or a locked decision.
 | Diet screen (01e) | **4** segments — Mild / Medium / Pedas / Bring it |
 | You screen (10) | **5** pips, 4 lit |
 
-One field, three representations. Pick one before implementing either screen.
+One field, three representations.
+
+**Resolved by storing the design's scale and deriving the old one** (D104).
+`profiles.spice_level` is a `smallint` 1–4 and is the truth; `update_preferences`
+and `complete_onboarding` write `spice_bias` in step with it (1→low, 2→medium,
+3 and 4→high), so `deck_scored`'s existing three-way term keeps scoring without
+a second migration. The You tab's five pips are five, with `spice_level` of
+them lit — "Bring it" leaves one dark exactly as the prototype draws it, which
+is what the fifth pip was always for. Null is a real state: the step is
+skippable, so "never answered" lights none.
 
 ### 4.2 "No emoji" vs. `cuisines.emoji` — ✅ resolved 2026-09-04
 
@@ -299,9 +308,12 @@ three offline caches, the router's splash-hold, and the whole test approach.
   vocabulary, and `AppEyebrow` + `appOverlineStyle` deleted outright.
 - **All five tab presentations.** Two change purpose (Explore → map,
   Group → calendar), one gains a sub-screen (Bites → wishlist).
-- **`onboarding/`** — 4 steps → 6. **5 of 6 as of 2026-09-04**: the gesture
-  primer (§01g) is built (D90). Diet & budget (§01e) and Friends (§01f) are the
-  two still missing, and each needs schema — a price band and a social graph.
+- **`onboarding/`** — 4 steps → 6, and the wizard now runs **6 of the design's
+  7 first-run steps as of 2026-09-05**. The gesture primer (§01g) landed with
+  D90; Diet & budget (§01e) landed with D104/D105, along with the design's
+  topbar chrome — a round back button, the three-state `.steps` bar, and a Skip
+  on the one skippable step. **Friends (§01f) is the only one still missing**,
+  and it is the one that needs a social graph rather than a column.
 - **`restaurants/presentation/`** — new action bar, "Ngap!"/"Skip" stamps, the
   bite notch, muted-by-default video, dishes instead of reviews.
 

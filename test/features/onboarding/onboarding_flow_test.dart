@@ -9,6 +9,7 @@ import 'package:swipe_eat/features/auth/state/auth_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_steps.dart';
 
+import '../../support/widget_test_support.dart';
 import '../auth/fake_auth_repository.dart';
 import 'fake_onboarding_repository.dart';
 
@@ -57,7 +58,12 @@ void main() {
     WidgetTester tester, {
     Future<Position> Function()? resolvePosition,
     Future<String?> Function(Position)? resolvePlace,
+    Size viewport = const Size(390, 844),
   }) async {
+    // A phone-sized viewport, not the 800x600 default: the wizard's steps are
+    // lazily built lists, and on a short surface the buttons at the bottom of
+    // a step are never built at all.
+    useViewport(tester, viewport);
     await tester.pumpWidget(
       MaterialApp(
         home: OnboardingPage(
@@ -90,6 +96,18 @@ void main() {
     await tester.tap(find.text('Malay'));
     await tester.pump();
     await tester.tap(primaryButton('Continue'));
+    await tester.pumpAndSettle();
+  }
+
+  /// The rules step sits between taste and habits and is skippable; most of
+  /// the tests below are not about it, so they walk past it with Continue.
+  Future<void> completeRulesStep(WidgetTester tester) async {
+    await tester.tap(primaryButton('Continue'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> tapBack(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('onboarding-back')));
     await tester.pumpAndSettle();
   }
 
@@ -151,9 +169,10 @@ void main() {
       await pumpWizard(tester);
       await completeNameStep(tester);
       await completeTasteStep(tester);
+      await completeRulesStep(tester);
 
       expect(find.text('How do you eat?'), findsOneWidget);
-      expect(find.text('No limit'), findsWidgets);
+      expect(find.text('Any distance'), findsWidgets);
 
       await tester.tap(find.text('On').first); // morning mode
       await tester.pump();
@@ -169,6 +188,7 @@ void main() {
       await pumpWizard(tester);
       await completeNameStep(tester);
       await completeTasteStep(tester);
+      await completeRulesStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -203,6 +223,7 @@ void main() {
       await pumpWizard(tester, resolvePosition: () async => fallbackUserPosition());
       await completeNameStep(tester);
       await completeTasteStep(tester);
+      await completeRulesStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -229,6 +250,7 @@ void main() {
       await pumpWizard(tester);
       await completeNameStep(tester);
       await completeTasteStep(tester);
+      await completeRulesStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -245,6 +267,7 @@ void main() {
       await pumpWizard(tester);
       await completeNameStep(tester);
       await completeTasteStep(tester);
+      await completeRulesStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -263,8 +286,7 @@ void main() {
       await completeNameStep(tester);
       await completeTasteStep(tester);
 
-      await tester.tap(find.text('Back'));
-      await tester.pumpAndSettle();
+      await tapBack(tester);
 
       expect(find.text('What do you like to eat?'), findsOneWidget);
       expect(isEnabled(tester, primaryButton('Continue')), isTrue,
@@ -283,6 +305,131 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('What should we call you?'), findsOneWidget);
+    });
+  });
+
+  group('the rules step', () {
+    Future<void> reachRules(WidgetTester tester, {Size? viewport}) async {
+      await pumpWizard(
+        tester,
+        viewport: viewport ?? const Size(390, 844),
+      );
+      await completeNameStep(tester);
+      await completeTasteStep(tester);
+    }
+
+    /// Walks the rest of the wizard so the RPC payload can be inspected.
+    Future<void> finishFromRules(WidgetTester tester) async {
+      await tester.tap(primaryButton('Continue')); // habits
+      await tester.pumpAndSettle();
+      await tester.tap(primaryButton('Continue')); // location
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('sits between taste and the habits step', (tester) async {
+      await reachRules(tester);
+
+      expect(find.text('Any rules?'), findsOneWidget);
+      expect(
+        find.text("So we never show you somewhere you can't eat."),
+        findsOneWidget,
+        reason: 'every first-run step says why it is asking',
+      );
+      expect(find.text('How do you eat?'), findsNothing);
+
+      await tester.tap(primaryButton('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('How do you eat?'), findsOneWidget);
+    });
+
+    testWidgets('opens on the range the prototype shows, spice unset',
+        (tester) async {
+      await reachRules(tester);
+
+      expect(find.text('RM 10–40'), findsOneWidget);
+      expect(find.text('RM 5'), findsOneWidget);
+      expect(find.text('RM 100+'), findsOneWidget);
+      for (final label in const ['Mild', 'Medium', 'Pedas', 'Bring it']) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+    });
+
+    testWidgets('the answers on screen reach the RPC', (tester) async {
+      await reachRules(tester);
+
+      await tester.tap(find.text('Halal only'));
+      await tester.pump();
+      await tester.tap(find.text('Pedas'));
+      await tester.pump();
+      await finishFromRules(tester);
+
+      expect(onboarding.sentParams!['p_halal_only'], isTrue);
+      expect(onboarding.sentParams!['p_vegetarian'], isFalse);
+      expect(onboarding.sentParams!['p_spice_level'], 3);
+      expect(onboarding.sentParams!['p_budget_min'], 10);
+      expect(onboarding.sentParams!['p_budget_max'], 40);
+      expect(onboarding.sentParams!['p_clear_budget'], isFalse);
+    });
+
+    testWidgets('Skip advances without writing any rule', (tester) async {
+      await reachRules(tester);
+
+      // Answer everything first, so a Skip that merely moved on would be
+      // visible in the payload.
+      await tester.tap(find.text('Halal only'));
+      await tester.pump();
+      await tester.tap(find.text('Bring it'));
+      await tester.pump();
+
+      await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('How do you eat?'), findsOneWidget);
+
+      await tester.tap(primaryButton('Continue'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      expect(onboarding.sentParams!['p_halal_only'], isFalse);
+      expect(onboarding.sentParams!['p_spice_level'], isNull);
+      expect(onboarding.sentParams!['p_budget_min'], isNull);
+      expect(onboarding.sentParams!['p_clear_budget'], isTrue);
+    });
+
+    testWidgets('Skip is offered on this step and no other', (tester) async {
+      await pumpWizard(tester);
+      expect(find.text('Skip'), findsNothing);
+
+      await completeNameStep(tester);
+      expect(find.text('Skip'), findsNothing);
+
+      await completeTasteStep(tester);
+      expect(find.text('Skip'), findsOneWidget);
+
+      await tester.tap(primaryButton('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Skip'), findsNothing);
+    });
+
+    testWidgets('reads each switch and segment out as one control',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await reachRules(tester);
+
+      expect(find.bySemanticsLabel('Halal only'), findsOneWidget);
+      expect(find.bySemanticsLabel('Vegetarian options'), findsOneWidget);
+      expect(find.bySemanticsLabel('Pedas'), findsOneWidget);
+
+      handle.dispose();
+    });
+
+    testWidgets('does not overflow at 320 px', (tester) async {
+      await reachRules(tester, viewport: const Size(320, 640));
+
+      expect(tester.takeException(), isNull);
     });
   });
 

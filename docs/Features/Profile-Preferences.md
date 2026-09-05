@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-05
 Cross-references: [Onboarding-Taste.md](Onboarding-Taste.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Account-Deletion-Legal.md](Account-Deletion-Legal.md)
 
 # Profile, Preferences, Filters & Passport
@@ -11,7 +11,15 @@ Cross-references: [Onboarding-Taste.md](Onboarding-Taste.md), [Swipe-Deck.md](Sw
 > `profiles.passport_*` remain on the database, unused. The "Must try" stat went
 > with the super like; "Liked" is now **Bites**.
 
-Tab index 4. Who is signed in, what they have collected, and the switches that
+> **Changed 2026-09-05.** The tab is now the design's **S10**: a "You" title
+> with a notifications bell, a portrait row, three stat tiles, and an editable
+> **Your taste** list. The three static `PreferenceTile` rows (Morning mode /
+> Spice bias / Nearby focus) are **gone** — they were `const` and never read the
+> profile, so nothing that worked was removed. Diet & budget (`halal_only`,
+> `vegetarian`, `spice_level`, `budget_min`, `budget_max`) is new and editable
+> here and in Settings (D104, D105, D106).
+
+Tab index 4. Who is signed in, what they have collected, and the rules that
 shape their deck.
 
 Files: `lib/features/profile/presentation/profile_tab.dart`,
@@ -26,8 +34,34 @@ Two sources, deliberately: the **profile row** (name, passport, radius) and the
 **likes** (what they have collected). Identity and behaviour are different
 reads, and the tab does not pretend one implies the other.
 
-Below that: the three taste switches, the radius picker, discovery filters,
-Passport, and the route to Settings.
+Below that, in the design's order:
+
+1. **`.me-row`** — a 64 px portrait ringed in ember (initials when there is no
+   photo), the name in the display face, and one small line reading
+   "`last_place_name` · eating out since `<Mon YYYY>`". The place is dropped
+   when there has never been a fix; a leading separator would read as a
+   missing word.
+2. **`.stats`** — three tiles. **bites** is the liked count from the shared
+   likes cache. **plans kept** and **eating-out streak** come from a
+   `ProfileStats` parameter that a later phase fills; until then they read
+   **0** rather than being hidden, because a tile that appears later would
+   change the row's shape (D106).
+3. **Your taste** — Halal only, Spice (five pips, `spice_level` lit), Budget
+   per person, Default radius. Each row opens a bottom sheet carrying the same
+   control the first run used, writes optimistically and reverts with a
+   SnackBar on failure.
+4. **Settings**, full width. The design's second ghost button is "Friends · N",
+   which belongs to the phase that has people in it.
+
+**"Videos autoplay" is not shown.** The design lists it, but
+`tikTokPlayerUrl` hard-codes `autoplay=1&muted=1` (D89) and the app has no
+connectivity package, so neither "Wi-Fi only" nor "Never" could be honoured. A
+setting that does nothing is worse than an absent one (D106).
+
+The tab does **not** use `DashboardTabShell`: the design puts the bell on the
+same line as the title and the shell's header is a title column with nothing
+beside it, so the tab reproduces the shell's chrome (background, glow, safe
+area) around a two-ended topbar.
 
 ## 2. Preferences
 
@@ -37,9 +71,41 @@ Passport, and the route to Settings.
 | `spice_bias` | `low` / `medium` / `high`, default `high` | Weights via `cuisines.spice_level` |
 | `nearby_focus` | bool, default true | Strengthens the proximity term |
 | `search_radius_km` | int, nullable | A **hard** filter, not a weight |
+| `halal_only` | bool, **default false** | A **hard** filter: `restaurants.is_halal is true` |
+| `vegetarian` | bool, default false | A **hard** filter: the `vegetarian` dietary tag |
+| `spice_level` | smallint 1–4, nullable | The stored truth; `spice_bias` is derived from it |
+| `budget_min` / `budget_max` | int, nullable | `budget_max` is a **hard** ceiling on `price_from` |
 
 Written by `update_preferences(p_name, p_morning_mode, p_spice_bias,
-p_nearby_focus, p_radius_km, p_clear_radius, p_cuisine_ids, p_dietary_ids)`.
+p_nearby_focus, p_radius_km, p_clear_radius, p_cuisine_ids, p_dietary_ids,
+p_halal_only, p_vegetarian, p_spice_level, p_budget_min, p_budget_max,
+p_clear_budget)`.
+
+### Spice: one question, one column
+
+The design asks four steps (Mild / Medium / Pedas / Bring it) and the You tab
+draws five pips. `profiles.spice_level` stores the four; `spice_bias` is
+written **in step** with it by the same RPC — 1→`low`, 2→`medium`, 3 and
+4→`high` — so `deck_scored`'s existing three-way term keeps scoring untouched
+(D104). Null is a real value: the first-run step is skippable, so "never
+answered" lights no pips and applies no weight.
+
+### Budget: the two ends move together
+
+"RM 10 and up" is a real answer — a floor with no ceiling — and a per-column
+`coalesce` could never express it, because null already means "leave alone".
+So a non-null `p_budget_min` makes the **pair** authoritative: the ceiling that
+arrives with it is written as-is, null included. `p_clear_budget` is the only
+route back to "Any", and it is what a skipped first-run step sends.
+
+### Halal is off by default, and stays off
+
+`halal_only` filters on `is_halal is true`, so an *unknown* certification does
+not pass. That is deliberate — a rule the user set to avoid eating somewhere
+they cannot must not be satisfied by a guess. It is also why the default is
+false: 27 of the 1 605 live restaurants carry a known certification, so this is
+a switch that legitimately empties the deck. The copy under it
+("Hides places without halal certification") is the warning (D105).
 
 That function needs an explicit **`p_clear_radius`** because null already means
 "don't change this field" in every other parameter. Without it there would be
@@ -173,3 +239,6 @@ Both stores require the deletion path; see
 | D34 | Filters are applied in `deck_scored`'s `candidates` CTE so they bind the exhaustion fallback too, not just the fresh-cards query. | locked 2026-08-31 |
 | D35 | `update_preferences` takes an explicit `p_clear_radius`, because null already means "leave unchanged". | locked 2026-08-23 |
 | D36 | The three taste switches are weights; radius and dietary tags are hard filters. | locked 2026-08-23 |
+| D104 | `spice_level` 1–4 is the stored truth; `spice_bias` is derived from it on every write. Resolves GAP-ANALYSIS §4.1. | locked 2026-09-05 |
+| D105 | `halal_only`, `vegetarian` and `budget_max` are hard deck filters. Halal needs `is_halal is true` (unknown does not pass), which is why it defaults off; an unknown `price_from` **does** pass the budget ceiling. | locked 2026-09-05 |
+| D106 | The You tab's stats read 0 for what nothing feeds yet rather than hiding a tile, its taste rows edit in place through sheets, and "Videos autoplay" is omitted because nothing could honour it. | locked 2026-09-05 |

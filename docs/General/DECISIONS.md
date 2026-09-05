@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 Cross-references: [PLAN.md](PLAN.md), [../README.md](../README.md)
 
 # Decision Log
@@ -42,6 +42,7 @@ not the row number.
 | D35 | `update_preferences` takes an explicit `p_clear_radius`, because null already means "leave unchanged". | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-23 |
 | D37 | `restaurants.video_url` is the stable identity of a row and is never rewritten. | [TikTok-Video](../Features/TikTok-Video.md) | locked 2026-08-22 |
 | D51 | `reviews.user_id` is `set null`, not cascade — a review is content about a restaurant, not personal data. | [Account-Deletion-Legal](../Features/Account-Deletion-Legal.md) | locked 2026-08-22 |
+| D104 | `profiles.spice_level` (1–4) is the stored truth for spice; `spice_bias` is **derived** from it on every write inside `update_preferences` / `complete_onboarding`. The app asks the design's four-step question and the deck's existing three-way term keeps scoring, with no second pass over `deck_scored`. Resolves GAP-ANALYSIS §4.1. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-09-05 |
 
 ## Deck & ranking
 
@@ -56,6 +57,7 @@ not the row number.
 | D34 | Filters are applied in `deck_scored`'s `candidates` CTE so they bind the exhaustion fallback too, not just the fresh-cards query. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-31 |
 | D36 | The three taste switches are weights; radius and dietary tags are hard filters. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-23 |
 | D103 | "Swipe all" hands the map's result **list** to the deck through `DeckHandoff` rather than re-querying; the deck deals what the map already fetched. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-05 |
+| D105 | `halal_only`, `vegetarian` and `budget_max` are **hard** deck filters: a place the user cannot eat at is a wrong result, not a worse one. Halal requires `is_halal is true` — unknown is not good enough — which is why it is off by default, with only 27 of 1 605 live rows certified. An unknown `price_from` **passes** the budget ceiling, because 1 419 rows have no price and dropping them would empty the deck. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-09-05 |
 
 ## Feature behaviour
 
@@ -77,6 +79,7 @@ not the row number.
 | D54 | The cold-start taste signal is collected in onboarding, not by a quiz tab — it runs before the first card. | [Quiz](../Features/Quiz.md) | locked 2026-08-23 |
 | D55 | Quiz schema retained at the redesign rather than dropped with the tab. | [Quiz](../Features/Quiz.md) | **open** |
 | D102 | The Nearby map **replaces** the cuisine grid and the per-cuisine page, which are deleted rather than kept alongside it. This retires the surfaces D22 and D23 govern without striking those decisions: the DB functions behind them (`get_cuisine_counts`, `get_top_picks`) are retained. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-05 |
+| D106 | The You tab shows three stat tiles and an editable taste list. "bites" is real; "plans kept" and "eating-out streak" come from a `ProfileStats` parameter a later phase fills and read **0** until then, rather than being hidden — a tile that appears later would change the row's shape. The taste list edits in place through bottom sheets carrying the same switch/segment/range controls as the first-run step, written optimistically and reverted on failure. "Videos autoplay" is **not** shown: the player hard-codes `autoplay=1` and the app cannot detect Wi-Fi, so the row would be a setting that does nothing. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-09-05 |
 
 ## TikTok player
 

@@ -5,6 +5,7 @@ import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
 import '../../../core/ui/radius_options.dart';
+import '../../profile/presentation/preference_controls.dart';
 import '../models/onboarding_draft.dart';
 import '../models/taste_option.dart';
 
@@ -120,7 +121,76 @@ class OnboardingTasteStep extends StatelessWidget {
   }
 }
 
-/// Step 3 — the three ranking tiles plus the hard distance filter.
+/// Step 3 — "Any rules?": the diet and budget answers the deck treats as hard
+/// filters rather than as weights.
+///
+/// This is the one step that hides restaurants instead of reordering them,
+/// which is why it comes with a reason above it and a Skip beside it: a rule
+/// nobody meant to set is worse than no rule at all.
+class OnboardingRulesStep extends StatelessWidget {
+  const OnboardingRulesStep({
+    super.key,
+    required this.draft,
+    required this.onChanged,
+  });
+
+  final OnboardingDraft draft;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        const _StepHeading(
+          title: 'Any rules?',
+          subtitle: "So we never show you somewhere you can't eat.",
+        ),
+        const SizedBox(height: AppOnboardingGaps.section),
+        PrefSwitchRow(
+          title: 'Halal only',
+          subtitle: 'Hides places without halal certification',
+          value: draft.halalOnly,
+          onChanged: (value) {
+            draft.halalOnly = value;
+            onChanged();
+          },
+        ),
+        const SizedBox(height: AppOnboardingGaps.item),
+        PrefSwitchRow(
+          title: 'Vegetarian options',
+          subtitle: 'Must have a real veg section',
+          value: draft.vegetarian,
+          onChanged: (value) {
+            draft.vegetarian = value;
+            onChanged();
+          },
+        ),
+        const SizedBox(height: AppOnboardingGaps.item),
+        PrefSpiceRow(
+          value: draft.spiceLevel,
+          onChanged: (value) {
+            draft.spiceLevel = value;
+            onChanged();
+          },
+        ),
+        const SizedBox(height: AppOnboardingGaps.item),
+        PrefBudgetRow(
+          min: draft.budgetMin,
+          max: draft.budgetMax,
+          onChanged: (min, max) {
+            draft
+              ..budgetMin = min
+              ..budgetMax = max;
+            onChanged();
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// Step 4 — the three ranking tiles plus the hard distance filter.
 class OnboardingHabitsStep extends StatelessWidget {
   const OnboardingHabitsStep({
     super.key,

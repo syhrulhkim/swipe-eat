@@ -18,6 +18,12 @@ class AppUser {
     this.filterCuisineIds = const [],
     this.filterDietaryTagIds = const [],
     this.filterMinRating,
+    this.createdAt,
+    this.halalOnly = false,
+    this.vegetarian = false,
+    this.spiceLevel,
+    this.budgetMin,
+    this.budgetMax,
   });
 
   final String id;
@@ -45,6 +51,31 @@ class AppUser {
   final List<int> filterDietaryTagIds;
   final double? filterMinRating;
 
+  /// When the profile row was created — the "eating out since Mar 2026" line
+  /// on the You tab. Null on a cache written before the column was read.
+  final DateTime? createdAt;
+
+  /// Diet rules the deck applies as **hard** filters, not as weights: a place
+  /// the user cannot eat at is not a worse result, it is a wrong one.
+  ///
+  /// [halalOnly] is off by default and stays that way. Only 27 of the 1 605
+  /// live restaurants carry a known halal certification, so it is a switch
+  /// that legitimately empties the deck — which the copy under it says.
+  final bool halalOnly;
+  final bool vegetarian;
+
+  /// 1 Mild, 2 Medium, 3 Pedas, 4 Bring it. Null until the question is
+  /// answered — the first-run step is skippable, so "no answer" is a state the
+  /// UI has to be able to draw (D104).
+  final int? spiceLevel;
+
+  /// Ringgit per person. A null [budgetMax] alongside a real [budgetMin] is
+  /// "RM 10 and up": a floor with no ceiling, which is what the range
+  /// control's upper thumb at its maximum means. Both null is "Any".
+  final int? budgetMin;
+  final int? budgetMax;
+
+  bool get hasBudget => budgetMin != null;
 
   bool get needsOnboarding => onboardedAt == null;
 
@@ -84,6 +115,12 @@ class AppUser {
       filterCuisineIds: _intList(row['filter_cuisine_ids']),
       filterDietaryTagIds: _intList(row['filter_dietary_tag_ids']),
       filterMinRating: _double(row['filter_min_rating']),
+      createdAt: _dateTime(row['created_at']),
+      halalOnly: _bool(row['halal_only']),
+      vegetarian: _bool(row['vegetarian']),
+      spiceLevel: _int(row['spice_level']),
+      budgetMin: _int(row['budget_min']),
+      budgetMax: _int(row['budget_max']),
     );
   }
 
@@ -102,6 +139,12 @@ class AppUser {
       filterCuisineIds: _intList(json['filter_cuisine_ids']),
       filterDietaryTagIds: _intList(json['filter_dietary_tag_ids']),
       filterMinRating: _double(json['filter_min_rating']),
+      createdAt: _dateTime(json['created_at']),
+      halalOnly: _bool(json['halal_only']),
+      vegetarian: _bool(json['vegetarian']),
+      spiceLevel: _int(json['spice_level']),
+      budgetMin: _int(json['budget_min']),
+      budgetMax: _int(json['budget_max']),
     );
   }
 
@@ -117,6 +160,12 @@ class AppUser {
       'filter_cuisine_ids': filterCuisineIds,
       'filter_dietary_tag_ids': filterDietaryTagIds,
       'filter_min_rating': filterMinRating,
+      'created_at': createdAt?.toIso8601String(),
+      'halal_only': halalOnly,
+      'vegetarian': vegetarian,
+      'spice_level': spiceLevel,
+      'budget_min': budgetMin,
+      'budget_max': budgetMax,
     };
   }
 
@@ -130,6 +179,19 @@ class AppUser {
     DateTime? onboardedAt,
     int? searchRadiusKm,
     String? lastPlaceName,
+    DateTime? createdAt,
+    bool? halalOnly,
+    bool? vegetarian,
+    int? spiceLevel,
+    int? budgetMin,
+    int? budgetMax,
+    // The budget is a *pair*: "RM 10 and up" is a floor with a null ceiling,
+    // which no `int? budgetMax` argument can express because null already
+    // means "leave it alone". So clearing goes through a flag.
+    bool clearBudget = false,
+    // Same problem, same answer: "Any distance" is a real radius answer, and
+    // null is already spoken for.
+    bool clearRadius = false,
   }) {
     return AppUser(
       id: id,
@@ -137,15 +199,28 @@ class AppUser {
       email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       onboardedAt: onboardedAt ?? this.onboardedAt,
-      searchRadiusKm: searchRadiusKm ?? this.searchRadiusKm,
+      searchRadiusKm:
+          clearRadius ? null : (searchRadiusKm ?? this.searchRadiusKm),
       lastPlaceName: lastPlaceName ?? this.lastPlaceName,
       // Filters only change through RPCs that return the whole
       // profile row, so copyWith always carries them through unchanged.
       filterCuisineIds: filterCuisineIds,
       filterDietaryTagIds: filterDietaryTagIds,
       filterMinRating: filterMinRating,
+      createdAt: createdAt ?? this.createdAt,
+      halalOnly: halalOnly ?? this.halalOnly,
+      vegetarian: vegetarian ?? this.vegetarian,
+      spiceLevel: spiceLevel ?? this.spiceLevel,
+      budgetMin: clearBudget ? null : (budgetMin ?? this.budgetMin),
+      // A new floor carries its own ceiling, null included — otherwise moving
+      // the range to "and up" would silently keep the old cap.
+      budgetMax: clearBudget || budgetMin != null
+          ? budgetMax
+          : (budgetMax ?? this.budgetMax),
     );
   }
+
+  static bool _bool(Object? value) => value is bool && value;
 
   static String? _string(Object? value) {
     if (value == null) {

@@ -64,10 +64,10 @@ void main() {
       expect(find.text('10 km'), findsOneWidget);
     });
 
-    testWidgets('a missing radius reads as No limit', (tester) async {
+    testWidgets('a missing radius reads as Any distance', (tester) async {
       await pumpSettings(tester);
 
-      expect(find.text('No limit'), findsOneWidget);
+      expect(find.text('Any distance'), findsOneWidget);
     });
 
     testWidgets('a stored radius that is not a slider stop still renders',
@@ -101,12 +101,12 @@ void main() {
     testWidgets('sliding back to the end clears the radius', (tester) async {
       await pumpSettings(tester, searchRadiusKm: 10);
 
-      // The last stop is null — "No limit".
+      // The last stop is null — "Any distance".
       await moveSliderTo(tester, 9);
 
       expect(profile.radiusCalls, [null]);
       expect(auth.user?.searchRadiusKm, isNull);
-      expect(find.text('No limit'), findsOneWidget);
+      expect(find.text('Any distance'), findsOneWidget);
     });
 
     testWidgets('releasing on the unchanged value writes nothing',
@@ -129,6 +129,53 @@ void main() {
       expect(find.text('10 km'), findsOneWidget,
           reason: 'the label must not keep a value the backend refused');
       expect(auth.user?.searchRadiusKm, 10);
+    });
+  });
+
+  group('SettingsPage rules', () {
+    testWidgets('asks the same four questions the first run does',
+        (tester) async {
+      await pumpSettings(tester);
+
+      expect(find.text('Halal only'), findsOneWidget);
+      expect(find.text('Vegetarian options'), findsOneWidget);
+      expect(find.text('Spice'), findsOneWidget);
+      expect(find.text('Budget per person'), findsOneWidget);
+      for (final label in const ['Mild', 'Medium', 'Pedas', 'Bring it']) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+    });
+
+    testWidgets('the spice segment writes the 1-4 level', (tester) async {
+      await pumpSettings(tester);
+
+      await tester.tap(find.text('Bring it'));
+      await tester.pumpAndSettle();
+
+      expect(profile.preferenceCalls.single.spiceLevel, 4);
+      expect(auth.user?.spiceLevel, 4);
+    });
+
+    testWidgets('a switch writes only itself', (tester) async {
+      await pumpSettings(tester);
+
+      await tester.tap(find.text('Halal only'));
+      await tester.pumpAndSettle();
+
+      expect(profile.preferenceCalls.single.halalOnly, isTrue);
+      expect(profile.preferenceCalls.single.vegetarian, isNull);
+      expect(auth.user?.halalOnly, isTrue);
+    });
+
+    testWidgets('a failed write puts the old answer back', (tester) async {
+      await pumpSettings(tester);
+      profile.fail = true;
+
+      await tester.tap(find.text('Vegetarian options'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Could not save that preference.'), findsOneWidget);
+      expect(auth.user?.vegetarian, isFalse);
     });
   });
 }

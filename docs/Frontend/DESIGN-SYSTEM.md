@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 Cross-references: [STACK.md](STACK.md), [Redesign/NGAP-DESIGN-SYSTEM.md](../Redesign/NGAP-DESIGN-SYSTEM.md), [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md), [General/PLAN.md](../General/PLAN.md)
 
 # Design System
@@ -338,6 +338,44 @@ same journey would make neither primary. Under width pressure the gap between
 the figures collapses and the figures ellipsize before the button gives up a
 pixel: the action must never be the thing that gets cut.
 
+## 7e. Preference controls
+
+Four shapes carry every yes/no, either/or and how-much question in the app.
+They live in `lib/features/profile/presentation/preference_controls.dart`
+because the same four questions are asked in three places — the first-run
+"Any rules?" step, the You tab's edit sheets, and Settings — and a preference
+that looks like a different control on the screen where you change it does not
+read as the same preference.
+
+| Widget | Design | Shape |
+|---|---|---|
+| `PrefRow` | `.setrow` | `kSurfaceDark`, hairline, `kRadiusPanel`, 16 padding. A header over a full-width control |
+| `PrefSwitchRow` | `.setrow.inline` | Title + explanation on the left, a `PrefSwitch` on the right. **The whole row is the target** — a rule you can only change by hitting a 50 px thumb is a rule people leave wrong |
+| `PrefSwitch` | `.switch` | `kSwitchWidth` 50 × `kSwitchHeight` 30 track, ember when on, a `kAccentCream` `kSwitchThumbSize` 22 thumb travelling 20 px over `kMotionDuration`. Not a Material `Switch`: that one draws a different outline, thumb and travel, and the difference is visible beside anything else on these screens. The track is 30 px tall; the **touch target is 44** |
+| `PrefSegmented` | `.seg` | A `kSurfacePanel` pill with `kSegmentTrackPadding` 4 around `kSegmentHeight` 36 buttons, each `Expanded` (the CSS is `flex:1`). The chosen one is ember on `kOnAccent`. **`value` is nullable**, because "not answered yet" has to look different from the first option |
+| `PrefBudgetRow` | `.setrow` + `input[type=range]` | A `RangeSlider` in ember/cream with a display-face read-out in the header and `.range-ends` micro labels under it |
+
+Two rules the controls encode rather than leave to their callers: a segment
+with no selection is a legitimate state, and a range's top stop **releases** the
+cap rather than setting one (`budget_max` null, read-out "RM 10+").
+
+### The first-run progress bar
+
+`.steps` has **three** states, not two: ember for the current step, `kCreamMuted`
+for the ones behind, `kHairline` for the ones ahead — `kStepBarHeight` 3 with
+`kStepBarGap` 5. A bar that only fills says "this much is done"; this one says
+"you are here, and there are three more", which is the question someone halfway
+through a first run is actually asking.
+
+### The You tab's stat tiles
+
+Three equal `kSurfaceDark` tiles in an `IntrinsicHeight` row: a
+`kFontSizeStatValue` 28 display number over a `kFontSizeMicro` cream-70 label.
+The label **wraps** rather than ellipsing — "eating-out streak" does not fit one
+line in a third of a 320 px screen, and an ellipsis there would hide which
+number it is. The number is in a `FittedBox`, so a four-digit count shrinks
+instead of overflowing.
+
 ## 8. Testing
 
 `test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the
@@ -419,3 +457,5 @@ instances and their licences already existed. Lexend was removed in turn.
 | D82 | The super-like star survives the bite. "Must try" and "saved" are different facts; retiring super like is [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md) §4.5's call. A bitten tile moves its badges to the left corner instead. | open, pending §4.5 |
 | D83 | Any `Semantics` using `excludeSemantics` re-declares its own `onTap`, and an accessibility claim is asserted by driving the semantics action, never by reading the widget tree. | locked 2026-09-04 |
 | D101 | The map's `TileProvider` is constructor-injected; the OSM default is development only, and a fake keeps the widget tests off the network. | locked 2026-09-05 |
+
+| D106 | The preference controls (`.setrow`, `.switch`, `.seg`, the budget range) are one shared vocabulary across the wizard, the You tab and Settings, and each encodes "not answered yet" as a state it can draw. | locked 2026-09-05 |
