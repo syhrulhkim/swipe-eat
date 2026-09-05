@@ -292,6 +292,52 @@ It was five controls before: rewind on the far left, a super-like star between
 the two, and Pass/Like as wide pills. All three of those features are retired
 (D84), and the bar is the design's three.
 
+## 7d. The map's furniture
+
+Three pieces, all floating over the tiles
+([Features/Nearby-Map.md](../Features/Nearby-Map.md)).
+
+**The me-dot** — an 18 px ember circle (`kNearbyMeDotSize`) with a 4 px
+`kBackgroundDark` border (`kNearbyMeDotBorder`) and a 12 px halo
+(`kNearbyMeHaloSpread`) of `kNearbyMeHalo`, which is lava at 22%. The border is
+the map's own background colour, so the dot punches a hole in the tiles rather
+than sitting on them.
+
+**The pins**
+
+| Pin | Blob | Border |
+|---|---|---|
+| Ordinary | 76 (`kNearbyPinSize`) | 2 px `kHairline` |
+| The two closest | 96 (`kNearbyPinBigSize`) | 2 px `kAccentEmber` |
+
+Ember on the two closest is not decoration — they are the two the user is most
+likely to act on, and orange marks what is actionable (D78's rule, not its
+exception). The blob carries a `BiteNotch` at `kNearbyPinBiteRadius` (18) when
+the place is saved, so the map speaks the same silhouette as the Bites grid
+(D79), and an ember distance badge (10 px w700 on `kOnAccent`) at the top right.
+
+**The scrim** — `kNearbyMapScrim` between the tiles and the markers. OSM's
+raster tiles are a daylight map, and cream text over them is unreadable without
+it. It is a flat overlay rather than a colour matrix on the tile layer, because
+a matrix cannot be verified by a widget test.
+
+**The radius stepper**, bottom right — a 44 px minus (`kUtilityButtonSize`,
+`kSurfaceDark` + hairline), the value block, a 44 px ember plus. The value is
+micro "Away from you" over a `kNearbyRadiusValueFontSize` (30) w800 number with
+a `kNearbyRadiusUnitFontSize` (14) w600 unit, so the number is legible at a
+glance and the unit does not compete with it. Only the plus is ember: widening
+is the move that finds more food.
+
+**The results bar** — `kSurfaceDark`, hairline, `kRadiusPanel` (18) on the top
+corners only, flush with the nav, so it reads as the map resting on the nav
+rather than a card floating over both. Figures are micro labels over
+`kNearbyResultFigureFontSize` (18) w700 values; the action is a
+`kNearbyResultButtonHeight` (46) **flat** ember pill, not `kCtaGradient` — the
+gradient is the deck's Ngap button alone (D75), and a second gradient on the
+same journey would make neither primary. Under width pressure the gap between
+the figures collapses and the figures ellipsize before the button gives up a
+pixel: the action must never be the thing that gets cut.
+
 ## 8. Testing
 
 `test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the
@@ -372,3 +418,4 @@ instances and their licences already existed. Lexend was removed in turn.
 | D81 | The bite is not wired to the swipe card. The deck deals only unswiped places, so the flag would be false everywhere — an always-false switch is dead code, not a reskin. | locked 2026-09-04 |
 | D82 | The super-like star survives the bite. "Must try" and "saved" are different facts; retiring super like is [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md) §4.5's call. A bitten tile moves its badges to the left corner instead. | open, pending §4.5 |
 | D83 | Any `Semantics` using `excludeSemantics` re-declares its own `onTap`, and an accessibility claim is asserted by driving the semantics action, never by reading the widget tree. | locked 2026-09-04 |
+| D101 | The map's `TileProvider` is constructor-injected; the OSM default is development only, and a fake keeps the widget tests off the network. | locked 2026-09-05 |

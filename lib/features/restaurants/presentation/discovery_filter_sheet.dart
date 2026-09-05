@@ -180,7 +180,7 @@ class _DiscoveryFilterSheetState extends State<DiscoveryFilterSheet> {
                 ],
               ),
               Text(
-                'Hard limits on the deck — only places that pass are dealt.',
+                'Hard limits on discovery — only places that pass are shown.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: kTextOnPhotoMuted,
                     ),

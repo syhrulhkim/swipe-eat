@@ -14,6 +14,7 @@ import '../../restaurants/models/restaurant_card.dart';
 import '../../restaurants/models/restaurant_detail_data.dart';
 import '../../restaurants/presentation/discovery_filter_sheet.dart';
 import '../../restaurants/state/likes_controller.dart';
+import '../domain/nearby_format.dart';
 import '../models/nearby_place.dart';
 import '../state/nearby_controller.dart';
 import 'nearby_pin.dart';
@@ -297,7 +298,10 @@ class _NearbyTabState extends State<NearbyTab> {
             _nearby.error == null &&
             _nearby.places.isEmpty)
           _buildOverlayMessage(
-            'Nothing within ${_nearby.radiusKm < 1 ? '${(_nearby.radiusKm * 1000).round()} m' : '${_nearby.radiusKm.toStringAsFixed(_nearby.radiusKm % 1 == 0 ? 0 : 1)} km'}. Widen the circle.',
+            // The same string the stepper shows, so the sentence names the
+            // circle the thumb just set rather than a rounded cousin of it.
+            'Nothing within ${formatNearbyDistance(_nearby.radiusKm).label}. '
+            'Widen the circle.',
           ),
       ],
     );

@@ -211,6 +211,33 @@ void main() {
       expect(bites, everyElement(isFalse));
     });
 
+    testWidgets('a saved place wears the bite', (tester) async {
+      // The pin on its own: the notch is a property of the pin, and routing
+      // this through LikesController would test the like path instead.
+      useViewport(tester, _phone);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            backgroundColor: kBackgroundDark,
+            body: Center(
+              child: NearbyPin(
+                place: testPlace(1, name: 'Banana Leaf House', distanceKm: 0.45),
+                saved: true,
+                prominent: false,
+                now: DateTime(2026, 9, 8, 19, 41),
+                onTap: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester.widget<BiteNotch>(find.byType(BiteNotch)).bitten,
+        isTrue,
+      );
+    });
+
     testWidgets('tapping a pin opens that restaurant', (tester) async {
       // One pin only: three of them overlap at map scale, and this test is
       // about the tap target, not about how they are arranged.
