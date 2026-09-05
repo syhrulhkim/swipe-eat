@@ -1,7 +1,7 @@
-Status: Superseded 2026-09-05 by [Nearby-Map.md](Nearby-Map.md)
+Status: SUPERSEDED 2026-09-05 by Nearby-Map.md
 Owner: Swipe Eat team
 Last updated: 2026-09-05
-Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md)
+Cross-references: [Nearby-Map.md](Nearby-Map.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md)
 
 # Explore & Search
 

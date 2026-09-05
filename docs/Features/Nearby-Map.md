@@ -60,8 +60,9 @@ Read from the row's hours in the device's clock, never from a server flag alone:
 | Closed for the rest of today | `Closed today` | muted |
 | Hours unknown | *nothing* | — |
 
-Unknown hours print no line at all. Roughly half the catalogue has no hours,
-and "Hours unknown" on half the pins is noise, not information.
+Unknown hours print no line at all — and that is the common case: **1,424 of
+the 1,605 active rows carry no `opens_at`** (2026-09-05). "Hours unknown" on
+nine pins in ten is noise, not information.
 
 `open_now` from the server is used for one thing only: the **"Open now *n*"**
 count in the results bar. It counts `true`, so `null` (unknown) is not counted
