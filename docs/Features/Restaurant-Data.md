@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-05
 Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](../General/RUNBOOK.md), [Backend-Schema.md](Backend-Schema.md), [TikTok-Video.md](TikTok-Video.md), [Explore-Search.md](Explore-Search.md)
 
 # Restaurant Data Pipeline
@@ -66,6 +66,30 @@ human — or a model — before anything reaches the database.
 That review pass is where advertisements, listicles and mall events leave the
 pipeline: **a candidate with no line in `keep.jsonl` is dropped.**
 
+### 2a. Facts parsed from the caption — added 2026-09-05 (D91)
+
+The redesign's card, detail screen and map need an opening span, a price, a
+halal flag and a neighbourhood. All four were already in the captions; the
+migration `restaurant_facts_hours_price_halal_dishes` parsed them once, in SQL,
+into columns on `restaurants`:
+
+| Column | From | Rule | Rows |
+|---|---|---|---|
+| `hours_text` | the text after ⏰ | kept verbatim, so a bad parse can be redone | 194 |
+| `opens_at`, `closes_at` | `9.30am - 8pm`, `11am – 10.30pm`, `5:30PM - 2AM` | `.` or `:` minutes, missing minutes, a missing opening am/pm inferred (5–11 → am), `24 hours`/`24 Jam` → 00:00–00:00 | 181 (30 past midnight, 3 all day) |
+| `closed_dow` | `(Closed on Monday)`, `Tutup Isnin` | ISO weekdays after *closed / tutup / off day / rest day*; English and Malay names | 37 |
+| `price_from` | the lowest `RM n` in the caption | a **dish** price, not a per-person band — the UI says "From RM 19" | 186 |
+| `is_halal` | `halal` / `non-halal` | true, false, or **null** when the caption does not say; not a certification check | 27 / 3 |
+| `neighbourhood` | the town after the 5-digit postcode | up to three capitalised words, state names and street prefixes stripped | 159 |
+
+"until sold out", "6pm (Thurs to Sat)" and the like keep their `hours_text` and
+get no span — the client shows nothing rather than a guess. `is_open_at(opens,
+closes, closed_dow, at)` evaluates in Asia/Kuala_Lumpur; a closing time earlier
+than the opening time runs past midnight and its post-midnight part belongs to
+the previous day's opening (D92). The `dishes` table ("What people bite") exists
+and is empty until menus are curated; every one of these fields is nullable and
+the UI hides what it does not know.
+
 ### The review file
 
 JSONL, one object per kept candidate, keyed by index into the candidates file:
@@ -126,6 +150,11 @@ expensive SKU, which is precisely the trade-off D10 declined.
 | With any image | 287 | 17.9% |
 | With any review | 6 | 0.4% |
 | Mapped to a cuisine | 1,607 | 100% |
+| With an opening span | 181 | 11.3% |
+| With a price | 186 | 11.6% |
+| With a halal statement | 30 | 1.9% |
+| With a neighbourhood | 159 | 9.9% |
+| With a dish | 0 | 0% |
 
 Geography follows the creators scraped: concentrated in **Johor and Penang**.
 
@@ -179,3 +208,4 @@ even though ratings and images do not.
 | D47 | Geocode results coarser than a suburb are discarded — a wrong fix is worse than none, because `0/0` hides the directions button and a bad fix routes people. | locked 2026-08-31 |
 | D48 | Geocode matching is confined to the row's `negeri` bounding box, so chains cannot resolve across states. | locked 2026-08-31 |
 | D49 | `negeri` / `negara` are overridable by hand in the review file, because Malaysian street names contain state names. | locked 2026-08-31 |
+| D91 | Hours, price, halal and neighbourhood are parsed once from the caption into nullable columns; `hours_text` is kept verbatim; `price_from` is a dish price, never a band; unknown is null and the UI hides it. | locked 2026-09-05 |

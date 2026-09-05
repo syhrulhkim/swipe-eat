@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-05
 Cross-references: [General/PLAN.md](../General/PLAN.md), [Backend-Schema.md](Backend-Schema.md), [TikTok-Video.md](TikTok-Video.md), [Likes-Visits.md](Likes-Visits.md), [Profile-Preferences.md](Profile-Preferences.md), [History/tinder-parity-plan.md](../History/tinder-parity-plan.md)
 
 # Swipe Deck
@@ -153,12 +153,19 @@ When cards come off the device, `isStale` is true and `stalenessLabel` renders a
 visible notice. A saved deck presented as live is a lie about how close those
 places are.
 
-### The header chip
+### The header
 
-`locationLabel` resolves in this order: the **passport pin** while one is set
-(the deck is dealing that city and the chip must not claim the user's real
-town), then the reverse-geocoded name of the last stored fix, then `'Nearby'`
-for an account that has never granted location.
+The design's `.topbar`: a place icon, the location on one line and
+"within 3 km · dinner" under it, and the **Filters** button with its count dot.
+Nothing else — Settings moved to the You tab on 2026-09-05, because the design
+gives the swipe screen one button.
+
+`locationLabel` is the reverse-geocoded name of the last stored fix, else
+`'Nearby'` for an account that has never granted location (the passport pin
+that used to come first was retired with D84). The second line is the profile's
+`search_radius_km` ("any distance" when unset) and `mealLabel(now)` from
+`domain/meal_label.dart` — breakfast before 11, lunch to 15, tea to 18, dinner
+to 22, supper otherwise.
 
 ## 6. Card content
 
@@ -167,13 +174,33 @@ gallery (tap left/right half). Only the **foreground** card mounts a WebView;
 the card behind shows a static thumbnail, so two videos never run at once. See
 [TikTok-Video.md](TikTok-Video.md).
 
-Over it: a tag pill, the restaurant name in the shared title style, rating and
-distance pills, and a tap-to-expand panel revealing `details` and the review
-carousel. The carousel blocks the deck's own pan gesture while the user is
-scrolling reviews, otherwise a horizontal review swipe would pass a restaurant.
+Over it, low over the scrim, the design's **info block** (`RestaurantInfoBlock`
+in `swipe_card.dart`), changed 2026-09-05 (D93):
 
-With 287 images and 6 reviews across 1,607 restaurants, the gallery and
-carousel are empty for almost every card today — the video carries it.
+- **Tags** — a fresh-tinted "Open till 2 am" chip when the place is open right
+  now (the only fresh thing on the screen, `AppTagChip.fresh`), the cuisine, and
+  "Halal" when the caption says so. A closed place gets no chip: on a card you
+  are being dealt, "closed" is a reason to skip, and the detail screen says when
+  it opens.
+- **Name** — Bricolage 34 px, weight 800, two lines at most.
+- **Meta** — `**1.2 km** · Masai` and `**From RM 19**`. Each part hides when
+  unknown; the distance always shows.
+
+A tap on the block opens the restaurant's screen; a tap on the clip opens the
+fullscreen player. The card carries **no buttons**: the three actions are
+`DeckActionBar` under the deck (`swipe_deck.dart`), so the card behind is the
+same surface as the card in front. The tap-to-expand panel, the `details`
+paragraph and the review carousel are gone from the card — with 6 reviews across
+1,607 rows the carousel was empty on almost every card, and its pan-gesture lock
+(the carousel had to block the deck's own drag) went with it. Details live on
+the detail screen.
+
+Where the facts come from: [Restaurant-Data.md §2a](Restaurant-Data.md) — the
+opening span, the lowest price, halal and the neighbourhood are parsed once
+from the caption into columns (D91). Open state is computed the same way on the
+server (`is_open_at`, Kuala Lumpur time) and on the device (`OpeningHours` in
+`domain/opening_hours.dart`, device-local clock — D92); the card uses the Dart
+one so a cached deck says the same thing a fresh one would.
 
 ## 7. Empty and error states
 
@@ -213,3 +240,5 @@ carousel are empty for almost every card today — the video carries it.
 | D16 | An unknown swipe count stays swipeable; only a known-and-spent count blocks. A stats failure must not brick the deck. | locked 2026-08-31 |
 | D17 | A stale (cached) deck is always labelled as stale, never presented as live. | locked 2026-08-30 |
 | D18 | `DeckRanker` gives unlocated rows neutral half-credit rather than excluding them. | locked 2026-08-31 |
+| D92 | Open state is computed identically in SQL (`is_open_at`, Asia/Kuala_Lumpur) and Dart (`OpeningHours`, device clock); an unknown span answers null and the chip hides. | locked 2026-09-05 |
+| D93 | The card carries no controls and no expandable panel: the action bar lives under the deck, the info block opens the detail screen, details and reviews live there. | locked 2026-09-05 |
