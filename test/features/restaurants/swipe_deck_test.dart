@@ -22,6 +22,7 @@ Future<void> _pumpHeader(
   int? radiusKm,
   String? mealLabel,
   String? stalenessLabel,
+  String? handoffLabel,
   int activeFilterCount = 0,
   VoidCallback? onFilterTap,
 }) async {
@@ -34,6 +35,7 @@ Future<void> _pumpHeader(
           radiusKm: radiusKm,
           mealLabel: mealLabel,
           stalenessLabel: stalenessLabel,
+          handoffLabel: handoffLabel,
           activeFilterCount: activeFilterCount,
           onFilterTap: onFilterTap,
         ),
@@ -190,6 +192,35 @@ void main() {
         tester.getTopRight(find.byType(AppIconButton)).dx,
         lessThanOrEqualTo(_narrowViewport.width),
       );
+    });
+  });
+
+  group('DeckHeader handoff chip', () {
+    testWidgets('names the handed-over list, without the offline cloud',
+        (tester) async {
+      await _pumpHeader(tester, handoffLabel: 'Nearby · 6 places');
+
+      expect(find.text('Nearby · 6 places'), findsOneWidget);
+      expect(find.byIcon(Icons.near_me_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.cloud_off_rounded), findsNothing);
+    });
+
+    testWidgets('sits beside the offline chip when both apply', (tester) async {
+      await _pumpHeader(
+        tester,
+        handoffLabel: 'Nearby · 6 places',
+        stalenessLabel: 'Offline · saved deck',
+      );
+
+      expect(find.text('Nearby · 6 places'), findsOneWidget);
+      expect(find.text('Offline · saved deck'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('is absent when nothing was handed over', (tester) async {
+      await _pumpHeader(tester);
+
+      expect(find.byIcon(Icons.near_me_rounded), findsNothing);
     });
   });
 

@@ -250,6 +250,7 @@ class _SwipeDeckState extends State<SwipeDeck>
       radiusKm: widget.authController.user?.searchRadiusKm,
       mealLabel: mealLabel(DateTime.now()),
       stalenessLabel: _deck.stalenessLabel,
+      handoffLabel: _deck.handoffLabel,
       activeFilterCount:
           widget.authController.user?.activeFilterCount ?? 0,
       onFilterTap: () => unawaited(_openFilters()),
@@ -581,6 +582,7 @@ class DeckHeader extends StatelessWidget {
     this.radiusKm,
     this.mealLabel,
     this.stalenessLabel,
+    this.handoffLabel,
     this.activeFilterCount = 0,
     this.onFilterTap,
   });
@@ -598,6 +600,11 @@ class DeckHeader extends StatelessWidget {
   /// Set when the deck came off the device instead of the server. Shown under
   /// the location so saved cards are never mistaken for fresh ones.
   final String? stalenessLabel;
+
+  /// Set while the deck is dealing a list handed over from Nearby ("Swipe all
+  /// 6"), so the user knows these six are not the ranked deck. Its own chip —
+  /// the offline chip's cloud would say the wrong thing about fresh rows.
+  final String? handoffLabel;
 
   /// How many discovery filters are on — the badge on the filter button.
   final int activeFilterCount;
@@ -672,12 +679,26 @@ class DeckHeader extends StatelessWidget {
                 ],
               ],
             ),
-            if (stalenessLabel != null) ...[
+            if (stalenessLabel != null || handoffLabel != null) ...[
               const SizedBox(height: 10),
-              AppChip(
-                icon: Icons.cloud_off_rounded,
-                label: stalenessLabel!,
-                onPhoto: false,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (handoffLabel != null)
+                    AppChip(
+                      icon: Icons.near_me_rounded,
+                      label: handoffLabel!,
+                      onPhoto: false,
+                      tint: kAccentEmber,
+                    ),
+                  if (stalenessLabel != null)
+                    AppChip(
+                      icon: Icons.cloud_off_rounded,
+                      label: stalenessLabel!,
+                      onPhoto: false,
+                    ),
+                ],
               ),
             ],
           ],
