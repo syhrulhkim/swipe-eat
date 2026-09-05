@@ -42,6 +42,7 @@ not the row number.
 | D35 | `update_preferences` takes an explicit `p_clear_radius`, because null already means "leave unchanged". | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-23 |
 | D37 | `restaurants.video_url` is the stable identity of a row and is never rewritten. | [TikTok-Video](../Features/TikTok-Video.md) | locked 2026-08-22 |
 | D51 | `reviews.user_id` is `set null`, not cascade — a review is content about a restaurant, not personal data. | [Account-Deletion-Legal](../Features/Account-Deletion-Legal.md) | locked 2026-08-22 |
+| D94 | `wishlist_items` replaces `swipes.super_like` as the store behind Later. A wishlist is a list you added to — not a property of your last swipe, which `record_swipe` overwrote — and it has to be able to hold a place that is not in the catalogue at all. The column and `get_super_liked_ids` stay for data safety; the client stops reading them. | [Wishlist](../Features/Wishlist.md) | locked 2026-09-05 |
 
 ## Deck & ranking
 
@@ -75,6 +76,7 @@ not the row number.
 | D32 | `morning_mode` and `spice_bias` apply through the cuisine taxonomy (`is_breakfast`, `spice_level`), not columns on `restaurants`. | [Onboarding-Taste](../Features/Onboarding-Taste.md) | locked 2026-08-23 |
 | D54 | The cold-start taste signal is collected in onboarding, not by a quiz tab — it runs before the first card. | [Quiz](../Features/Quiz.md) | locked 2026-08-23 |
 | D55 | Quiz schema retained at the redesign rather than dropped with the tab. | [Quiz](../Features/Quiz.md) | **open** |
+| D95 | A Later is a **like** — the swipe is unchanged (`p_liked: true`, no `p_super_like`) and a `wishlist_items` row is written on top. The wishlist follows the like on removal only: unliking clears the row, re-liking never does. The old flag failed the second half, because `record_swipe` overwrote it on every swipe. | [Wishlist](../Features/Wishlist.md) | locked 2026-09-05 |
 
 ## TikTok player
 
@@ -137,6 +139,7 @@ not the row number.
 | D87 | Tabs 2 and 4 are named **Nearby** and **Calendar** per the design, ahead of the map and the plans they will hold. This reverses the earlier reading of D7: the design's names are the target, and the empty states now say plainly what is coming rather than describing the old feature. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-04 |
 | D88 | **No emoji anywhere as food imagery.** `cuisines.emoji` is not read at all — the field is gone from both models, so a call site cannot reintroduce it. A cuisine with no cover photo falls back to its **name on a chip**. | [Features/Explore-Search](../Features/Explore-Search.md) | locked 2026-09-04 |
 | D89 | Video starts **muted**, and the card says so. It is also the only autoplay a browser engine honours without a gesture, so the first frame stops depending on `setMediaPlaybackRequiresUserGesture`. Sound is turned on through TikTok's own control, because D4 forbids driving their player. | [Features/TikTok-Video](../Features/TikTok-Video.md) | locked 2026-09-04 |
+| D96 | The design's **chip row** replaces the Bites tab's Liked / Visited / Reviewed segments, and Visited and Reviewed leave the client entirely (their RPCs and data stay). The three plan chips are one enum rather than three booleans that can contradict each other, and "Wishlist →" navigates without ever holding a pressed state — a chip still lit after taking you away is claiming to be a filter it is not. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-05 |
 | D90 | Onboarding ends on a **gesture primer** — "Three moves" — and its button says **"Show me dinner"** rather than "Finish". The three words the deck expects (Ngap!, Skip, Later) are taught before the user meets a card that expects them. | [Features/Onboarding-Taste](../Features/Onboarding-Taste.md) | locked 2026-09-04 |
 
 ## Testing
