@@ -4,8 +4,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/radius_options.dart';
+import '../../auth/models/app_user.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../onboarding/models/onboarding_draft.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../profile/presentation/preference_controls.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -73,6 +76,34 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  /// The diet & budget answers, written the moment they change.
+  ///
+  /// Optimistic like the You tab's sheets and for the same reason: these are
+  /// hard deck filters, so the screen has to agree with the finger immediately
+  /// and put the old answer back — loudly — if the write does not land.
+  Future<void> _savePreference(
+    AppUser optimistic,
+    Future<AppUser> Function() write,
+  ) async {
+    final previous = widget.authController.user;
+    widget.authController.applyUser(optimistic);
+
+    try {
+      widget.authController.applyUser(await write());
+    } on Object catch (error) {
+      debugPrint('Preference save failed: $error');
+      if (previous != null) {
+        widget.authController.applyUser(previous);
+      }
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save that preference.')),
+      );
+    }
+  }
+
   Future<void> _openUrl(String url) async {
     final launched = await launchUrl(
       Uri.parse(url),
@@ -108,7 +139,8 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               'Delete',
-              style: TextStyle(color: Theme.of(dialogContext).colorScheme.error),
+              style:
+                  TextStyle(color: Theme.of(dialogContext).colorScheme.error),
             ),
           ),
         ],
@@ -158,146 +190,238 @@ class _SettingsPageState extends State<SettingsPage> {
           icon: const Icon(Icons.arrow_back_rounded),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.screenPadding),
-        children: [
-          Text(
-            'Discovery',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Search radius',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        radiusLabel(_radiusKm),
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  Slider(
-                    // An unknown stored value (not on the stops) renders as
-                    // "No limit" rather than crashing on -1.
-                    value: (stopIndex < 0 ? kRadiusStops.length - 1 : stopIndex)
-                        .toDouble(),
-                    max: (kRadiusStops.length - 1).toDouble(),
-                    divisions: kRadiusStops.length - 1,
-                    label: radiusLabel(_radiusKm),
-                    onChanged: _saving
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _radiusKm = kRadiusStops[value.round()];
-                            });
-                          },
-                    onChangeEnd: (value) =>
-                        _saveRadius(kRadiusStops[value.round()]),
-                  ),
-                  Text(
-                    'Only places within this distance of your location are '
-                    'shown in the deck and on Explore.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'About',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Privacy policy'),
-                    trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-                    onTap: () => _openUrl(AppConfig.privacyPolicyUrl),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Terms of use'),
-                    trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-                    onTap: () => _openUrl(AppConfig.termsUrl),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Account',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Sign out'),
-                    trailing: const Icon(Icons.logout_rounded, size: 18),
-                    onTap: _deleting
-                        ? null
-                        : () => widget.authController.logout(),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Delete account',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    subtitle: const Text(
-                      'Permanently removes your account and everything in it.',
-                    ),
-                    trailing: _deleting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            Icons.delete_outline_rounded,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                    onTap: _deleting ? null : _confirmDelete,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+      // The rules below are drawn straight from the session, so the page has
+      // to rebuild when a write lands — and when an optimistic one is rolled
+      // back.
+      body: AnimatedBuilder(
+        animation: widget.authController,
+        builder: (context, _) => _buildBody(context, stopIndex),
       ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, int stopIndex) {
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+      children: [
+        Text(
+          'Discovery',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Search radius',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      radiusLabel(_radiusKm),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                Slider(
+                  // An unknown stored value (not on the stops) renders as
+                  // "Any distance" rather than crashing on -1.
+                  value: (stopIndex < 0 ? kRadiusStops.length - 1 : stopIndex)
+                      .toDouble(),
+                  max: (kRadiusStops.length - 1).toDouble(),
+                  divisions: kRadiusStops.length - 1,
+                  label: radiusLabel(_radiusKm),
+                  onChanged: _saving
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _radiusKm = kRadiusStops[value.round()];
+                          });
+                        },
+                  onChangeEnd: (value) =>
+                      _saveRadius(kRadiusStops[value.round()]),
+                ),
+                Text(
+                  'Only places within this distance of your location are '
+                  'shown in the deck and on Explore.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _RulesSection(
+          user: widget.authController.user,
+          onHalalOnly: (value, user) => _savePreference(
+            user.copyWith(halalOnly: value),
+            () => _repository.updatePreferences(halalOnly: value),
+          ),
+          onVegetarian: (value, user) => _savePreference(
+            user.copyWith(vegetarian: value),
+            () => _repository.updatePreferences(vegetarian: value),
+          ),
+          onSpice: (value, user) => _savePreference(
+            user.copyWith(spiceLevel: value.level),
+            () => _repository.updatePreferences(spiceLevel: value.level),
+          ),
+          onBudget: (min, max, user) => _savePreference(
+            user.copyWith(budgetMin: min, budgetMax: max),
+            () => _repository.updatePreferences(
+              budgetMin: min,
+              budgetMax: max,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'About',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Privacy policy'),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: () => _openUrl(AppConfig.privacyPolicyUrl),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Terms of use'),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: () => _openUrl(AppConfig.termsUrl),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Account',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Sign out'),
+                  trailing: const Icon(Icons.logout_rounded, size: 18),
+                  onTap:
+                      _deleting ? null : () => widget.authController.logout(),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Delete account',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Permanently removes your account and everything in it.',
+                  ),
+                  trailing: _deleting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                  onTap: _deleting ? null : _confirmDelete,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// "Any rules?" as it appears in Settings — the same four controls the first
+/// run asks, so a preference does not change shape between the screen that
+/// asked for it and the screen where it is changed.
+///
+/// Unlike the radius above it, these write per-change rather than on release:
+/// a switch and a segment have no drag to finish.
+class _RulesSection extends StatelessWidget {
+  const _RulesSection({
+    required this.user,
+    required this.onHalalOnly,
+    required this.onVegetarian,
+    required this.onSpice,
+    required this.onBudget,
+  });
+
+  final AppUser? user;
+  final void Function(bool value, AppUser user) onHalalOnly;
+  final void Function(bool value, AppUser user) onVegetarian;
+  final void Function(SpiceLevel value, AppUser user) onSpice;
+  final void Function(int min, int? max, AppUser user) onBudget;
+
+  @override
+  Widget build(BuildContext context) {
+    final account = user;
+    if (account == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PrefSwitchRow(
+          title: 'Halal only',
+          subtitle: 'Hides places without halal certification',
+          value: account.halalOnly,
+          onChanged: (value) => onHalalOnly(value, account),
+        ),
+        const SizedBox(height: 10),
+        PrefSwitchRow(
+          title: 'Vegetarian options',
+          subtitle: 'Must have a real veg section',
+          value: account.vegetarian,
+          onChanged: (value) => onVegetarian(value, account),
+        ),
+        const SizedBox(height: 10),
+        PrefSpiceRow(
+          value: SpiceLevel.fromLevel(account.spiceLevel),
+          onChanged: (value) => onSpice(value, account),
+        ),
+        const SizedBox(height: 10),
+        PrefBudgetRow(
+          min: account.budgetMin,
+          max: account.budgetMax,
+          onChanged: (min, max) => onBudget(min, max, account),
+        ),
+      ],
     );
   }
 }

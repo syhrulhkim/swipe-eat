@@ -146,9 +146,9 @@ class OnboardingDraft {
   /// The `complete_onboarding` argument list.
   ///
   /// `p_radius_km` is always present, including when null: the function
-  /// assigns it unconditionally so that "No limit" can clear a previous value,
-  /// which means omitting the key would silently clear the radius instead of
-  /// leaving it alone.
+  /// assigns it unconditionally so that "Any distance" can clear a previous
+  /// value, which means omitting the key would silently clear the radius
+  /// instead of leaving it alone.
   Map<String, dynamic> toRpcParams() {
     return <String, dynamic>{
       'p_name': name.trim(),

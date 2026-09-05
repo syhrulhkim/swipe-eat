@@ -38,8 +38,8 @@ void main() {
       final params = OnboardingDraft(name: 'A').toRpcParams();
 
       // complete_onboarding assigns search_radius_km unconditionally so that
-      // "No limit" can clear a stored value. Omitting the key would therefore
-      // clear the radius by accident rather than leave it alone.
+      // "Any distance" can clear a stored value. Omitting the key would
+      // therefore clear the radius by accident rather than leave it alone.
       expect(params.containsKey('p_radius_km'), isTrue);
       expect(params['p_radius_km'], isNull);
     });

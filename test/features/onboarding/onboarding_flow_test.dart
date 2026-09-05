@@ -172,7 +172,7 @@ void main() {
       await completeRulesStep(tester);
 
       expect(find.text('How do you eat?'), findsOneWidget);
-      expect(find.text('No limit'), findsWidgets);
+      expect(find.text('Any distance'), findsWidgets);
 
       await tester.tap(find.text('On').first); // morning mode
       await tester.pump();

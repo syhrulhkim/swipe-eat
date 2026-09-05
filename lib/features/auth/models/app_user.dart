@@ -189,8 +189,8 @@ class AppUser {
     // which no `int? budgetMax` argument can express because null already
     // means "leave it alone". So clearing goes through a flag.
     bool clearBudget = false,
-    // Same problem, same answer: "No limit" is a real radius answer, and null
-    // is already spoken for.
+    // Same problem, same answer: "Any distance" is a real radius answer, and
+    // null is already spoken for.
     bool clearRadius = false,
   }) {
     return AppUser(

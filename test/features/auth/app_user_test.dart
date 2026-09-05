@@ -107,7 +107,7 @@ void main() {
       expect(cleared.hasBudget, isFalse);
     });
 
-    test('clearing the radius is "No limit", not "leave it alone"', () {
+    test('clearing the radius is "Any distance", not "leave it alone"', () {
       expect(user.copyWith(clearRadius: true).searchRadiusKm, isNull);
       expect(user.copyWith().searchRadiusKm, 10);
     });

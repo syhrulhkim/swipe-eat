@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-05
 Cross-references: [Auth.md](Auth.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md)
 
 # Onboarding & the Taste Signal
@@ -11,11 +11,14 @@ Cross-references: [Auth.md](Auth.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-P
 > controls use — before the user meets a card that expects them. Taste chips no
 > longer carry emoji (D88).
 >
-> The design specifies six steps; Diet & budget and Friends are the two that
-> are missing, and both need schema the app does not have — a price band and a
-> social graph.
+> **Changed 2026-09-05.** **Six steps.** "Any rules?" (design 01e) now sits
+> between Taste and Habits, and the topbar is the design's: a 44 px round back
+> button, a three-state `.steps` bar, and a **Skip** on this one step. Continue
+> is a single block button in the foot. **Friends (01f) is the only design step
+> still missing** — it is the one that needs a social graph rather than a
+> column.
 
-The four-step wizard every account walks **exactly once**. It exists to solve
+The six-step wizard every account walks **exactly once**. It exists to solve
 one problem: a deck ranked on nothing is a random deck, and the first session
 is the one that decides whether there is a second.
 
@@ -37,21 +40,49 @@ The seeded demo account (`demo@swipeeat.test`) has a deliberately null
 `onboarded_at`, so signing in as demo walks the wizard once and exercises this
 path.
 
-## 2. The four steps
+## 2. The six steps
 
 | # | Step | Collects | Required? |
 |---|---|---|---|
 | 1 | You | `name` | Yes |
 | 2 | Taste | `cuisineIds`, `dietaryIds` | Yes |
-| 3 | Habits | `morning_mode`, `spice_bias`, `nearby_focus`, `radius_km` | No — every tile has a valid default |
-| 4 | Location | A fix, or an explicit refusal | No — refusal is a valid answer |
+| 3 | **Any rules?** | `halal_only`, `vegetarian`, `spice_level`, `budget_min` / `budget_max` | No — and **skippable**, which is not the same thing |
+| 4 | Habits | `morning_mode`, `spice_bias`, `nearby_focus`, `radius_km` | No — every tile has a valid default |
+| 5 | Location | A fix, or an explicit refusal | No — refusal is a valid answer |
+| 6 | Three moves | Nothing — it teaches the gestures | No |
 
-`_stepCount = 4`, with a progress indicator and a back button from step 2
-onward. The Continue button's label becomes **"Finish"** on the last step.
+`_stepCount = 6`. The final button reads **"Show me dinner"** (D90).
 
-`_canContinue` gates only steps 1 and 2; steps 3 and 4 are always satisfiable
-because every tile and the location itself have valid defaults. Back navigation
-never lands the user on a step the Continue button had refused.
+`_canAdvance` gates only steps 1 and 2; everything after is always satisfiable
+because the rules, the tiles and the location itself all have valid defaults.
+Back navigation never lands the user on a step the Continue button had refused.
+
+### The topbar
+
+Back is a 44 px `kGlass` round icon button, replaced by a 44 px spacer on step
+1 so the progress bar never shifts. The bar is the design's `.steps`: 3 px
+segments with 5 px gaps, **ember** for the current step, muted cream for the
+ones behind, hairline for the ones ahead. The right slot holds the `.textbtn`
+Skip on step 3 and a spacer everywhere else.
+
+### Step 3 — "Any rules?", and why Skip clears rather than passes
+
+This is the only step whose answers **hide** restaurants instead of reordering
+them, which is why it carries a reason under the heading ("So we never show you
+somewhere you can't eat.") and a Skip beside the bar.
+
+The budget range opens on RM 10–40, as the prototype shows it. That creates a
+trap: skipping a step that is already showing a range would silently cap a
+stranger's deck at RM 40. So **Skip clears every rule first** — the switches go
+off, the spice level goes null, and the budget goes to "no answer"
+(`p_clear_budget: true`) — and only then advances. Continue commits what is on
+screen. Spice starts with **nothing** selected, because "unanswered" and "Mild"
+are different things.
+
+The upper thumb parked at RM 100 means *no ceiling*, not RM 100: the read-out
+says "RM 10+" and `budget_max` is written null. Hiding the handful of places
+that cost more from someone who just said money is not the issue would be the
+opposite of what they answered.
 
 ### Step 2 — the cold-start taste signal
 
@@ -88,9 +119,10 @@ the geolocator platform channel, which has no implementation under
 
 One call: `complete_onboarding(p_name, p_cuisine_ids, p_dietary_ids,
 p_morning_mode, p_spice_bias, p_nearby_focus, p_radius_km, p_latitude,
-p_longitude, p_place_name, p_location_source) → profiles`.
+p_longitude, p_place_name, p_location_source, p_halal_only, p_vegetarian,
+p_spice_level, p_budget_min, p_budget_max, p_clear_budget) → profiles`.
 
-Eleven parameters in one transaction, returning the whole profile row — so a
+Seventeen parameters in one transaction, returning the whole profile row — so a
 partial wizard can never half-commit, and the client refreshes its cached
 profile from the write's own response instead of a follow-up read (D11).
 
@@ -123,3 +155,5 @@ Everything the wizard sets is editable afterwards from Profile, except that
 | D31 | Dietary tags filter; cuisines weight. "Halal" must not be outweighed by proximity. | locked 2026-08-23 |
 | D32 | `morning_mode` and `spice_bias` apply through the cuisine taxonomy (`is_breakfast`, `spice_level`), not through columns on `restaurants`. | locked 2026-08-23 |
 | D11 | `complete_onboarding` returns the whole `profiles` row. | locked 2026-08-23 |
+| D104 | Step 3 asks four spice steps; `spice_level` stores them and `spice_bias` is derived, so the deck's existing term is untouched. | locked 2026-09-05 |
+| D105 | Step 3's answers are hard deck filters, which is why the step explains itself and why Skip clears rather than passes the defaults through. | locked 2026-09-05 |

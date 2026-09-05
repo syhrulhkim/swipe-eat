@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-05
 Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](../General/RUNBOOK.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-Preferences.md](Profile-Preferences.md), [History/backend-plan.md](../History/backend-plan.md)
 
 # Backend Schema (as built)
@@ -112,6 +112,14 @@ Four concerns share the table:
   A null `onboarded_at` is what routes a user into the wizard.
 - **Ranking preferences** — `morning_mode`, `spice_bias`
   (`low`/`medium`/`high`), `nearby_focus`.
+- **Diet & budget rules** (2026-09-05) — `halal_only bool not null default
+  false`, `vegetarian bool not null default false`, `spice_level smallint`
+  (`check between 1 and 4`, nullable), `budget_min int`, `budget_max int`
+  (`check` that both are non-negative and `budget_min <= budget_max`). These
+  are **hard filters** in `deck_scored`, not weights (D105).
+  `spice_level` is the stored truth for spice and `spice_bias` is derived from
+  it on every write (D104); a null `budget_max` beside a real `budget_min`
+  means "and up", and both null means no answer.
 - **Location** — `search_radius_km`, `last_latitude`, `last_longitude`,
   `last_place_name`, `located_at`, `location_source`. The stored fix is what
   lets a user who denied location still get a sensible deck.
@@ -163,6 +171,32 @@ on every `load()`.
 The seed is derived from the current date in `Asia/Kuala_Lumpur`, so a
 shortlist is stable for a day and rerolls at midnight for free.
 
+#### The diet & budget predicates (2026-09-05)
+
+All three sit in the `candidates` CTE alongside the radius and filter clauses,
+so they bind the exhaustion fallback too (D34):
+
+```sql
+and (not c.halal_only or r.is_halal is true)
+and (not c.vegetarian or exists (
+      select 1 from public.restaurant_dietary_tags rdt
+      join public.dietary_tags dt on dt.id = rdt.dietary_tag_id
+      where rdt.restaurant_id = r.id and dt.slug = 'vegetarian'))
+and (c.budget_max is null or r.price_from is null
+     or r.price_from <= c.budget_max)
+```
+
+Three deliberate asymmetries (D105):
+
+- Halal needs `is_halal is true` — an **unknown** certification does not pass a
+  rule someone set to avoid eating where they cannot. 27 of 1 605 live rows are
+  certified, which is why the column defaults to false.
+- Vegetarian matches on the tag's **slug**, not a seeded id, so the predicate
+  survives a reseed.
+- An **unknown price passes** the budget ceiling. 1 419 of 1 605 rows have no
+  `price_from`; dropping them would empty the deck for anyone who answered the
+  budget question at all.
+
 ### Swiping
 
 | Function | Signature | Notes |
@@ -192,14 +226,32 @@ to carry a flag would cost the embed; a cheap second call is the smaller price.
 
 | Function | Signature |
 |---|---|
-| `complete_onboarding` | `(p_name, p_cuisine_ids, p_dietary_ids, p_morning_mode, p_spice_bias, p_nearby_focus, p_radius_km, p_latitude, p_longitude, p_place_name, p_location_source) → profiles` |
-| `update_preferences` | `(p_name, p_morning_mode, p_spice_bias, p_nearby_focus, p_radius_km, p_clear_radius, p_cuisine_ids, p_dietary_ids) → profiles` |
+| `complete_onboarding` | `(p_name, p_cuisine_ids, p_dietary_ids, p_morning_mode, p_spice_bias, p_nearby_focus, p_radius_km, p_latitude, p_longitude, p_place_name, p_location_source, p_halal_only, p_vegetarian, p_spice_level, p_budget_min, p_budget_max, p_clear_budget) → profiles` |
+| `update_preferences` | `(p_name, p_morning_mode, p_spice_bias, p_nearby_focus, p_radius_km, p_clear_radius, p_cuisine_ids, p_dietary_ids, p_halal_only, p_vegetarian, p_spice_level, p_budget_min, p_budget_max, p_clear_budget) → profiles` |
 | `set_discovery_filters` | `(p_cuisine_ids, p_dietary_tag_ids, p_min_rating) → profiles` |
 | `set_passport` | `(p_latitude, p_longitude, p_place_name) → profiles` |
 | `update_location` | `(p_latitude, p_longitude, p_place_name, p_source) → profiles` |
 
 Each returns the whole updated `profiles` row, so the client refreshes its
 cached profile from the write's own response instead of a follow-up read.
+Both gained their last six parameters on 2026-09-05. Because Postgres
+identifies a function by its argument list, appending parameters to a
+`create or replace` would leave the old function behind as an **overload** and
+make every named-argument call ambiguous — so each was dropped and recreated in
+one transaction, with every old parameter kept in its old position. Callers did
+not change.
+
+`p_clear_budget` mirrors `p_clear_radius`. Between them, the budget's two ends
+move as a **pair**: a non-null `p_budget_min` makes the pair authoritative and
+the ceiling that arrives with it is written as-is, null included ("RM 10 and
+up"). `p_clear_budget` is the only route back to "no answer", and it is what a
+skipped first-run step sends.
+
+When `p_spice_level` is given, both functions also write `spice_bias`
+(1→`low`, 2→`medium`, 3 and 4→`high`) so `deck_scored`'s three-way term keeps
+scoring (D104). The legacy `p_spice_bias` still works for a caller that has not
+moved.
+
 `update_preferences` needs an explicit `p_clear_radius` because null already
 means "don't change this".
 
@@ -289,4 +341,6 @@ production.
 | D9 | `haversine_km` in SQL, not PostGIS. | locked 2026-08-23 |
 | D11 | Profile write RPCs return the whole `profiles` row, so the client never needs a follow-up read. | locked 2026-08-23 |
 | D12 | `deck_scored` resolves passport → GPS → last-known server-side, so a client cannot override an active Passport. | locked 2026-08-31 |
+| D104 | `spice_level` 1–4 is stored; `spice_bias` is derived from it inside the two write RPCs. | locked 2026-09-05 |
+| D105 | `halal_only` / `vegetarian` / `budget_max` are hard predicates in `deck_scored`'s `candidates` CTE; unknown halal fails, unknown price passes. | locked 2026-09-05 |
 | D13 | `get_super_liked_ids` is a separate call rather than widening `get_liked_restaurants`, to preserve PostgREST embeds. | locked 2026-08-31 |
