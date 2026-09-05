@@ -44,6 +44,14 @@ const Color kCreamMuted = Color(0x73FFF3E8);
 /// in the app, so spending it anywhere else costs it its meaning.
 const Color kFresh = Color(0xFF9DF2B8);
 
+/// The "open now" chip's fill and outline: fresh at 16 % and 50 %, as the
+/// prototype's `.tags span.open`. Nothing else is tinted fresh.
+const Color kFreshFill = Color(0x299DF2B8);
+const Color kFreshLine = Color(0x809DF2B8);
+
+/// The fill of a fact chip over video — 14 % white, so the clip shows through.
+const Color kFillTag = Color(0x24FFFFFF);
+
 /// The gradient every primary action is filled with.
 const LinearGradient kCtaGradient = LinearGradient(
   begin: Alignment.topLeft,
@@ -722,6 +730,59 @@ class AppChip extends StatelessWidget {
                     color: foreground,
                     fontWeight: FontWeight.w600,
                   ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A fact chip over a clip: the cuisine, "Halal", or — tinted fresh, with the
+/// dot — whether the place is open right now. The prototype's
+/// `.card .info .tags span`, 11 px and pill-shaped, smaller than [AppChip].
+class AppTagChip extends StatelessWidget {
+  const AppTagChip({super.key, required this.label}) : fresh = false;
+
+  /// The one fresh-tinted chip in the app: open now.
+  const AppTagChip.fresh({super.key, required this.label}) : fresh = true;
+
+  final String label;
+  final bool fresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: fresh ? kFreshFill : kFillTag,
+        borderRadius: BorderRadius.circular(kRadiusPill),
+        border: Border.all(color: fresh ? kFreshLine : kHairline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (fresh) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: kFresh,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: kTextFontFamily,
+              fontSize: kFontSizeMicro,
+              fontWeight: FontWeight.w600,
+              color: kTextOnPhoto,
+              height: 1.2,
             ),
           ),
         ],

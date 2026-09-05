@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/design_tokens.dart';
+import '../domain/opening_hours.dart';
+import 'dish.dart';
 import 'restaurant.dart';
 import 'restaurant_card.dart';
 
@@ -23,6 +25,11 @@ class RestaurantDetailData {
     required this.reviewText,
     required this.imageUrls,
     this.videoUrl,
+    this.hours = OpeningHours.unknown,
+    this.priceFrom,
+    this.isHalal,
+    this.neighbourhood,
+    this.dishes = const [],
   });
 
   factory RestaurantDetailData.fromPayload(Map<String, dynamic> payload) {
@@ -43,6 +50,16 @@ class RestaurantDetailData {
           .map((value) => value.toString())
           .toList(),
       videoUrl: payload['videoUrl'] as String?,
+      hours: payload['hours'] is Map<String, dynamic>
+          ? OpeningHours.fromJson(payload['hours'] as Map<String, dynamic>)
+          : OpeningHours.unknown,
+      priceFrom: (payload['priceFrom'] as num?)?.toInt(),
+      isHalal: payload['isHalal'] as bool?,
+      neighbourhood: payload['neighbourhood'] as String?,
+      dishes: (payload['dishes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(Dish.fromJson)
+          .toList(),
     );
   }
 
@@ -63,6 +80,11 @@ class RestaurantDetailData {
       reviewText: card.reviewText,
       imageUrls: card.imageUrls,
       videoUrl: card.videoUrl,
+      hours: card.hours,
+      priceFrom: card.priceFrom,
+      isHalal: card.isHalal,
+      neighbourhood: card.neighbourhood,
+      dishes: card.dishes,
     );
   }
 
@@ -78,6 +100,14 @@ class RestaurantDetailData {
   final String reviewText;
   final List<String> imageUrls;
   final String? videoUrl;
+  final OpeningHours hours;
+  final int? priceFrom;
+  final bool? isHalal;
+  final String? neighbourhood;
+  final List<Dish> dishes;
+
+  String? get priceLabel =>
+      priceFrom == null ? null : 'From ${formatRinggit(priceFrom!)}';
 }
 
 extension RestaurantCardDetailPayload on RestaurantCard {
@@ -97,6 +127,11 @@ extension RestaurantCardDetailPayload on RestaurantCard {
       'reviewText': reviewText,
       'imageUrls': imageUrls,
       'videoUrl': videoUrl,
+      'hours': hours.toJson(),
+      'priceFrom': priceFrom,
+      'isHalal': isHalal,
+      'neighbourhood': neighbourhood,
+      'dishes': dishes.map((dish) => dish.toJson()).toList(),
     };
   }
 }

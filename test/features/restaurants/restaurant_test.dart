@@ -215,6 +215,66 @@ void main() {
     });
   });
 
+  group('restaurant facts', () {
+    test('reads hours, price, halal, neighbourhood and dishes from the row', () {
+      final restaurant = Restaurant.fromJson({
+        'id': 167,
+        'name': 'Ikan Bakar Medan',
+        'hours_text': '5:30PM - 2AM (Closed on Monday)',
+        'opens_at': '17:30:00',
+        'closes_at': '02:00:00',
+        'closed_dow': [1],
+        'price_from': 19,
+        'is_halal': true,
+        'neighbourhood': 'Masai',
+        'dishes': [
+          {'id': 2, 'name': 'Second', 'position': 1},
+          {'id': 1, 'name': 'First', 'position': 0, 'price_rm': 12},
+        ],
+      });
+      expect(restaurant.hours.isOvernight, isTrue);
+      expect(restaurant.hours.closedWeekdays, {1});
+      expect(restaurant.priceFrom, 19);
+      expect(restaurant.isHalal, isTrue);
+      expect(restaurant.neighbourhood, 'Masai');
+      expect(restaurant.dishes.map((d) => d.name), ['First', 'Second']);
+    });
+
+    test('defaults to unknown facts on a bare row', () {
+      final restaurant = Restaurant.fromJson({'id': 1});
+      expect(restaurant.hours.isKnown, isFalse);
+      expect(restaurant.priceFrom, isNull);
+      expect(restaurant.isHalal, isNull);
+      expect(restaurant.neighbourhood, isNull);
+      expect(restaurant.dishes, isEmpty);
+    });
+
+    test('the facts survive the cache round-trip', () {
+      final restaurant = Restaurant.fromJson({
+        'id': 167,
+        'opens_at': '17:30:00',
+        'closes_at': '02:00:00',
+        'closed_dow': [1],
+        'hours_text': 'x',
+        'price_from': 19,
+        'is_halal': false,
+        'neighbourhood': 'Masai',
+        'dishes': [
+          {'id': 1, 'name': 'First', 'position': 0, 'price_rm': 12.5},
+        ],
+      });
+      final again = Restaurant.fromJson(restaurant.toJson());
+      expect(again.hours.opensAtMinutes, 17 * 60 + 30);
+      expect(again.hours.closesAtMinutes, 2 * 60);
+      expect(again.hours.closedWeekdays, {1});
+      expect(again.hours.text, 'x');
+      expect(again.priceFrom, 19);
+      expect(again.isHalal, isFalse);
+      expect(again.neighbourhood, 'Masai');
+      expect(again.dishes.single.priceLabel, 'RM 12.50');
+    });
+  });
+
   group('RestaurantReview.fromJson', () {
     test('maps author_name and body', () {
       final review = RestaurantReview.fromJson(<String, dynamic>{

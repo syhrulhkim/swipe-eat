@@ -15,7 +15,10 @@ class RestaurantRepository {
 
   static const _deckColumns = 'id, name, tag, details, brand_color, rating, '
       'latitude, longitude, video_url, '
-      'restaurant_images(url, position), reviews(author_name, body)';
+      'hours_text, opens_at, closes_at, closed_dow, '
+      'price_from, is_halal, neighbourhood, '
+      'restaurant_images(url, position), reviews(author_name, body), '
+      'dishes(id, name, description, price_rm, image_url, position)';
 
   // A stalled connection would otherwise never resolve; surface it as an
   // error so the UI can offer a retry instead of spinning forever.
@@ -174,5 +177,14 @@ class RestaurantRepository {
     return rows
         .map((row) => CuisineCount.fromJson(row as Map<String, dynamic>))
         .toList();
+  }
+
+  /// How many people have bitten this place, across every account. Backed by
+  /// a definer RPC because `swipes` only ever shows a user their own rows.
+  Future<int> ngapCount(int restaurantId) async {
+    final result = await _client
+        .rpc<dynamic>('get_ngap_count', params: {'p_restaurant_id': restaurantId})
+        .timeout(_timeout);
+    return (result as num?)?.toInt() ?? 0;
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
@@ -109,6 +110,13 @@ class _ProfileTabState extends State<ProfileTab> {
                   subtitle: 'Favor shorter distances',
                   trailingLabel: 'On',
                   tint: kTintNearby,
+                ),
+                const SizedBox(height: 22),
+                // The design's `.settings` row. Settings moved here from the
+                // deck header, which the design gives only a filters button.
+                AppSecondaryButton(
+                  label: 'Settings',
+                  onPressed: () => context.push('/settings'),
                 ),
               ],
             ),

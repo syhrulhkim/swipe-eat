@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../domain/opening_hours.dart';
+import 'dish.dart';
 import 'restaurant.dart';
 
 /// One review as the card shows it: who wrote it and what they said.
@@ -32,6 +34,11 @@ class RestaurantCard {
     required this.reviews,
     required this.imageUrls,
     this.videoUrl,
+    this.hours = OpeningHours.unknown,
+    this.priceFrom,
+    this.isHalal,
+    this.neighbourhood,
+    this.dishes = const [],
   });
 
   /// Builds a card from a database row, dropping reviews with no body: an
@@ -58,6 +65,11 @@ class RestaurantCard {
       reviews: reviews,
       imageUrls: restaurant.imageUrls,
       videoUrl: restaurant.videoUrl,
+      hours: restaurant.hours,
+      priceFrom: restaurant.priceFrom,
+      isHalal: restaurant.isHalal,
+      neighbourhood: restaurant.neighbourhood,
+      dishes: restaurant.dishes,
     );
   }
 
@@ -74,4 +86,13 @@ class RestaurantCard {
   final List<ReviewSnippet> reviews;
   final List<String> imageUrls;
   final String? videoUrl;
+  final OpeningHours hours;
+  final int? priceFrom;
+  final bool? isHalal;
+  final String? neighbourhood;
+  final List<Dish> dishes;
+
+  /// "From RM 19" — null when the caption named no price.
+  String? get priceLabel =>
+      priceFrom == null ? null : 'From ${formatRinggit(priceFrom!)}';
 }

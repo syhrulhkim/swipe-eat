@@ -145,6 +145,11 @@ class FakeRestaurantRepository implements RestaurantRepository {
     return List.of(topPicksRows);
   }
 
+  final Map<int, int> ngapCounts = {};
+
+  @override
+  Future<int> ngapCount(int restaurantId) async => ngapCounts[restaurantId] ?? 0;
+
   @override
   Future<Set<int>> laterIds() async {
     if (failSuperLiked) {

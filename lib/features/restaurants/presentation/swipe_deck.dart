@@ -7,9 +7,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
-import '../../../core/ui/rating_label.dart';
 import '../../auth/state/auth_controller.dart';
+import '../domain/meal_label.dart';
 import '../models/restaurant_card.dart';
+import '../models/restaurant_detail_data.dart';
 import '../state/deck_controller.dart';
 import 'discovery_filter_sheet.dart';
 import 'swipe_card.dart';
@@ -45,12 +46,10 @@ class _SwipeDeckState extends State<SwipeDeck>
   StreamSubscription<String>? _messages;
 
   Offset _dragOffset = Offset.zero;
-  bool _infoExpanded = false;
 
   /// The clip the fullscreen route is currently showing, if any. The card
   /// underneath must not mount the same controller at the same time.
   String? _fullscreenVideoUrl;
-  bool _reviewInteractionActive = false;
   Offset _animationStartOffset = Offset.zero;
   Offset _animationEndOffset = Offset.zero;
   _SwipeMotionType _motionType = _SwipeMotionType.idle;
@@ -69,8 +68,6 @@ class _SwipeDeckState extends State<SwipeDeck>
 
       setState(() {
         _dragOffset = Offset.zero;
-        _infoExpanded = false;
-        _reviewInteractionActive = false;
         _motionType = _SwipeMotionType.idle;
       });
 
@@ -225,23 +222,29 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
-  void _setReviewInteractionActive(bool active) {
-    if (_reviewInteractionActive == active) {
-      return;
-    }
-
-    setState(() {
-      _reviewInteractionActive = active;
-    });
-  }
-
   Future<void> _openFilters() {
     return showDiscoveryFilterSheet(context, deck: _deck);
+  }
+
+  /// The info block's tap: the restaurant's own screen, handed the card so it
+  /// paints before the row is refetched.
+  void _openDetail(RestaurantCard card) {
+    context.push('/restaurant/${card.id}', extra: card.toDetailPayload());
+  }
+
+  Widget _buildActionBar() {
+    return DeckActionBar(
+      onPass: () => _triggerAction(liked: false),
+      onLike: () => _triggerAction(liked: true),
+      onLater: () => _triggerAction(liked: true, later: true),
+    );
   }
 
   DeckHeader _buildHeader() {
     return DeckHeader(
       locationLabel: _deck.locationLabel,
+      radiusKm: widget.authController.user?.searchRadiusKm,
+      mealLabel: mealLabel(DateTime.now()),
       stalenessLabel: _deck.stalenessLabel,
       activeFilterCount:
           widget.authController.user?.activeFilterCount ?? 0,
@@ -249,18 +252,13 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
-  // Keeps the floating header visible around the loading/error/empty states
-  // so those states aren't a bare widget on an otherwise blank tab.
+  // Keeps the header above the loading/error/empty states so those states
+  // aren't a bare widget on an otherwise blank tab.
   Widget _deckMessage(Widget child) {
-    return Stack(
+    return Column(
       children: [
-        Center(child: child),
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: _buildHeader(),
-        ),
+        _buildHeader(),
+        Expanded(child: Center(child: child)),
       ],
     );
   }
@@ -345,27 +343,28 @@ class _SwipeDeckState extends State<SwipeDeck>
     final next = _deck.next;
     final motion = _motionFrame();
 
-    return Stack(
+    // The design's swipe screen, top to bottom: the location header, the
+    // deck, the three actions. The card is a rounded surface inside the
+    // screen padding, not a full-bleed one under the status bar.
+    return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              if (next != null) Positioned.fill(child: _buildBehindCard(next)),
-              Positioned.fill(child: _buildTopCard(current, motion)),
-            ],
+        _buildHeader(),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (next != null)
+                  Positioned.fill(child: _buildBehindCard(next)),
+                Positioned.fill(child: _buildTopCard(current, motion)),
+              ],
+            ),
           ),
         ),
-        // Painted above the card so the settings button stays tappable; the
-        // gradient itself ignores pointers so card gestures pass through the
-        // top 300px.
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: _buildHeader(),
-        ),
+        const SizedBox(height: 14),
+        _buildActionBar(),
+        const SizedBox(height: 4),
       ],
     );
   }
@@ -379,17 +378,10 @@ class _SwipeDeckState extends State<SwipeDeck>
         key: ValueKey(next.id),
         data: next,
         isBehind: true,
-        infoExpanded: _infoExpanded,
-        ratingText: ratingLabel(next.rating),
         distanceText: _deck.distanceLabelFor(next),
         onTap: () => unawaited(_openVideoPlayer(next)),
+        onOpenDetail: () => _openDetail(next),
         tiktokPlayerFuture: _deck.players.warm(next.videoUrl),
-        onInfoTap: () {
-          setState(() {
-            _infoExpanded = !_infoExpanded;
-          });
-        },
-        onReviewInteractionChanged: _setReviewInteractionActive,
       ),
       builder: (context, child) {
         final lift = _motionFrame().lift;
@@ -409,8 +401,7 @@ class _SwipeDeckState extends State<SwipeDeck>
   }
 
   Widget _buildTopCard(RestaurantCard current, _MotionFrame motion) {
-    final gesturesLocked =
-        _motionType != _SwipeMotionType.idle || _reviewInteractionActive;
+    final gesturesLocked = _motionType != _SwipeMotionType.idle;
 
     return GestureDetector(
       onPanStart: gesturesLocked ? null : (_) => _deck.warmUpcomingPlayers(),
@@ -486,34 +477,77 @@ class _SwipeDeckState extends State<SwipeDeck>
           data: current,
           likeOpacity: motion.offset.dx > 20 ? motion.dragPercentage : 0,
           nopeOpacity: motion.offset.dx < -20 ? motion.dragPercentage : 0,
-          infoExpanded: _infoExpanded,
-          ratingText: ratingLabel(current.rating),
           distanceText: _deck.distanceLabelFor(current),
           onTap: () => unawaited(_openVideoPlayer(current)),
+          onOpenDetail: () => _openDetail(current),
           tiktokPlayerFuture: _deck.players.warm(current.videoUrl),
           videoHiddenForFullscreen: _fullscreenVideoUrl != null &&
               _fullscreenVideoUrl == current.videoUrl,
-          onInfoTap: () {
-            setState(() {
-              _infoExpanded = !_infoExpanded;
-            });
-          },
-          onReviewInteractionChanged: _setReviewInteractionActive,
-          onPass: () => _triggerAction(liked: false),
-          onLike: () => _triggerAction(liked: true),
-          onLater: () => _triggerAction(liked: true, later: true),
         ),
       ),
     );
   }
 }
 
-/// The deck's top chrome: where the user is, and the way into Settings, over a
-/// gradient that keeps both legible against any clip.
+/// The design's three-button bar under the deck: a ghost Skip, the Ngap
+/// button, a ghost Later, centred as equals around the one that matters.
+///
+/// Three, not five. Rewind and the super-like star are gone with the features
+/// behind them — the design has neither, and a control for a feature that no
+/// longer exists is worse than a missing one.
+class DeckActionBar extends StatelessWidget {
+  const DeckActionBar({
+    super.key,
+    required this.onPass,
+    required this.onLike,
+    required this.onLater,
+  });
+
+  final VoidCallback onPass;
+  final VoidCallback onLike;
+  final VoidCallback onLater;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        AppIconButton(
+          icon: Icons.close_rounded,
+          size: kActionButtonSize,
+          iconSize: 22,
+          onPhoto: false,
+          background: kSurfaceDark,
+          semanticLabel: 'Skip',
+          onTap: onPass,
+        ),
+        const SizedBox(width: 20),
+        AppNgapButton(onTap: onLike),
+        const SizedBox(width: 20),
+        // A clock, not a bookmark: "later" here is about when you eat, not
+        // about filing the place away.
+        AppIconButton(
+          icon: Icons.schedule_rounded,
+          size: kActionButtonSize,
+          iconSize: 22,
+          onPhoto: false,
+          background: kSurfaceDark,
+          semanticLabel: 'Save for later',
+          onTap: onLater,
+        ),
+      ],
+    );
+  }
+}
+
+/// The deck's top bar, the design's `.topbar`: where the user is with the
+/// radius and the meal under it, and the filters button.
 class DeckHeader extends StatelessWidget {
   const DeckHeader({
     super.key,
     required this.locationLabel,
+    this.radiusKm,
+    this.mealLabel,
     this.stalenessLabel,
     this.activeFilterCount = 0,
     this.onFilterTap,
@@ -523,8 +557,14 @@ class DeckHeader extends StatelessWidget {
   /// hardcoded town.
   final String locationLabel;
 
+  /// The search radius from Settings; null means no limit.
+  final int? radiusKm;
+
+  /// "dinner", "lunch" — the meal the hour is closest to.
+  final String? mealLabel;
+
   /// Set when the deck came off the device instead of the server. Shown under
-  /// the location chip so saved cards are never mistaken for fresh ones.
+  /// the location so saved cards are never mistaken for fresh ones.
   final String? stalenessLabel;
 
   /// How many discovery filters are on — the badge on the filter button.
@@ -533,93 +573,83 @@ class DeckHeader extends StatelessWidget {
   /// Opens the discovery filter sheet. Null hides the button.
   final VoidCallback? onFilterTap;
 
+  String get _subline {
+    final parts = <String>[
+      radiusKm == null ? 'any distance' : 'within $radiusKm km',
+      if (mealLabel != null) mealLabel!,
+    ];
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 300,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.90),
-                      Colors.black.withValues(alpha: 0.82),
-                      Colors.black.withValues(alpha: 0.66),
-                      Colors.black.withValues(alpha: 0.46),
-                      Colors.black.withValues(alpha: 0.30),
-                      Colors.black.withValues(alpha: 0.16),
-                      Colors.black.withValues(alpha: 0.08),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.09, 0.20, 0.34, 0.50, 0.68, 0.86, 1.0],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12, left: 16, right: 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.place_outlined, size: 18, color: kAccentCream),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Flexible(
-                        child: AppChip(
-                          icon: Icons.place_rounded,
-                          label: locationLabel,
+                      Text(
+                        locationLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: kTextFontFamily,
+                          fontSize: kFontSizeBody,
+                          fontWeight: FontWeight.w600,
+                          color: kAccentCream,
+                          height: 1.2,
                         ),
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (onFilterTap != null) ...[
-                            AppIconButton(
-                              icon: Icons.tune_rounded,
-                              size: kUtilityButtonSize,
-                              iconSize: 20,
-                              background: Colors.black.withValues(alpha: 0.34),
-                              semanticLabel: 'Discovery filters',
-                              badgeCount: activeFilterCount,
-                              onTap: onFilterTap!,
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          AppIconButton(
-                            icon: Icons.settings_rounded,
-                            size: kUtilityButtonSize,
-                            iconSize: 20,
-                            background: Colors.black.withValues(alpha: 0.34),
-                            semanticLabel: 'Settings',
-                            onTap: () => context.push('/settings'),
-                          ),
-                        ],
+                      Text(
+                        _subline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: kTextFontFamily,
+                          fontSize: kFontSizeMicro,
+                          fontWeight: FontWeight.w400,
+                          color: kCreamSecondary,
+                          height: 1.3,
+                        ),
                       ),
                     ],
                   ),
-                  // Only the offline chip survives: the streak and the swipe
-                  // allowance are gone with the features behind them.
-                  if (stalenessLabel != null) ...[
-                    const SizedBox(height: 10),
-                    AppChip(
-                      icon: Icons.cloud_off_rounded,
-                      label: stalenessLabel!,
-                    ),
-                  ],
+                ),
+                if (onFilterTap != null) ...[
+                  const SizedBox(width: 8),
+                  AppIconButton(
+                    icon: Icons.tune_rounded,
+                    size: kUtilityButtonSize,
+                    iconSize: 20,
+                    onPhoto: false,
+                    background: kGlass,
+                    semanticLabel: 'Filters',
+                    badgeCount: activeFilterCount,
+                    onTap: onFilterTap!,
+                  ),
                 ],
-              ),
+              ],
             ),
-          ),
-        ],
+            if (stalenessLabel != null) ...[
+              const SizedBox(height: 10),
+              AppChip(
+                icon: Icons.cloud_off_rounded,
+                label: stalenessLabel!,
+                onPhoto: false,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

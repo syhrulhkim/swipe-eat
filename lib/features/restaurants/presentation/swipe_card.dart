@@ -1,45 +1,44 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import '../../../core/location/open_directions.dart';
-import '../../../core/ui/app_spacing.dart';
+
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../data/tiktok_player_factory.dart';
 import '../models/restaurant_card.dart';
-import '../state/visit_prompt_controller.dart';
 import 'review_carousel.dart';
 import 'tiktok_player.dart';
 
-/// One restaurant as a full-bleed card: its clip or photos behind, its name,
-/// rating and distance in a panel at the bottom.
+/// One restaurant as a full-bleed card: its clip or photos behind, and low
+/// over the scrim the design's info block — the fact chips, the name, and a
+/// line of distance, neighbourhood and price.
+///
+/// The card carries no buttons. The action bar is the deck's, below the
+/// cards, so the card is the same surface whether it is on top or behind.
 class SwipeCard extends StatefulWidget {
   const SwipeCard({
     super.key,
     required this.data,
-    required this.infoExpanded,
-    required this.ratingText,
     required this.distanceText,
     required this.onTap,
-    required this.onInfoTap,
-    required this.onReviewInteractionChanged,
+    required this.onOpenDetail,
     this.tiktokPlayerFuture,
     this.videoHiddenForFullscreen = false,
-    this.onPass,
-    this.onLike,
-    this.onLater,
     this.isBehind = false,
     this.likeOpacity = 0,
     this.nopeOpacity = 0,
+    this.clock = _defaultClock,
   });
 
+  static DateTime _defaultClock() => DateTime.now();
+
   final RestaurantCard data;
-  final bool infoExpanded;
-  final String ratingText;
   final String distanceText;
+
+  /// A tap on the clip: the fullscreen player.
   final VoidCallback onTap;
-  final VoidCallback onInfoTap;
-  final ValueChanged<bool> onReviewInteractionChanged;
+
+  /// A tap on the info block: the restaurant's own screen.
+  final VoidCallback onOpenDetail;
+
   final Future<TikTokPlayerHandle>? tiktokPlayerFuture;
 
   /// True while the fullscreen route holds this card's player. One controller
@@ -47,18 +46,12 @@ class SwipeCard extends StatefulWidget {
   /// falls back to its photos until the route closes.
   final bool videoHiddenForFullscreen;
 
-  /// Absent on the card behind: it must never act on the deck while the top
-  /// card is the one being dragged.
-  final VoidCallback? onPass;
-  final VoidCallback? onLike;
-
-  /// The up gesture: save the place for later without deciding on it. Follows
-  /// the same rule as [onPass] — absent on the card behind.
-  final VoidCallback? onLater;
-
   final bool isBehind;
   final double likeOpacity;
   final double nopeOpacity;
+
+  /// What time it is, for the "open now" chip. Injected so a test can pin it.
+  final DateTime Function() clock;
 
   @override
   State<SwipeCard> createState() => _SwipeCardState();
@@ -100,7 +93,6 @@ class _SwipeCardState extends State<SwipeCard> {
 
   @override
   Widget build(BuildContext context) {
-    const bottomRadius = Radius.circular(kRadiusCard);
     final cardVideoUrl = widget.data.videoUrl;
     final showsPhotos = widget.isBehind ||
         widget.videoHiddenForFullscreen ||
@@ -112,148 +104,76 @@ class _SwipeCardState extends State<SwipeCard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: widget.onTap,
-        child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            bottomLeft: bottomRadius,
-            bottomRight: bottomRadius,
+        borderRadius: BorderRadius.circular(kRadiusCard),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: kSurfaceDark,
+            borderRadius: BorderRadius.circular(kRadiusCard),
+            border: Border.all(color: kHairline),
+            boxShadow: kCardShadow,
           ),
-          child: Container(
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.only(
-                bottomLeft: bottomRadius,
-                bottomRight: bottomRadius,
-              ),
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Clipped square, like every other corner in the app; the
-                // card runs under the status-bar scrim at the top.
-                Positioned.fill(
-                  child: ClipRect(child: _buildMedia()),
-                ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(child: _buildMedia()),
+              // The design's `.video::after`: a light wash at the top so the
+              // muted hint reads, and the deep one at the bottom under the
+              // info block.
+              const PhotoTopScrim(height: 120),
+              const PhotoBottomScrim(height: 360),
+              if (hasMultipleImages)
                 Positioned(
+                  top: 14,
                   left: 0,
                   right: 0,
-                  top: 0,
                   child: IgnorePointer(
-                    child: Container(
-                      height: 140,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 1.00),
-                            Colors.black.withValues(alpha: 1.00),
-                            Colors.black.withValues(alpha: 0.96),
-                            Colors.black.withValues(alpha: 0.84),
-                            Colors.black.withValues(alpha: 0.56),
-                            Colors.black.withValues(alpha: 0.22),
-                            Colors.black.withValues(alpha: 0.00),
-                          ],
-                          stops: const [0.0, 0.14, 0.28, 0.46, 0.70, 0.90, 1.0],
-                        ),
+                    child: Center(
+                      child: ProgressDots(
+                        count: widget.data.imageUrls.length,
+                        activeIndex: _imageIndex,
+                        style: ProgressDotsStyle.photo,
                       ),
                     ),
                   ),
                 ),
-                const PhotoBottomScrim(height: 360),
-                if (hasMultipleImages)
-                  Positioned(
-                    top: 150,
-                    left: 0,
-                    right: 0,
-                    child: IgnorePointer(
-                      child: Center(
-                        child: ProgressDots(
-                          count: widget.data.imageUrls.length,
-                          activeIndex: _imageIndex,
-                          style: ProgressDotsStyle.photo,
-                        ),
-                      ),
-                    ),
-                  ),
-                // The Figma's bottom panel: an opaque grey card carrying the
-                // name, the rating block, the fact chips and — on the top
-                // card — the action bar, all in one surface.
-                Positioned(
-                  left: 14,
-                  right: 14,
-                  bottom: AppSpacing.screenPadding + 2,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: kSurfacePanel,
-                      borderRadius: BorderRadius.circular(kRadiusSheet),
-                      border: Border.all(color: kHairline),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        RestaurantInfoPanel(
-                          data: widget.data,
-                          expanded: widget.infoExpanded,
-                          ratingText: widget.ratingText,
-                          distanceText: widget.distanceText,
-                          onTap: widget.onInfoTap,
-                          onReviewInteractionChanged:
-                              widget.onReviewInteractionChanged,
-                        ),
-                        if (widget.onPass != null &&
-                            widget.onLike != null) ...[
-                          const SizedBox(height: 14),
-                          Container(height: 1, color: kHairline),
-                          const SizedBox(height: 14),
-                          _buildActionBar(),
-                        ],
-                      ],
-                    ),
-                  ),
+              // The stamps: "Ngap!" rotates in from the right as the card
+              // drags right, "Skip" from the left.
+              Positioned(
+                top: 26,
+                right: 22,
+                child: _Stamp(
+                  label: 'Ngap!',
+                  color: kAccentEmber,
+                  angle: -12,
+                  opacity: widget.likeOpacity,
                 ),
-              ],
-            ),
+              ),
+              Positioned(
+                top: 26,
+                left: 22,
+                child: _Stamp(
+                  label: 'Skip',
+                  color: kAccentCream,
+                  angle: 12,
+                  opacity: widget.nopeOpacity,
+                ),
+              ),
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 20,
+                child: RestaurantInfoBlock(
+                  data: widget.data,
+                  distanceText: widget.distanceText,
+                  now: widget.clock(),
+                  onTap: widget.onOpenDetail,
+                ),
+              ),
+            ],
           ),
         ),
       ),
-    );
-  }
-
-  /// The design's three-button bar: a ghost Skip, the Ngap button, a ghost
-  /// Later, centred as equals around the one that matters.
-  ///
-  /// Three, not five. Rewind and the super-like star are gone with the
-  /// features behind them — the design has neither, and a control for a
-  /// feature that no longer exists is worse than a missing one.
-  Widget _buildActionBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        AppIconButton(
-          icon: Icons.close_rounded,
-          size: kActionButtonSize,
-          iconSize: 22,
-          onPhoto: false,
-          background: kSurfaceDark,
-          semanticLabel: 'Skip',
-          onTap: widget.onPass ?? () {},
-        ),
-        const SizedBox(width: 20),
-        AppNgapButton(onTap: widget.onLike),
-        const SizedBox(width: 20),
-        // A clock, not a bookmark: "later" here is about when you eat, not
-        // about filing the place away.
-        AppIconButton(
-          icon: Icons.schedule_rounded,
-          size: kActionButtonSize,
-          iconSize: 22,
-          onPhoto: false,
-          background: kSurfaceDark,
-          semanticLabel: 'Save for later',
-          onTap: widget.onLater ?? () {},
-        ),
-      ],
     );
   }
 
@@ -280,15 +200,16 @@ class _SwipeCardState extends State<SwipeCard> {
                   videoUrl: videoUrl,
                   playerFuture: widget.tiktokPlayerFuture,
                 ),
-                // The clip starts silent (D89), so the card says so.
+                // The clip starts silent (D89), so the card says so — top
+                // left, where the prototype puts its `.tag`.
                 //
                 // "Tap for sound", not the design's "tap to unmute": on the
                 // card a tap opens the fullscreen player, which is where
                 // TikTok's own volume control lives. Promising an unmute here
                 // would be promising something this tap does not do.
                 const Positioned(
-                  left: 14,
-                  bottom: 0,
+                  left: 16,
+                  top: 16,
                   child: _MutedHint(),
                 ),
               ],
@@ -335,9 +256,9 @@ class _SwipeCardState extends State<SwipeCard> {
             _imagePointerMoved = false;
           },
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
+            duration: kMotionDuration,
+            switchInCurve: kMotionEase,
+            switchOutCurve: kMotionEase,
             child: SizedBox.expand(
               key: ValueKey(widget.data.imageUrls[_imageIndex]),
               child: Image.network(
@@ -371,227 +292,179 @@ class _SwipeCardState extends State<SwipeCard> {
   }
 }
 
-/// The panel at the bottom of a card: category, name, rating, distance, and —
-/// once expanded — the description and reviews.
-class RestaurantInfoPanel extends StatefulWidget {
-  const RestaurantInfoPanel({
+/// The design's `.info`: fact chips, the name, then distance · neighbourhood
+/// and the price. Sits low over the scrim; a tap opens the restaurant.
+class RestaurantInfoBlock extends StatelessWidget {
+  const RestaurantInfoBlock({
     super.key,
     required this.data,
-    required this.expanded,
-    required this.ratingText,
     required this.distanceText,
+    required this.now,
     required this.onTap,
-    required this.onReviewInteractionChanged,
   });
 
   final RestaurantCard data;
-  final bool expanded;
-  final String ratingText;
   final String distanceText;
+  final DateTime now;
   final VoidCallback onTap;
-  final ValueChanged<bool> onReviewInteractionChanged;
-
-  @override
-  State<RestaurantInfoPanel> createState() => _RestaurantInfoPanelState();
-}
-
-class _RestaurantInfoPanelState extends State<RestaurantInfoPanel> {
-  Future<void> _openDirections() async {
-    final opened = await openDirections(
-      latitude: widget.data.latitude,
-      longitude: widget.data.longitude,
-      label: widget.data.title,
-    );
-    if (opened) {
-      unawaited(VisitPromptController.instance.recordDirections(
-        restaurantId: widget.data.id,
-        name: widget.data.title,
-      ));
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open maps for this place.')),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
-    // Unrated restaurants render ratingLabel's '–', which would put a bare
-    // dash in the rating block — the block only appears for real ratings.
-    final hasRating = widget.ratingText.trim() != '–';
+    final openLabel = data.hours.statusLabel(now);
+    final isOpen = data.hours.isOpenAt(now) ?? false;
+    final priceLabel = data.priceLabel;
+    final neighbourhood = data.neighbourhood;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(kRadiusPanel),
+    final tags = <Widget>[
+      // Only the open state is worth a chip: "closed" on a card you are being
+      // dealt is a reason to skip, and the meta line already says when.
+      if (isOpen && openLabel != null) AppTagChip.fresh(label: openLabel),
+      if (data.tag.trim().isNotEmpty) AppTagChip(label: data.tag),
+      if (data.isHalal == true) const AppTagChip(label: 'Halal'),
+    ];
+
+    return Semantics(
+      button: true,
+      label: [
+        data.title,
+        if (openLabel != null) openLabel,
+        distanceText,
+        if (neighbourhood != null) neighbourhood,
+        if (priceLabel != null) priceLabel,
+      ].join(', '),
+      excludeSemantics: true,
+      onTap: onTap,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedSize(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.bottomCenter,
-              child: widget.expanded
-                  ? _buildExpandedDetails(context)
-                  : const SizedBox.shrink(),
+            if (tags.isNotEmpty) ...[
+              Wrap(spacing: 6, runSpacing: 6, children: tags),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              data.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: kDisplayFontFamily,
+                fontSize: 34,
+                fontWeight: FontWeight.w800,
+                height: 0.98,
+                letterSpacing: -0.85,
+                color: kTextOnPhoto,
+              ),
             ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.data.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: appTitleStyle(context),
-                  ),
-                ),
-                if (hasRating) ...[
-                  const SizedBox(width: 12),
-                  _RatingBlock(ratingText: widget.ratingText),
-                ],
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                // A Wrap, not flexed chips: flex would cap each chip at a
-                // quarter of the row and ellipsize the distance on ordinary
-                // phone widths. Here every chip gets its natural size and an
-                // overlong set flows to a second line instead of clipping.
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      AppChip(
-                        icon: Icons.place_rounded,
-                        label: widget.distanceText,
-                      ),
-                      AppChip(label: widget.data.tag),
-                      if (hasMapFix(
-                          widget.data.latitude, widget.data.longitude))
-                        // Its own tap target: the surrounding InkWell expands
-                        // the panel, and leaving directions to that gesture
-                        // would open maps every time the user peeked at the
-                        // reviews.
-                        GestureDetector(
-                          onTap: _openDirections,
-                          behavior: HitTestBehavior.opaque,
-                          child: const AppChip(
-                            label: 'Directions',
-                            icon: Icons.directions_rounded,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                AnimatedRotation(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  turns: widget.expanded ? 0.5 : 0,
-                  child: Icon(
-                    Icons.keyboard_arrow_up_rounded,
-                    color: Colors.white.withValues(alpha: 0.65),
-                    size: 22,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 6),
+            _MetaLine(
+              distanceText: distanceText,
+              neighbourhood: neighbourhood,
+              priceLabel: priceLabel,
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildExpandedDetails(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(kRadiusPanel),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            // Opaque rather than translucent: this panel carries paragraphs of
-            // text over a moving video, and only a solid ground keeps them
-            // readable frame to frame.
-            color: kSurfaceDark,
-            borderRadius: BorderRadius.circular(kRadiusPanel),
-            border: Border.all(color: kHairline),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.data.details,
-                maxLines: 5,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      height: 1.35,
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-              ),
-              const SizedBox(height: 10),
-              ReviewCarousel(
-                reviews: widget.data.reviews,
-                onInteractionChanged: widget.onReviewInteractionChanged,
-              ),
-            ],
+/// `<b>1.2 km</b> · Kampung Baru   <b>From RM 8</b>` — the design's `.meta`.
+class _MetaLine extends StatelessWidget {
+  const _MetaLine({
+    required this.distanceText,
+    required this.neighbourhood,
+    required this.priceLabel,
+  });
+
+  final String distanceText;
+  final String? neighbourhood;
+  final String? priceLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    const muted = TextStyle(
+      fontFamily: kTextFontFamily,
+      fontSize: kFontSizeSmall,
+      fontWeight: FontWeight.w400,
+      color: kTextOnPhotoSecondary,
+      height: 1.3,
+    );
+    const strong = TextStyle(
+      fontWeight: FontWeight.w600,
+      color: kTextOnPhoto,
+    );
+
+    return Row(
+      children: [
+        Flexible(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: distanceText, style: strong),
+                if (neighbourhood != null) TextSpan(text: ' · $neighbourhood'),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: muted,
           ),
         ),
-      ),
+        if (priceLabel != null) ...[
+          const SizedBox(width: 10),
+          Text(priceLabel!, style: muted.merge(strong)),
+        ],
+      ],
     );
   }
 }
 
-/// The Figma's ember rating tile: the number large, "Google rating" under it
-/// so the figure is never mistaken for a price or a distance.
-class _RatingBlock extends StatelessWidget {
-  const _RatingBlock({required this.ratingText});
+/// "Ngap!" or "Skip", rubber-stamped across the top corner as the card drags.
+class _Stamp extends StatelessWidget {
+  const _Stamp({
+    required this.label,
+    required this.color,
+    required this.angle,
+    required this.opacity,
+  });
 
-  final String ratingText;
+  final String label;
+  final Color color;
+
+  /// Degrees. The design tilts Ngap! to the left and Skip to the right.
+  final double angle;
+  final double opacity;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: kAccentEmber,
-        borderRadius: BorderRadius.circular(kRadiusThumb),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            ratingText,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontFamily: kDisplayFontFamily,
-              color: kOnAccent,
-              fontWeight: FontWeight.w700,
-              height: 1.05,
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: Opacity(
+          opacity: opacity.clamp(0.0, 1.0),
+          child: Transform.rotate(
+            angle: angle * 3.141592653589793 / 180,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                border: Border.all(color: color, width: 3),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontFamily: kDisplayFontFamily,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.56,
+                  color: color,
+                  height: 1,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            'Google rating',
-            maxLines: 1,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: kOnAccent.withValues(alpha: 0.75),
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
