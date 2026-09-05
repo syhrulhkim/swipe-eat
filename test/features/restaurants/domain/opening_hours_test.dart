@@ -7,6 +7,8 @@ void main() {
       DateTime(2026, 9, 7, hour, minute);
   DateTime tuesday(int hour, [int minute = 0]) =>
       DateTime(2026, 9, 8, hour, minute);
+  DateTime sunday(int hour, [int minute = 0]) =>
+      DateTime(2026, 9, 6, hour, minute);
 
   group('OpeningHours.fromJson', () {
     test('reads the row columns', () {
@@ -51,6 +53,33 @@ void main() {
       expect(OpeningHours.parseClockMinutes('9'), isNull);
       expect(OpeningHours.parseClockMinutes('ab:cd'), isNull);
       expect(OpeningHours.parseClockMinutes('24:00:00'), 0);
+      expect(OpeningHours.parseClockMinutes(null), isNull);
+    });
+
+    test('degrades on values no clock ever had', () {
+      // A cached deck or a router payload can hold anything; unknown hours
+      // hide the chip, a crash takes the screen with it.
+      final hours = OpeningHours.fromJson(<String, dynamic>{
+        'opens_at': 930,
+        'closes_at': <String>['20:00:00'],
+        'closed_dow': 'Mondays',
+        'hours_text': 7,
+      });
+
+      expect(hours.isKnown, isFalse);
+      expect(hours.closedWeekdays, isEmpty);
+      expect(hours.text, isNull);
+      expect(hours.isOpenAt(monday(12)), isNull);
+    });
+
+    test('keeps the weekdays it recognises and drops the rest', () {
+      final hours = OpeningHours.fromJson(<String, dynamic>{
+        'opens_at': '09:00:00',
+        'closes_at': '17:00:00',
+        'closed_dow': <dynamic>[1, 'Sunday', null, 7.0],
+      });
+
+      expect(hours.closedWeekdays, {1, 7});
     });
   });
 
@@ -96,6 +125,40 @@ void main() {
       expect(hours.isOpenAt(tuesday(3)), isFalse);
     });
 
+    test('the closing minute is already shut, both sides of midnight', () {
+      // `closes_at` is exclusive in the database, so the minute it names is
+      // the first minute the kitchen is off.
+      expect(daytime.isOpenAt(monday(19, 59)), isTrue);
+      expect(daytime.isOpenAt(monday(20, 0)), isFalse);
+
+      const overnight = OpeningHours(
+        opensAtMinutes: 17 * 60 + 30,
+        closesAtMinutes: 2 * 60,
+      );
+      expect(overnight.isOpenAt(monday(17, 29)), isFalse);
+      expect(overnight.isOpenAt(monday(17, 30)), isTrue);
+      expect(overnight.isOpenAt(tuesday(1, 59)), isTrue);
+      expect(overnight.isOpenAt(tuesday(2, 0)), isFalse);
+    });
+
+    test('a closed Sunday shuts the small hours of Monday', () {
+      // Monday is ISO 1, so "yesterday" has to wrap round to 7 rather than
+      // count down to 0 — the only weekday where that arithmetic can go wrong.
+      const hours = OpeningHours(
+        opensAtMinutes: 17 * 60 + 30,
+        closesAtMinutes: 2 * 60,
+        closedWeekdays: {DateTime.sunday},
+      );
+      // Sunday itself never opens.
+      expect(hours.isOpenAt(sunday(20)), isFalse);
+      // 1 am Monday belongs to Sunday's shut evening.
+      expect(hours.isOpenAt(monday(1)), isFalse);
+      // Monday's own evening is fine...
+      expect(hours.isOpenAt(monday(20)), isTrue);
+      // ...and so is the 1 am that belongs to it.
+      expect(hours.isOpenAt(tuesday(1)), isTrue);
+    });
+
     test('equal times mean all day', () {
       const hours = OpeningHours(opensAtMinutes: 0, closesAtMinutes: 0);
       expect(hours.isAllDay, isTrue);
@@ -129,6 +192,39 @@ void main() {
       );
       expect(hours.statusLabel(monday(18)), 'Closed today');
       expect(hours.statusLabel(tuesday(12)), 'Closed today');
+    });
+
+    test('an overnight place that has just shut says when it opens again', () {
+      const hours = OpeningHours(
+        opensAtMinutes: 17 * 60 + 30,
+        closesAtMinutes: 2 * 60,
+      );
+      // 3 am: the night is over, but tonight's opening is still to come, so
+      // "Closed today" would be wrong twice over.
+      expect(hours.statusLabel(monday(3)), 'Opens 5:30 pm');
+      expect(hours.statusLabel(monday(11, 59)), 'Opens 5:30 pm');
+    });
+
+    test('the small hours of a closed day still point at tonight', () {
+      const hours = OpeningHours(
+        opensAtMinutes: 17 * 60 + 30,
+        closesAtMinutes: 2 * 60,
+        closedWeekdays: {DateTime.sunday},
+      );
+      // 1 am Monday: Sunday was shut, so nothing is open — but Monday night
+      // is, and that is what the card should say.
+      expect(hours.isOpenAt(monday(1)), isFalse);
+      expect(hours.statusLabel(monday(1)), 'Opens 5:30 pm');
+    });
+
+    test('a closed day says so even before its opening hour', () {
+      const hours = OpeningHours(
+        opensAtMinutes: 17 * 60 + 30,
+        closesAtMinutes: 2 * 60,
+        closedWeekdays: {DateTime.monday},
+      );
+      expect(hours.statusLabel(monday(3)), 'Closed today');
+      expect(hours.statusLabel(monday(20)), 'Closed today');
     });
 
     test('says 24 h for an all-day place', () {

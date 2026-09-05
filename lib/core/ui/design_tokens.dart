@@ -773,16 +773,21 @@ class AppTagChip extends StatelessWidget {
             ),
             const SizedBox(width: 5),
           ],
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: kTextFontFamily,
-              fontSize: kFontSizeMicro,
-              fontWeight: FontWeight.w600,
-              color: kTextOnPhoto,
-              height: 1.2,
+          // Flexible for the same reason [AppChip] is: without it the Row
+          // gives the label unbounded width, the ellipsis never engages, and
+          // a long cuisine tag overflows the card instead of being cut.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: kTextFontFamily,
+                fontSize: kFontSizeMicro,
+                fontWeight: FontWeight.w600,
+                color: kTextOnPhoto,
+                height: 1.2,
+              ),
             ),
           ),
         ],

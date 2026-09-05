@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
+import 'package:swipe_eat/features/restaurants/data/tiktok_player_factory.dart';
 import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant_card.dart';
 import 'package:swipe_eat/features/restaurants/presentation/swipe_card.dart';
+
+import '../../support/widget_test_support.dart';
 
 RestaurantCard card({
   OpeningHours hours = OpeningHours.unknown,
@@ -12,6 +17,7 @@ RestaurantCard card({
   bool? isHalal,
   String? neighbourhood,
   String tag = 'Malay',
+  String? videoUrl,
 }) {
   return RestaurantCard(
     id: 1,
@@ -26,6 +32,7 @@ RestaurantCard card({
     reviewText: '',
     reviews: const [],
     imageUrls: const [],
+    videoUrl: videoUrl,
     hours: hours,
     priceFrom: priceFrom,
     isHalal: isHalal,
@@ -35,6 +42,75 @@ RestaurantCard card({
 
 // 8 pm on a Monday.
 DateTime eightPm() => DateTime(2026, 9, 7, 20);
+
+/// The card's own surface: the one box rounded to the card radius. Everything
+/// else it draws is a pill or square.
+final Finder cardSurface = find.byWidgetPredicate(
+  (widget) =>
+      widget is Container &&
+      widget.decoration is BoxDecoration &&
+      (widget.decoration! as BoxDecoration).borderRadius ==
+          BorderRadius.circular(kRadiusCard),
+  description: 'Container(borderRadius: kRadiusCard)',
+);
+
+/// The [Opacity] a stamp is wrapped in — the nearest one above its word.
+double stampOpacity(WidgetTester tester, String label) {
+  return tester
+      .widget<Opacity>(
+        find
+            .ancestor(of: find.text(label), matching: find.byType(Opacity))
+            .first,
+      )
+      .opacity;
+}
+
+/// Pumps a whole [SwipeCard] in a card-shaped box.
+///
+/// A card with a clip is handed a player future that never completes: the
+/// view then paints its spinner and never reaches for a WebView, so the test
+/// stays off the platform channels and off the network. Photos are left empty
+/// for the same reason — [Image.network] would be a real request.
+Future<void> pumpCard(
+  WidgetTester tester,
+  RestaurantCard data, {
+  double likeOpacity = 0,
+  double nopeOpacity = 0,
+  bool isBehind = false,
+  VoidCallback? onTap,
+  VoidCallback? onOpenDetail,
+}) async {
+  // A phone, not the 800x600 default: a 620 pt card does not fit in 600.
+  useViewport(tester, const Size(390, 844));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        backgroundColor: kBackgroundDark,
+        body: Center(
+          child: SizedBox(
+            width: 360,
+            height: 620,
+            child: SwipeCard(
+              data: data,
+              distanceText: '1.2 km',
+              onTap: onTap ?? () {},
+              onOpenDetail: onOpenDetail ?? () {},
+              tiktokPlayerFuture: data.videoUrl == null
+                  ? null
+                  : Completer<TikTokPlayerHandle>().future,
+              isBehind: isBehind,
+              likeOpacity: likeOpacity,
+              nopeOpacity: nopeOpacity,
+              clock: eightPm,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  // Never pumpAndSettle: the pending player leaves a spinner turning forever.
+  await tester.pump();
+}
 
 Future<void> pumpBlock(
   WidgetTester tester,
@@ -161,6 +237,129 @@ void main() {
       );
       await pumpBlock(tester, data, width: 280);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a caption-length cuisine tag is cut, not spilled',
+        (tester) async {
+      // The tag comes off a TikTok caption, so nothing bounds its length.
+      await pumpBlock(
+        tester,
+        card(tag: 'Nasi kandar, mamak, North Indian and Penang street food'),
+        width: 280,
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byType(AppTagChip)).width,
+        lessThanOrEqualTo(280),
+      );
+    });
+  });
+
+  group('SwipeCard', () {
+    testWidgets('is a rounded surface with the info block low on it',
+        (tester) async {
+      await pumpCard(tester, card(priceFrom: 8, neighbourhood: 'Masai'));
+
+      expect(cardSurface, findsOneWidget);
+      final decoration =
+          tester.widget<Container>(cardSurface).decoration! as BoxDecoration;
+      expect(decoration.borderRadius, BorderRadius.circular(28));
+      expect(decoration.color, kSurfaceDark);
+      expect(tester.getSize(cardSurface), const Size(360, 620));
+      expect(find.byType(RestaurantInfoBlock), findsOneWidget);
+    });
+
+    testWidgets('a clip says it is playing silent', (tester) async {
+      await pumpCard(tester, card(videoUrl: 'https://tiktok.test/v/1'));
+
+      expect(find.text('Tap for sound'), findsOneWidget);
+      expect(find.byIcon(Icons.volume_off_rounded), findsOneWidget);
+    });
+
+    testWidgets('a card with no clip promises no sound', (tester) async {
+      await pumpCard(tester, card());
+
+      expect(find.text('Tap for sound'), findsNothing);
+      expect(find.byIcon(Icons.volume_off_rounded), findsNothing);
+    });
+
+    testWidgets('an empty video url is no clip at all', (tester) async {
+      await pumpCard(tester, card(videoUrl: ''));
+
+      expect(find.text('Tap for sound'), findsNothing);
+    });
+
+    testWidgets('the card behind gives its player up, and the hint with it',
+        (tester) async {
+      await pumpCard(
+        tester,
+        card(videoUrl: 'https://tiktok.test/v/1'),
+        isBehind: true,
+      );
+
+      expect(find.text('Tap for sound'), findsNothing);
+    });
+
+    testWidgets('both stamps are invisible on a card at rest', (tester) async {
+      await pumpCard(tester, card());
+
+      expect(stampOpacity(tester, 'Ngap!'), 0);
+      expect(stampOpacity(tester, 'Skip'), 0);
+    });
+
+    testWidgets('the stamps follow the drag they belong to', (tester) async {
+      await pumpCard(tester, card(), likeOpacity: 0.6, nopeOpacity: 0.2);
+
+      expect(stampOpacity(tester, 'Ngap!'), 0.6);
+      expect(stampOpacity(tester, 'Skip'), 0.2);
+    });
+
+    testWidgets('an over-driven drag stops at fully opaque', (tester) async {
+      await pumpCard(tester, card(), likeOpacity: 1.7, nopeOpacity: -0.4);
+
+      expect(stampOpacity(tester, 'Ngap!'), 1.0);
+      expect(stampOpacity(tester, 'Skip'), 0.0);
+    });
+
+    testWidgets('the stamps are decoration, not something to read or press',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpCard(tester, card(), likeOpacity: 1);
+
+      expect(find.bySemanticsLabel('Ngap!'), findsNothing);
+      expect(find.bySemanticsLabel('Skip'), findsNothing);
+
+      handle.dispose();
+    });
+
+    testWidgets('a tap on the clip and a tap on the block go different ways',
+        (tester) async {
+      var opened = 0;
+      var detail = 0;
+      await pumpCard(
+        tester,
+        card(),
+        onTap: () => opened++,
+        onOpenDetail: () => detail++,
+      );
+
+      await tester.tap(find.text('Warung Kak Ros'));
+      await tester.pump();
+      expect([opened, detail], [0, 1]);
+
+      // Well above the info block, on the media itself.
+      await tester.tapAt(tester.getCenter(cardSurface) - const Offset(0, 200));
+      await tester.pump();
+      expect([opened, detail], [1, 1]);
+    });
+
+    testWidgets('a card with no photos and no clip still paints', (tester) async {
+      await pumpCard(tester, card());
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Image), findsNothing);
+      expect(find.text('Warung Kak Ros'), findsOneWidget);
     });
   });
 }

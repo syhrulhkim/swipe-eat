@@ -1,3 +1,5 @@
+import '../domain/json_field.dart';
+
 /// One thing people order at a restaurant — the "What people bite" list on
 /// the detail screen.
 class Dish {
@@ -10,14 +12,17 @@ class Dish {
     this.position = 0,
   });
 
+  /// Reads a row, or an entry out of a detail payload. Every field falls back
+  /// rather than throwing: a dish carried in a map the app did not write is
+  /// worth showing thinly, and never worth crashing the page it sits on.
   factory Dish.fromJson(Map<String, dynamic> json) {
     return Dish(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      name: json['name'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      priceRm: (json['price_rm'] as num?)?.toDouble(),
-      imageUrl: json['image_url'] as String?,
-      position: (json['position'] as num?)?.toInt() ?? 0,
+      id: jsonInt(json['id']) ?? 0,
+      name: jsonString(json['name']) ?? '',
+      description: jsonString(json['description']) ?? '',
+      priceRm: jsonDouble(json['price_rm']),
+      imageUrl: jsonString(json['image_url']),
+      position: jsonInt(json['position']) ?? 0,
     );
   }
 

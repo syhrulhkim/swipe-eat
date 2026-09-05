@@ -1,3 +1,5 @@
+import 'json_field.dart';
+
 /// A restaurant's daily opening span, and whether it is open at a moment.
 ///
 /// Mirrors the database's `is_open_at` so a card painted from the offline
@@ -16,17 +18,17 @@ class OpeningHours {
     this.text,
   });
 
-  /// From the row's columns. Either time missing means the hours are unknown
-  /// and every question below answers null.
+  /// From the row's columns. Either time missing — or of a type no clock ever
+  /// had — means the hours are unknown and every question below answers null.
   factory OpeningHours.fromJson(Map<String, dynamic> json) {
     return OpeningHours(
-      opensAtMinutes: parseClockMinutes(json['opens_at'] as String?),
-      closesAtMinutes: parseClockMinutes(json['closes_at'] as String?),
+      opensAtMinutes: parseClockMinutes(jsonString(json['opens_at'])),
+      closesAtMinutes: parseClockMinutes(jsonString(json['closes_at'])),
       closedWeekdays: {
-        for (final day in (json['closed_dow'] as List<dynamic>? ?? const []))
+        for (final day in jsonList(json['closed_dow']))
           if (day is num) day.toInt(),
       },
-      text: json['hours_text'] as String?,
+      text: jsonString(json['hours_text']),
     );
   }
 

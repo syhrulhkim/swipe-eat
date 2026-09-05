@@ -92,6 +92,35 @@ Color? _chipFill(WidgetTester tester) {
   return (container.decoration! as BoxDecoration).color;
 }
 
+/// The chip's own box. The fresh variant nests a second [Container] for its
+/// dot, so the outer one — the one carrying the fill and the border — is
+/// taken by depth rather than by type.
+BoxDecoration _tagChipDecoration(WidgetTester tester) {
+  final container = tester.widget<Container>(
+    find
+        .descendant(
+          of: find.byType(AppTagChip),
+          matching: find.byType(Container),
+        )
+        .first,
+  );
+  return container.decoration! as BoxDecoration;
+}
+
+Color _tagChipBorderColor(WidgetTester tester) {
+  return (_tagChipDecoration(tester).border! as Border).top.color;
+}
+
+/// The 6px fresh-coloured circle the open-now chip leads with.
+final Finder _freshDot = find.byWidgetPredicate(
+  (widget) =>
+      widget is Container &&
+      widget.decoration is BoxDecoration &&
+      (widget.decoration! as BoxDecoration).shape == BoxShape.circle &&
+      (widget.decoration! as BoxDecoration).color == kFresh,
+  description: 'Container(circle, kFresh)',
+);
+
 void main() {
   group('AppIconButton', () {
     testWidgets('renders the requested icon', (tester) async {
@@ -375,6 +404,79 @@ void main() {
       // The chip stays inside the box it was given instead of overflowing.
       expect(
         tester.getSize(find.byType(AppChip)).width,
+        lessThanOrEqualTo(_chipHostWidth),
+      );
+    });
+  });
+
+  group('AppTagChip', () {
+    testWidgets('renders the label on its own', (tester) async {
+      await tester.pumpWidget(_host(const AppTagChip(label: 'Halal')));
+
+      expect(find.text('Halal'), findsOneWidget);
+      expect(find.byType(Icon), findsNothing);
+    });
+
+    testWidgets('the plain variant paints the tag fill and the hairline',
+        (tester) async {
+      await tester.pumpWidget(_host(const AppTagChip(label: 'Malay')));
+
+      expect(_tagChipDecoration(tester).color, kFillTag);
+      expect(_tagChipBorderColor(tester), kHairline);
+    });
+
+    testWidgets('the plain variant carries no dot', (tester) async {
+      await tester.pumpWidget(_host(const AppTagChip(label: 'Malay')));
+
+      expect(_freshDot, findsNothing);
+    });
+
+    testWidgets('the fresh variant paints the fresh fill and line',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(const AppTagChip.fresh(label: 'Open till 2 am')),
+      );
+
+      expect(_tagChipDecoration(tester).color, kFreshFill);
+      expect(_tagChipBorderColor(tester), kFreshLine);
+      expect(find.text('Open till 2 am'), findsOneWidget);
+    });
+
+    testWidgets('the fresh variant carries the dot, in the fresh colour',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(const AppTagChip.fresh(label: 'Open till 2 am')),
+      );
+
+      expect(_freshDot, findsOneWidget);
+      expect(tester.getSize(_freshDot), const Size(6, 6));
+    });
+
+    testWidgets('the two variants are told apart by their constructor',
+        (tester) async {
+      expect(const AppTagChip(label: 'Malay').fresh, isFalse);
+      expect(const AppTagChip.fresh(label: 'Open now').fresh, isTrue);
+    });
+
+    testWidgets('ellipsises a long label onto one line', (tester) async {
+      useViewport(tester, _phoneViewport);
+      await tester.pumpWidget(
+        _host(
+          const SizedBox(
+            width: _chipHostWidth,
+            child: AppTagChip(label: _longLabel),
+          ),
+        ),
+      );
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text(_longLabel),
+      );
+      expect(paragraph.didExceedMaxLines, isTrue);
+      expect(paragraph.size.height, lessThan(2 * paragraph.preferredLineHeight));
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byType(AppTagChip)).width,
         lessThanOrEqualTo(_chipHostWidth),
       );
     });

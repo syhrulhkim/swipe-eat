@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/design_tokens.dart';
+import '../domain/json_field.dart';
 import '../domain/opening_hours.dart';
 import 'dish.dart';
 import 'restaurant.dart';
@@ -33,30 +34,29 @@ class RestaurantDetailData {
   });
 
   factory RestaurantDetailData.fromPayload(Map<String, dynamic> payload) {
+    final hours = jsonMap(payload['hours']);
     return RestaurantDetailData(
-      id: (payload['id'] as num?)?.toInt() ?? 0,
-      title: payload['title'] as String? ?? 'Restaurant',
-      tag: payload['tag'] as String? ?? '',
-      details: payload['details'] as String? ?? '',
+      id: jsonInt(payload['id']) ?? 0,
+      title: jsonString(payload['title']) ?? 'Restaurant',
+      tag: jsonString(payload['tag']) ?? '',
+      details: jsonString(payload['details']) ?? '',
       color: payload['color'] is int
           ? Color(payload['color'] as int)
           : kBrandColorFallback,
-      rating: (payload['rating'] as num?)?.toDouble() ?? 0,
-      latitude: (payload['latitude'] as num?)?.toDouble() ?? 0,
-      longitude: (payload['longitude'] as num?)?.toDouble() ?? 0,
-      reviewName: payload['reviewName'] as String? ?? '',
-      reviewText: payload['reviewText'] as String? ?? '',
-      imageUrls: (payload['imageUrls'] as List<dynamic>? ?? const [])
+      rating: jsonDouble(payload['rating']) ?? 0,
+      latitude: jsonDouble(payload['latitude']) ?? 0,
+      longitude: jsonDouble(payload['longitude']) ?? 0,
+      reviewName: jsonString(payload['reviewName']) ?? '',
+      reviewText: jsonString(payload['reviewText']) ?? '',
+      imageUrls: jsonList(payload['imageUrls'])
           .map((value) => value.toString())
           .toList(),
-      videoUrl: payload['videoUrl'] as String?,
-      hours: payload['hours'] is Map<String, dynamic>
-          ? OpeningHours.fromJson(payload['hours'] as Map<String, dynamic>)
-          : OpeningHours.unknown,
-      priceFrom: (payload['priceFrom'] as num?)?.toInt(),
-      isHalal: payload['isHalal'] as bool?,
-      neighbourhood: payload['neighbourhood'] as String?,
-      dishes: (payload['dishes'] as List<dynamic>? ?? const [])
+      videoUrl: jsonString(payload['videoUrl']),
+      hours: hours == null ? OpeningHours.unknown : OpeningHours.fromJson(hours),
+      priceFrom: jsonInt(payload['priceFrom']),
+      isHalal: jsonBool(payload['isHalal']),
+      neighbourhood: jsonString(payload['neighbourhood']),
+      dishes: jsonList(payload['dishes'])
           .whereType<Map<String, dynamic>>()
           .map(Dish.fromJson)
           .toList(),
