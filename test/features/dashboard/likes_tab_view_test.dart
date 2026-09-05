@@ -7,7 +7,6 @@ import 'package:swipe_eat/core/ui/tiktok_thumbnail_placeholder.dart';
 import 'package:swipe_eat/features/dashboard/presentation/likes_tab_view.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 import 'package:swipe_eat/features/restaurants/presentation/restaurant_grid_card.dart';
-import 'package:swipe_eat/features/restaurants/state/restaurant_list_controller.dart';
 
 import '../../support/widget_test_support.dart';
 
@@ -22,10 +21,6 @@ const Size _tabletViewport = Size(1024, 1366);
 /// Accessibility scale the layout has to survive.
 const TextScaler _largeTextScale = TextScaler.linear(1.6);
 
-/// The distance string the host normally computes; injected here so the tests
-/// do not need the geolocator.
-const String _distanceLabel = '1.2 km away';
-
 /// A restaurant photo URL. Every image request is answered by the fake HTTP
 /// client with a real (transparent) PNG, so these never hit the network.
 String _photo(int id) => 'https://example.com/photo-$id.jpg';
@@ -38,6 +33,8 @@ Restaurant _restaurant({
   List<String>? imageUrls,
   List<RestaurantReview> reviews = const [],
   String? videoUrl,
+  bool? isHalal,
+  String? neighbourhood,
 }) {
   return Restaurant(
     id: id,
@@ -51,6 +48,8 @@ Restaurant _restaurant({
     imageUrls: imageUrls ?? [_photo(id)],
     reviews: reviews,
     videoUrl: videoUrl,
+    isHalal: isHalal,
+    neighbourhood: neighbourhood,
   );
 }
 
@@ -61,32 +60,17 @@ List<Restaurant> _restaurants(int count) {
   );
 }
 
-/// A controller whose fetch resolves immediately with [rows] (or throws).
-RestaurantListController _listController({
-  List<Restaurant> rows = const [],
-  bool fail = false,
-}) {
-  return RestaurantListController(() async {
-    if (fail) {
-      throw Exception('list unavailable');
-    }
-    return rows;
-  });
-}
-
 Future<void> _pumpLikesTab(
   WidgetTester tester, {
   required List<Restaurant> liked,
-  RestaurantListController? visited,
-  RestaurantListController? reviewed,
+  Set<int> wishlistedIds = const {},
+  Set<int> plannedIds = const {},
+  Map<int, String> plannedLabels = const {},
   Size viewport = _phoneViewport,
   double dpr = 1.0,
   TextScaler textScaler = TextScaler.noScaling,
-  String Function(Restaurant restaurant)? distanceLabel,
-  double Function(Restaurant restaurant)? distanceMeters,
   void Function(Restaurant restaurant)? onOpenRestaurant,
-  void Function(Restaurant restaurant)? onUnlike,
-  void Function(Restaurant restaurant)? onMarkVisited,
+  VoidCallback? onOpenWishlist,
 }) async {
   useViewport(tester, viewport, dpr: dpr);
   await tester.pumpWidget(
@@ -101,13 +85,11 @@ Future<void> _pumpLikesTab(
         backgroundColor: kBackgroundDark,
         body: LikesTabView(
           liked: liked,
-          visitedController: visited ?? _listController(),
-          reviewedController: reviewed ?? _listController(),
-          distanceLabel: distanceLabel ?? (_) => _distanceLabel,
-          distanceMeters: distanceMeters ?? (_) => double.infinity,
+          wishlistedIds: wishlistedIds,
+          plannedIds: plannedIds,
+          plannedLabels: plannedLabels,
           onOpenRestaurant: onOpenRestaurant ?? (_) {},
-          onUnlike: onUnlike ?? (_) {},
-          onMarkVisited: onMarkVisited ?? (_) {},
+          onOpenWishlist: onOpenWishlist ?? () {},
         ),
       ),
     ),
@@ -115,19 +97,24 @@ Future<void> _pumpLikesTab(
   await tester.pumpAndSettle();
 }
 
-Finder _card(String name) {
-  return find.ancestor(
-    of: find.text(name),
-    matching: find.byType(RestaurantGridCard),
-  );
+/// Taps a filter chip, scrolling the row sideways first.
+///
+/// The row is wider than any phone by design — that is what `.chiprow`'s
+/// overflow means — so the last chips start off screen and a bare tap would
+/// miss them.
+Future<void> _tapChip(WidgetTester tester, String label) async {
+  await tester.ensureVisible(find.text(label));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
 }
 
-/// The tappable control inside one card, found by its semantic label.
-Finder _cardAction(String name, String label) {
-  return find.descendant(
-    of: _card(name),
-    matching: find.bySemanticsLabel(label),
-  );
+/// The names of the tiles currently on screen, in grid order.
+List<String> _tileNames(WidgetTester tester) {
+  return tester
+      .widgetList<RestaurantGridCard>(find.byType(RestaurantGridCard))
+      .map((card) => card.restaurant.name)
+      .toList();
 }
 
 void main() {
@@ -136,22 +123,20 @@ void main() {
   });
 
   group('LikesTabView empty state', () {
-    testWidgets('shows the no-likes copy for an empty list', (tester) async {
+    testWidgets('shows the no-bites copy for an empty list', (tester) async {
       await _pumpLikesTab(tester, liked: const []);
 
-      expect(find.text('No likes yet'), findsOneWidget);
+      expect(find.text('No bites yet'), findsOneWidget);
       expect(
-        find.text(
-          'Swipe right on restaurants you love and they will show up here.',
-        ),
+        find.text('Ngap the places you want and they land here.'),
         findsOneWidget,
       );
       expect(find.byType(RestaurantGridCard), findsNothing);
     });
   });
 
-  group('LikesTabView liked grid', () {
-    testWidgets('renders one card per liked restaurant', (tester) async {
+  group('LikesTabView grid', () {
+    testWidgets('renders one tile per saved restaurant', (tester) async {
       await _pumpLikesTab(
         tester,
         liked: [
@@ -161,26 +146,45 @@ void main() {
       );
 
       expect(find.byType(RestaurantGridCard), findsNWidgets(2));
-      expect(find.text('Newest Warung'), findsOneWidget);
-      expect(find.text('Older Kopitiam'), findsOneWidget);
+      expect(_tileNames(tester), ['Newest Warung', 'Older Kopitiam']);
     });
 
-    testWidgets('shows distance and rating on the card', (tester) async {
-      await _pumpLikesTab(tester, liked: [_restaurant(id: 1)]);
+    testWidgets('every tile is bitten', (tester) async {
+      // Bites only holds saved places, so the notch is on all of them.
+      await _pumpLikesTab(tester, liked: _restaurants(2));
 
-      expect(find.text('$_distanceLabel  ·  ★ 4.5'), findsOneWidget);
+      final cards =
+          tester.widgetList<RestaurantGridCard>(find.byType(RestaurantGridCard));
+      expect(cards.every((card) => card.isSaved), isTrue);
     });
 
-    testWidgets('an unrated restaurant shows only the distance',
+    testWidgets('the wishlist badge follows the passed ids', (tester) async {
+      await _pumpLikesTab(
+        tester,
+        liked: [
+          _restaurant(id: 1, name: 'On The List'),
+          _restaurant(id: 2, name: 'Not On It'),
+        ],
+        wishlistedIds: const {1},
+      );
+
+      expect(find.byIcon(Icons.bookmark_outline_rounded), findsOneWidget);
+    });
+
+    testWidgets('the tile subtitle is cuisine and neighbourhood',
         (tester) async {
       await _pumpLikesTab(
         tester,
-        liked: [_restaurant(id: 1, name: 'Warung Baru', rating: 0)],
+        liked: [
+          _restaurant(
+            id: 1,
+            tag: 'Nasi lemak',
+            neighbourhood: 'Kampung Baru',
+          ),
+        ],
       );
 
-      // ratingLabel(0) is '–'; it must not leak onto the card.
-      expect(find.text(_distanceLabel), findsOneWidget);
-      expect(find.textContaining('–'), findsNothing);
+      expect(find.text('Nasi lemak · Kampung Baru'), findsOneWidget);
     });
 
     testWidgets('falls back to the TikTok placeholder without a photo',
@@ -200,25 +204,21 @@ void main() {
       expect(find.text('@johorfoodie'), findsOneWidget);
     });
 
-    testWidgets('no tile carries a star', (tester) async {
-      // The super like is gone and the bite replaces every badge that marked
-      // a saved place. A star here would be a control for a feature that no
-      // longer exists.
-      await _pumpLikesTab(
-        tester,
-        liked: [
-          _restaurant(id: 1, name: 'Satu Stall'),
-          _restaurant(id: 2, name: 'Dua Stall'),
-        ],
-      );
+    testWidgets('carries none of the retired per-tile controls',
+        (tester) async {
+      // The design's tile is one tap target. The star, the heart and the
+      // mark-visited check all went with the segments (D96).
+      await _pumpLikesTab(tester, liked: _restaurants(2));
 
       expect(find.byIcon(Icons.star_rounded), findsNothing);
-      expect(find.bySemanticsLabel('Must try'), findsNothing);
+      expect(find.bySemanticsLabel('Remove from likes'), findsNothing);
+      expect(find.bySemanticsLabel('Mark visited'), findsNothing);
+      expect(find.bySemanticsLabel('Filters'), findsNothing);
     });
   });
 
   group('LikesTabView callbacks', () {
-    testWidgets('tapping the card opens the restaurant', (tester) async {
+    testWidgets('tapping a tile opens the restaurant', (tester) async {
       final opened = <int>[];
       await _pumpLikesTab(
         tester,
@@ -231,208 +231,216 @@ void main() {
 
       expect(opened, [4]);
     });
+  });
 
-    testWidgets('the heart unlikes and the check marks visited',
-        (tester) async {
-      final unliked = <int>[];
-      final visited = <int>[];
-      await _pumpLikesTab(
-        tester,
-        liked: [_restaurant(id: 4, name: 'Warung Empat')],
-        onUnlike: (value) => unliked.add(value.id),
-        onMarkVisited: (value) => visited.add(value.id),
-      );
+  group('LikesTabView chip row', () {
+    testWidgets('shows the design\'s five chips in order', (tester) async {
+      await _pumpLikesTab(tester, liked: _restaurants(2));
 
-      await tester.tap(_cardAction('Warung Empat', 'Remove from likes'));
-      await tester.tap(_cardAction('Warung Empat', 'Mark visited'));
-      await tester.pump();
-
-      expect(unliked, [4]);
-      expect(visited, [4]);
+      for (final label in const [
+        'All',
+        'Not planned yet',
+        'Planned',
+        'Wishlist →',
+        'Halal',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      // The segments they replaced are gone.
+      expect(find.text('Liked'), findsNothing);
+      expect(find.text('Visited'), findsNothing);
+      expect(find.text('Reviewed'), findsNothing);
     });
 
-    testWidgets('the distance label is computed per restaurant',
+    testWidgets('All is selected to begin with', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpLikesTab(tester, liked: _restaurants(2));
+
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('All')),
+        matchesSemantics(
+          label: 'All',
+          isButton: true,
+          hasSelectedState: true,
+          isSelected: true,
+          hasTapAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('Halal keeps only the places that say they are',
         (tester) async {
+      await _pumpLikesTab(
+        tester,
+        liked: [
+          _restaurant(id: 1, name: 'Halal Stall', isHalal: true),
+          _restaurant(id: 2, name: 'Pork Noodles', isHalal: false),
+          // Null is "the caption never said", which is not a yes.
+          _restaurant(id: 3, name: 'Unknown Stall'),
+        ],
+      );
+
+      await _tapChip(tester, 'Halal');
+
+      expect(_tileNames(tester), ['Halal Stall']);
+    });
+
+    testWidgets('Halal toggles back off', (tester) async {
+      await _pumpLikesTab(
+        tester,
+        liked: [
+          _restaurant(id: 1, name: 'Halal Stall', isHalal: true),
+          _restaurant(id: 2, name: 'Other Stall'),
+        ],
+      );
+
+      await _tapChip(tester, 'Halal');
+      await _tapChip(tester, 'Halal');
+
+      expect(_tileNames(tester).length, 2);
+    });
+
+    testWidgets('Planned and Not planned yet split the grid on the ids',
+        (tester) async {
+      await _pumpLikesTab(
+        tester,
+        liked: [
+          _restaurant(id: 1, name: 'Booked Stall'),
+          _restaurant(id: 2, name: 'Loose Stall'),
+        ],
+        plannedIds: const {1},
+      );
+
+      await _tapChip(tester, 'Planned');
+      expect(_tileNames(tester), ['Booked Stall']);
+
+      await _tapChip(tester, 'Not planned yet');
+      expect(_tileNames(tester), ['Loose Stall']);
+    });
+
+    testWidgets('with no planned ids, Planned is empty and Not planned is all',
+        (tester) async {
+      // Today's real state: the plans phase has not landed, so nothing is
+      // planned. The chips still have to behave.
+      await _pumpLikesTab(tester, liked: _restaurants(3));
+
+      await _tapChip(tester, 'Not planned yet');
+      expect(find.byType(RestaurantGridCard), findsNWidgets(3));
+
+      await _tapChip(tester, 'Planned');
+      expect(find.byType(RestaurantGridCard), findsNothing);
+      expect(find.text('Nothing matches those chips'), findsOneWidget);
+    });
+
+    testWidgets('a filter that hides everything offers a way back',
+        (tester) async {
+      await _pumpLikesTab(tester, liked: _restaurants(2));
+
+      await _tapChip(tester, 'Planned');
+      expect(find.text('Nothing matches those chips'), findsOneWidget);
+
+      await tester.tap(find.text('Show all'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RestaurantGridCard), findsNWidgets(2));
+    });
+
+    testWidgets('tapping the chosen plan chip again returns to All',
+        (tester) async {
+      await _pumpLikesTab(
+        tester,
+        liked: [_restaurant(id: 1, name: 'Loose Stall')],
+      );
+
+      final handle = tester.ensureSemantics();
+      await _tapChip(tester, 'Not planned yet');
+      await _tapChip(tester, 'Not planned yet');
+
+      // Scrolled back to the head of the row: a chip off screen reports
+      // itself hidden, which is true but not what this case is asking.
+      await tester.ensureVisible(find.text('All'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('All')),
+        matchesSemantics(
+          label: 'All',
+          isButton: true,
+          hasSelectedState: true,
+          isSelected: true,
+          hasTapAction: true,
+        ),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('Wishlist → navigates and never stays pressed',
+        (tester) async {
+      var opened = 0;
+      final handle = tester.ensureSemantics();
       await _pumpLikesTab(
         tester,
         liked: _restaurants(2),
-        distanceLabel: (restaurant) => '${restaurant.id} km away',
+        onOpenWishlist: () => opened++,
       );
 
-      // The rating shares the line, so match on the substring.
-      expect(find.textContaining('1 km away'), findsOneWidget);
-      expect(find.textContaining('2 km away'), findsOneWidget);
-    });
-  });
+      await _tapChip(tester, 'Wishlist →');
 
-  group('LikesTabView segments', () {
-    testWidgets('Visited loads lazily and lists its own rows', (tester) async {
-      final visited = _listController(
-        rows: [_restaurant(id: 9, name: 'Eaten There')],
+      expect(opened, 1);
+      // It filtered nothing…
+      expect(find.byType(RestaurantGridCard), findsNWidgets(2));
+      // …and it is not lit.
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Wishlist →')),
+        matchesSemantics(
+          label: 'Wishlist →',
+          isButton: true,
+          hasSelectedState: true,
+          isSelected: false,
+          hasTapAction: true,
+        ),
       );
-      await _pumpLikesTab(
-        tester,
-        liked: [_restaurant(id: 1, name: 'Liked Only')],
-        visited: visited,
-      );
-
-      // Nothing fetched while the segment is closed.
-      expect(visited.isLoaded, isFalse);
-
-      await tester.tap(find.text('Visited'));
-      await tester.pumpAndSettle();
-
-      expect(visited.isLoaded, isTrue);
-      expect(find.text('Eaten There'), findsOneWidget);
-      expect(find.text('Liked Only'), findsNothing);
-      // Visited cards carry no unlike/mark-visited controls.
-      expect(find.bySemanticsLabel('Remove from likes'), findsNothing);
-      expect(find.bySemanticsLabel('Mark visited'), findsNothing);
+      handle.dispose();
     });
 
-    testWidgets('an empty Visited segment explains itself', (tester) async {
-      await _pumpLikesTab(tester, liked: [_restaurant(id: 1)]);
+    testWidgets('every chip is a button of at least 44 pt', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpLikesTab(tester, liked: _restaurants(2));
 
-      await tester.tap(find.text('Visited'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('No visits logged'), findsOneWidget);
-    });
-
-    testWidgets('a failed segment load offers a retry that recovers',
-        (tester) async {
-      var fail = true;
-      final reviewed = RestaurantListController(() async {
-        if (fail) {
-          throw Exception('reviewed unavailable');
-        }
-        return [_restaurant(id: 7, name: 'Reviewed Spot')];
-      });
-      await _pumpLikesTab(
-        tester,
-        liked: [_restaurant(id: 1)],
-        reviewed: reviewed,
-      );
-
-      await tester.tap(find.text('Reviewed'));
-      await tester.pumpAndSettle();
-      expect(find.text('Something went wrong'), findsOneWidget);
-
-      fail = false;
-      await tester.tap(find.text('Try again'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Reviewed Spot'), findsOneWidget);
-    });
-
-    testWidgets('switching back to Liked keeps the liked rows',
-        (tester) async {
-      await _pumpLikesTab(
-        tester,
-        liked: [_restaurant(id: 1, name: 'Liked Only')],
-      );
-
-      await tester.tap(find.text('Visited'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Liked'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Liked Only'), findsOneWidget);
-    });
-  });
-
-  group('LikesTabView sort and filters', () {
-    testWidgets('Nearest reorders the grid by metres', (tester) async {
-      await _pumpLikesTab(
-        tester,
-        liked: [
-          _restaurant(id: 1, name: 'Far Stall'),
-          _restaurant(id: 2, name: 'Near Stall'),
-        ],
-        distanceMeters: (restaurant) => restaurant.id == 2 ? 100 : 5000,
-      );
-
-      await tester.tap(find.text('Latest'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Nearest'));
-      await tester.pumpAndSettle();
-
-      final nearTop = tester.getTopLeft(find.text('Near Stall'));
-      final farTop = tester.getTopLeft(find.text('Far Stall'));
-      // Two columns: the first row is left-to-right, so nearest is leftmost.
-      expect(nearTop.dx, lessThan(farTop.dx));
-    });
-
-    testWidgets('Top rated puts the highest rating first', (tester) async {
-      await _pumpLikesTab(
-        tester,
-        liked: [
-          _restaurant(id: 1, name: 'Okay Stall', rating: 3.1),
-          _restaurant(id: 2, name: 'Great Stall', rating: 4.9),
-        ],
-      );
-
-      await tester.tap(find.text('Latest'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Top rated'));
-      await tester.pumpAndSettle();
-
-      final greatTop = tester.getTopLeft(find.text('Great Stall'));
-      final okayTop = tester.getTopLeft(find.text('Okay Stall'));
-      expect(greatTop.dx, lessThan(okayTop.dx));
-    });
-
-    testWidgets('the must-try filter narrows the grid and clears again',
-        (tester) async {
-      await _pumpLikesTab(
-        tester,
-        liked: [
-          _restaurant(
-            id: 1,
-            name: 'Clipped Stall',
-            videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
+      for (final label in const [
+        'All',
+        'Not planned yet',
+        'Planned',
+        'Wishlist →',
+        'Halal',
+      ]) {
+        await tester.ensureVisible(find.text(label));
+        await tester.pumpAndSettle();
+        final finder = find.bySemanticsLabel(label);
+        expect(
+          tester.getSemantics(finder),
+          matchesSemantics(
+            label: label,
+            isButton: true,
+            hasSelectedState: true,
+            isSelected: label == 'All',
+            hasTapAction: true,
           ),
-          _restaurant(id: 2, name: 'Plain Stall'),
-        ],
-      );
-
-      await tester.tap(find.bySemanticsLabel('Filters'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('With TikTok review'));
-      await tester.pumpAndSettle();
-      // Close the sheet.
-      await tester.tapAt(const Offset(195, 100));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Clipped Stall'), findsOneWidget);
-      expect(find.text('Plain Stall'), findsNothing);
-    });
-
-    testWidgets('filters that hide everything offer a clear action',
-        (tester) async {
-      await _pumpLikesTab(
-        tester,
-        liked: [_restaurant(id: 1, name: 'Plain Stall')],
-      );
-
-      await tester.tap(find.bySemanticsLabel('Filters'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('With TikTok review'));
-      await tester.pumpAndSettle();
-      await tester.tapAt(const Offset(195, 100));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Nothing matches your filters'), findsOneWidget);
-
-      await tester.tap(find.text('Clear filters'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Plain Stall'), findsOneWidget);
+          reason: label,
+        );
+        expect(
+          tester.getSize(finder).height,
+          greaterThanOrEqualTo(kMinTapTarget),
+          reason: label,
+        );
+      }
+      handle.dispose();
     });
   });
 
   group('LikesTabView layout', () {
-    /// A name long enough to need the card's ellipsis.
+    /// A name long enough to need the tile's ellipsis.
     const longName = 'Restoran Nasi Kandar Pelita Simpang Empat Batu Pahat';
 
     Future<void> pumpBusyGrid(
@@ -446,11 +454,15 @@ void main() {
         viewport: viewport,
         dpr: dpr,
         textScaler: textScaler,
+        wishlistedIds: const {1, 3},
+        plannedIds: const {1},
+        plannedLabels: const {1: 'Fri 4'},
         liked: [
           _restaurant(
             id: 1,
             name: longName,
             tag: 'Charcoal-grilled chicken and sambal',
+            neighbourhood: 'Simpang Empat',
             videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
           ),
           ..._restaurants(5).map(
@@ -482,24 +494,32 @@ void main() {
       expect(tester.takeException(), isNull);
 
       // Guard against a vacuous pass: the scaler really did grow the text.
-      final scaledHeight = tester.getSize(find.text('Latest')).height;
+      final scaledHeight = tester.getSize(find.text('Halal')).height;
       await pumpBusyGrid(tester, viewport: _phoneViewport);
-      expect(
-        tester.getSize(find.text('Latest')).height,
-        lessThan(scaledHeight),
-      );
+      expect(tester.getSize(find.text('Halal')).height, lessThan(scaledHeight));
     });
 
-    testWidgets('keeps the segment control inside the viewport',
+    testWidgets('the chip row scrolls rather than overflowing at 320 px',
         (tester) async {
       await pumpBusyGrid(tester, viewport: _narrowViewport);
 
+      expect(tester.takeException(), isNull);
+      // The row is wider than the phone by design, so the last chip starts
+      // off screen and is reached by scrolling — which is the point: it
+      // scrolls rather than overflowing.
       final viewport = logicalViewport(tester);
-      for (final label in const ['Liked', 'Visited', 'Reviewed']) {
-        final rect = tester.getRect(find.text(label));
-        expect(rect.left, greaterThanOrEqualTo(0), reason: label);
-        expect(rect.right, lessThanOrEqualTo(viewport.width), reason: label);
-      }
+      expect(tester.getRect(find.text('All')).left, greaterThanOrEqualTo(0));
+      expect(tester.getRect(find.text('Halal')).right,
+          greaterThan(viewport.width));
+
+      await tester.ensureVisible(find.text('Halal'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getRect(find.text('Halal')).right,
+        lessThanOrEqualTo(viewport.width),
+      );
     });
   });
 }

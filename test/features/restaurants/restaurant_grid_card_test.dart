@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
+import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 import 'package:swipe_eat/features/restaurants/presentation/restaurant_grid_card.dart';
 
 import '../../support/widget_test_support.dart';
@@ -15,11 +16,9 @@ const double _narrowScreen = 320;
 const double _tileWidth = (_narrowScreen - 12 * 2 - 10) / 2;
 const double _tileHeight = _tileWidth / 0.78;
 
-/// The badge row a bitten tile carries: the two row actions, each 30 pt with
-/// 6 pt between them. The super-like star used to make it a third wider — it
-/// went with the feature, which is what let the bite go to full size.
-const double _badgeRowWidth = 30 * 2 + 6;
-const double _badgeInset = 8;
+/// How far a corner mark sits in from the tile's edges — the design's
+/// `top: 8; right: 8`.
+const double _markInset = 8;
 
 /// Where the bite's left edge falls on a tile of [width].
 ///
@@ -31,10 +30,31 @@ double _biteLeftEdge(double width, double radius) {
   return width - kBiteNotchInset - halfChord;
 }
 
+Restaurant _restaurant({String tag = 'Nasi lemak', String? neighbourhood}) {
+  final base = testRestaurant(1, name: 'Warung Kak Ros');
+
+  return Restaurant(
+    id: base.id,
+    name: base.name,
+    tag: tag,
+    details: base.details,
+    brandColor: base.brandColor,
+    rating: base.rating,
+    latitude: base.latitude,
+    longitude: base.longitude,
+    imageUrls: base.imageUrls,
+    reviews: base.reviews,
+    neighbourhood: neighbourhood,
+  );
+}
+
 Future<void> _pumpTile(
   WidgetTester tester, {
-  required bool isSaved,
-  Widget? badge,
+  bool isSaved = false,
+  bool isWishlisted = false,
+  String? plannedLabel,
+  Restaurant? restaurant,
+  String distanceText = '1.2 km',
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -44,11 +64,12 @@ Future<void> _pumpTile(
             width: _tileWidth,
             height: _tileHeight,
             child: RestaurantGridCard(
-              restaurant: testRestaurant(1, name: 'Warung Kak Ros'),
-              distanceText: '1.2 km',
+              restaurant: restaurant ?? _restaurant(),
+              distanceText: distanceText,
               onTap: () {},
               isSaved: isSaved,
-              badge: badge,
+              isWishlisted: isWishlisted,
+              plannedLabel: plannedLabel,
             ),
           ),
         ),
@@ -57,58 +78,118 @@ Future<void> _pumpTile(
   );
 }
 
+/// The wish badge, found by the one icon only it draws.
+Finder get _wishBadge => find.byIcon(Icons.bookmark_outline_rounded);
+
 void main() {
   setUpAll(() => HttpOverrides.global = ImageHttpOverrides());
   tearDownAll(() => HttpOverrides.global = null);
 
-  group('RestaurantGridCard', () {
-    testWidgets('an unsaved tile keeps its badge in the top right',
+  group('RestaurantGridCard subtitle', () {
+    testWidgets('reads cuisine then neighbourhood', (tester) async {
+      await _pumpTile(
+        tester,
+        restaurant: _restaurant(neighbourhood: 'Kampung Baru'),
+      );
+
+      expect(find.text('Nasi lemak · Kampung Baru'), findsOneWidget);
+    });
+
+    testWidgets('drops the neighbourhood rather than dangling a separator',
+        (tester) async {
+      await _pumpTile(tester, restaurant: _restaurant());
+
+      expect(find.text('Nasi lemak'), findsOneWidget);
+      expect(find.textContaining('·'), findsNothing);
+    });
+
+    testWidgets('falls back to the passed line when the row knows neither',
         (tester) async {
       await _pumpTile(
         tester,
-        isSaved: false,
-        badge: const SizedBox(width: _badgeRowWidth, height: 30),
+        restaurant: _restaurant(tag: ''),
+        distanceText: '1.2 km away',
       );
 
-      final tile = tester.getRect(find.byType(RestaurantGridCard));
-      final badge = tester.getRect(find.byType(SizedBox).last);
-
-      expect(badge.right, closeTo(tile.right - _badgeInset, 0.01));
+      expect(find.text('1.2 km away'), findsOneWidget);
     });
 
-    testWidgets('a bitten tile moves its badge clear of the notch',
-        (tester) async {
-      // The badge row holds real buttons — Mark visited, Remove from likes —
-      // so the bite cannot be allowed to clip it. It moves to the left corner
-      // rather than being cut in half.
-      await _pumpTile(
-        tester,
-        isSaved: true,
-        badge: const SizedBox(width: _badgeRowWidth, height: 30),
+    testWidgets('no rating rides on the subtitle', (tester) async {
+      // The design's tile carries cuisine and neighbourhood and nothing else;
+      // the star came from the old card.
+      await _pumpTile(tester);
+
+      expect(find.textContaining('★'), findsNothing);
+    });
+  });
+
+  group('RestaurantGridCard wishlist badge', () {
+    testWidgets('appears only for a wishlisted place', (tester) async {
+      await _pumpTile(tester, isSaved: true);
+      expect(_wishBadge, findsNothing);
+
+      await _pumpTile(tester, isSaved: true, isWishlisted: true);
+      expect(_wishBadge, findsOneWidget);
+    });
+
+    testWidgets('sits in the top-right corner', (tester) async {
+      await _pumpTile(tester, isSaved: true, isWishlisted: true);
+
+      final tile = tester.getRect(find.byType(RestaurantGridCard));
+      final badge = tester.getRect(_wishBadge);
+
+      expect(badge.right, closeTo(tile.right - _markInset, 0.01));
+      expect(badge.top, closeTo(tile.top + _markInset, 0.01));
+    });
+
+    testWidgets('survives the bite it overlaps', (tester) async {
+      // The badge's centre is well inside the notch's radius, so a badge drawn
+      // *inside* the clip would be erased. It has to be painted over the bite,
+      // and this is what says so: the widget is laid out and hit-testable at
+      // full size on a bitten tile.
+      await _pumpTile(tester, isSaved: true, isWishlisted: true);
+
+      expect(tester.getSize(find.byIcon(Icons.bookmark_outline_rounded)).width,
+          greaterThan(0));
+
+      final tile = tester.getRect(find.byType(RestaurantGridCard));
+      final badgeCentre = tester.getCenter(_wishBadge);
+      final notchCentre = Offset(
+        tile.right - kBiteNotchInset,
+        tile.top + kBiteNotchInset,
       );
 
+      // Guards against a vacuous pass: if the geometry ever stops overlapping,
+      // this test is no longer testing anything.
+      expect((badgeCentre - notchCentre).distance,
+          lessThan(kBiteNotchRadius));
+    });
+  });
+
+  group('RestaurantGridCard planned pill', () {
+    testWidgets('shows the day in the top-left corner', (tester) async {
+      await _pumpTile(tester, isSaved: true, plannedLabel: 'Fri 4');
+
       final tile = tester.getRect(find.byType(RestaurantGridCard));
-      final badge = tester.getRect(find.byType(SizedBox).last);
+      final pill = tester.getRect(find.text('Fri 4'));
 
-      expect(badge.left, closeTo(tile.left + _badgeInset, 0.01));
+      expect(find.text('Fri 4'), findsOneWidget);
+      expect(pill.left, greaterThanOrEqualTo(tile.left + _markInset));
+      expect(pill.left, lessThan(tile.centerRight.dx));
     });
 
-    test('the full-size bite clears the badge row on the narrowest tile', () {
-      // The tile now carries the prototype's full 30 pt bite. That only fits
-      // because the super-like star is gone; the assertion is what stops a
-      // third badge from quietly reintroducing the collision.
-      final biteEdge = _biteLeftEdge(_tileWidth, kBiteNotchRadius);
+    testWidgets('is absent while nothing is planned', (tester) async {
+      await _pumpTile(tester, isSaved: true);
 
-      expect(biteEdge, greaterThan(_badgeInset + _badgeRowWidth));
+      expect(find.text('Fri 4'), findsNothing);
     });
 
-    test('a third badge would collide with the bite', () {
-      // The margin is real but not generous, and it is the reason the star
-      // could not simply have been left in place next to a full-size notch.
-      const withThirdBadge = _badgeInset + _badgeRowWidth + 6 + 30;
-
+    test('the full-size bite leaves the planned corner alone', () {
+      // The pill lives in the left corner precisely so the notch cannot clip
+      // it. A pill wide enough to reach the bite would be a copy problem, not
+      // a layout one, so the margin is asserted rather than assumed.
       expect(_biteLeftEdge(_tileWidth, kBiteNotchRadius),
-          lessThan(withThirdBadge));
+          greaterThan(_markInset + 44));
     });
   });
 }

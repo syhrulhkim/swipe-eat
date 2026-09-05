@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
+import 'package:swipe_eat/features/wishlist/models/wishlist_item.dart';
 
+import '../wishlist/fake_wishlist_repository.dart';
 import 'fake_restaurant_repositories.dart';
 
 /// Drives the controller's auth subscription without a Supabase singleton.
@@ -59,7 +61,6 @@ class _GatedSwipeRepository extends FakeSwipeRepository {
   Future<void> record({
     required int restaurantId,
     required bool liked,
-    bool later = false,
     String source = 'deck',
     double? latitude,
     double? longitude,
@@ -68,7 +69,6 @@ class _GatedSwipeRepository extends FakeSwipeRepository {
     return super.record(
       restaurantId: restaurantId,
       liked: liked,
-      later: later,
       source: source,
       latitude: latitude,
       longitude: longitude,
@@ -79,15 +79,21 @@ class _GatedSwipeRepository extends FakeSwipeRepository {
 void main() {
   late FakeRestaurantRepository restaurants;
   late FakeSwipeRepository swipes;
+  late FakeWishlistRepository wishlist;
   late LikesController controller;
 
   setUp(() {
     restaurants = FakeRestaurantRepository();
     swipes = FakeSwipeRepository();
+    wishlist = FakeWishlistRepository();
     wireFakeBackend(restaurants, swipes);
+    // One database, two tables: a Later written through the wishlist has to
+    // come back out of `laterIds`, the way the real pair behave.
+    restaurants.laterSource = wishlist.pendingRestaurantIds;
     controller = LikesController(
       restaurants: restaurants,
       swipes: swipes,
+      wishlist: wishlist,
       followAuthChanges: false,
     );
   });
@@ -378,6 +384,162 @@ void main() {
       await scoped.ensureLoaded();
       expect(backend.likedFetches, 2,
           reason: 'a loaded controller must not fetch again');
+    });
+  });
+
+  group('LikesController later and the wishlist', () {
+    test('a later is a like, plus a wishlist row', () async {
+      await controller.like(7, later: true);
+
+      // Still an ordinary like on the wire — the swipe carries no flag of its
+      // own any more (D95).
+      expect(swipes.calls.single.restaurantId, 7);
+      expect(swipes.calls.single.liked, isTrue);
+      expect(controller.isLiked(7), isTrue);
+
+      // And the place is on the wishlist.
+      expect(wishlist.calls, contains('addRestaurant:7'));
+      expect(wishlist.rows.single.restaurantId, 7);
+      expect(wishlist.rows.single.source, WishlistSource.swiped);
+      expect(controller.isSavedForLater(7), isTrue);
+      expect(controller.laterCount, 1);
+    });
+
+    test('a plain like writes no wishlist row', () async {
+      await controller.like(7);
+
+      expect(wishlist.calls, isEmpty);
+      expect(controller.isSavedForLater(7), isFalse);
+    });
+
+    test('re-liking a saved place does not unsave it', () async {
+      // The old backend cleared super_like on every swipe, so this used to
+      // silently take the place off the list. It must not any more (D95).
+      wishlist.seed([testWishlistItem(7, restaurantId: 7)]);
+      await controller.refresh();
+      expect(controller.isSavedForLater(7), isTrue);
+
+      await controller.like(7);
+
+      expect(controller.isSavedForLater(7), isTrue);
+      expect(wishlist.calls, isNot(contains('removeRestaurant:7')));
+    });
+
+    test('a second later on the same place writes one row', () async {
+      await controller.like(7, later: true);
+      await controller.like(7, later: true);
+
+      expect(wishlist.rows.length, 1);
+    });
+
+    test('unliking takes the place off the wishlist too', () async {
+      await controller.like(7, later: true);
+      expect(wishlist.rows.length, 1);
+
+      await controller.unlike(7);
+
+      expect(wishlist.calls, contains('removeRestaurant:7'));
+      expect(wishlist.rows, isEmpty);
+      expect(controller.isSavedForLater(7), isFalse);
+    });
+
+    test('unliking a place that was never saved touches no wishlist row',
+        () async {
+      await controller.like(7);
+
+      await controller.unlike(7);
+
+      expect(wishlist.calls, isNot(contains('removeRestaurant:7')));
+    });
+
+    test('a refused swipe leaves the wishlist alone and rolls the bite back',
+        () async {
+      swipes.fail = true;
+
+      await expectLater(controller.like(7, later: true), throwsException);
+
+      expect(controller.isLiked(7), isFalse);
+      expect(controller.isSavedForLater(7), isFalse);
+      expect(wishlist.calls, isEmpty);
+    });
+
+    test('a refused wishlist row leaves the like standing', () async {
+      // The swipe lands and only the second write fails. The deck must not be
+      // told the swipe was lost — the server is holding it.
+      wishlist.failWrite = true;
+
+      await controller.like(7, later: true);
+
+      expect(swipes.calls.single.liked, isTrue);
+      expect(controller.isLiked(7), isTrue);
+      // Only the bookmark rolls back.
+      expect(controller.isSavedForLater(7), isFalse);
+    });
+
+    test('a refused wishlist delete leaves the pass standing', () async {
+      await controller.like(7, later: true);
+      wishlist.failWrite = true;
+
+      await controller.unlike(7);
+
+      expect(swipes.calls.last.liked, isFalse);
+      expect(controller.isLiked(7), isFalse);
+      // The row is still there, so the bookmark goes back rather than lying
+      // about what is saved.
+      expect(controller.isSavedForLater(7), isTrue);
+    });
+
+    test('the saved-for-later set is read from the wishlist on refresh',
+        () async {
+      wishlist.seed([
+        testWishlistItem(2, restaurantId: 2),
+        testWishlistItem(5, restaurantId: 5),
+        // Eaten rows are not places to go, so they must not light a bookmark.
+        testWishlistItem(9, restaurantId: 9, eatenAt: DateTime(2026, 8, 24)),
+      ]);
+      restaurants.likedRows = [testRestaurant(2), testRestaurant(5)];
+
+      await controller.refresh();
+
+      expect(controller.isSavedForLater(2), isTrue);
+      expect(controller.isSavedForLater(5), isTrue);
+      expect(controller.isSavedForLater(9), isFalse);
+      expect(controller.laterCount, 2);
+    });
+
+    test('a failed wishlist read does not take the whole refresh down',
+        () async {
+      restaurants.failLater = true;
+      restaurants.likedRows = [testRestaurant(2)];
+
+      await controller.refresh();
+
+      expect(controller.isLoaded, isTrue);
+      expect(controller.liked.single.id, 2);
+    });
+  });
+
+  group('LikesController planned ids', () {
+    test('are empty until the plans phase feeds them', () {
+      expect(controller.plannedRestaurantIds, isEmpty);
+    });
+
+    test('publish and notify once set', () async {
+      var notified = 0;
+      controller.addListener(() => notified++);
+
+      controller.setPlannedRestaurantIds({3, 8});
+
+      expect(controller.plannedRestaurantIds, {3, 8});
+      expect(notified, 1);
+    });
+
+    test('are dropped when the account changes', () async {
+      controller.setPlannedRestaurantIds({3});
+
+      controller.reset();
+
+      expect(controller.plannedRestaurantIds, isEmpty);
     });
   });
 }

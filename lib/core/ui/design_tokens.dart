@@ -790,3 +790,140 @@ class AppTagChip extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Wishlist and the Bites filter row — the design's `.wl*`, `.chip`/`.chiprow`
+// and `.tile .wish` (docs/Redesign/assets/ngap-app-screens.html, S7 and S8).
+// ---------------------------------------------------------------------------
+
+/// The smallest thing a finger may be asked to hit. Controls the design draws
+/// smaller than this (a 36 px chip, a 26 px check) keep their drawn size and
+/// take their taps from a box this tall.
+const double kMinTapTarget = 44;
+
+/// A filter chip and the wishlist's round add button — the prototype's
+/// `.chip{height:36px}` and `.wl-add button{width:36px}`. Same number twice on
+/// purpose: they are the same size of control.
+const double kChipHeight = 36;
+const double kRoundActionSize = 36;
+
+/// The wishlist's "Add a place…" bar. Taller than a chip because it is a text
+/// field with a button living inside it.
+const double kInputBarHeight = 50;
+
+/// The wishlist row's check circle, its photo thumb, and that thumb's corner.
+/// The corner is its own token rather than [kRadiusThumb]: a 40 px square at
+/// 10 px reads almost square, and the design rounds it further.
+const double kCheckCircleSize = 26;
+const double kWishThumbSize = 40;
+const double kRadiusWishThumb = 12;
+
+/// The bookmark badge on a Bites tile that is also on the wishlist —
+/// `.tile .wish`, a 28 px circle of near-opaque background over the photo.
+const double kWishBadgeSize = 28;
+const Color kFillWishBadge = Color(0x8C0B0605);
+
+/// How long the eaten strike-through takes to draw itself across a title.
+///
+/// Its own duration rather than [kMotionDuration]: this one is a *drawing*
+/// gesture the eye is meant to follow left-to-right, so it is deliberately
+/// slower than the interface transitions. The prototype says 260 ms.
+const Duration kStrikeDuration = Duration(milliseconds: 260);
+
+/// The display-face number in the wishlist's counts ("**6** to go").
+TextStyle appCountStyle(BuildContext context) {
+  return Theme.of(context).textTheme.titleMedium!.copyWith(
+        fontFamily: kDisplayFontFamily,
+        color: kTextOnPhoto,
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        height: 1.1,
+      );
+}
+
+/// A wishlist row's place name — `.wl .t b`, display face at 16 px.
+TextStyle appRowTitleStyle(BuildContext context) {
+  return Theme.of(context).textTheme.titleMedium!.copyWith(
+        fontFamily: kDisplayFontFamily,
+        color: kTextOnPhoto,
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.16,
+        height: 1.1,
+      );
+}
+
+/// One filter in a `.chiprow`: a 36 px pill that fills ember once chosen.
+///
+/// [selected] is what makes it orange, which is the palette's whole rule — a
+/// chip nobody has chosen is a hairline outline and nothing else. A chip that
+/// navigates instead of filtering (the Wishlist chip) passes false forever and
+/// so never holds the selected fill, because it holds no state to show.
+class AppFilterChip extends StatelessWidget {
+  const AppFilterChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      button: true,
+      selected: selected,
+      // The Text below would merge its own node into this one; excluding it
+      // keeps the announced name exactly the label, and the tap action is
+      // re-declared here because excluding drops it (D83).
+      excludeSemantics: true,
+      onTap: onTap,
+      child: SizedBox(
+        // Drawn 36 px tall, tapped at 44 — the chip keeps the design's size
+        // and the finger still gets its target.
+        height: kMinTapTarget,
+        child: Center(
+          child: Material(
+            color: selected ? kAccentEmber : Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(kRadiusPill),
+              side: BorderSide(color: selected ? kAccentEmber : kHairline),
+            ),
+            child: InkWell(
+              customBorder: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(kRadiusPill),
+              ),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                onTap();
+              },
+              child: AnimatedContainer(
+                duration: kMotionDuration,
+                curve: kMotionEase,
+                height: kChipHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                alignment: Alignment.center,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: kTextFontFamily,
+                    fontSize: kFontSizeSmall,
+                    fontWeight: FontWeight.w500,
+                    color: selected ? kOnAccent : kTextOnPhoto,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

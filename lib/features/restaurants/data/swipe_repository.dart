@@ -15,10 +15,16 @@ class SwipeRepository {
 
   static const _timeout = Duration(seconds: 15);
 
+  /// Records the swipe, and nothing else.
+  ///
+  /// There is no `later` here any more. A Later is a like plus a **wishlist
+  /// row**, and the row is written by [WishlistRepository]; this call only
+  /// says the place was liked (D94, D95). `swipes.super_like` and
+  /// `p_super_like` still exist server-side, untouched, so the historic data
+  /// is intact — the client simply stops writing them.
   Future<void> record({
     required int restaurantId,
     required bool liked,
-    bool later = false,
     String source = 'deck',
     double? latitude,
     double? longitude,
@@ -27,15 +33,6 @@ class SwipeRepository {
       'p_restaurant_id': restaurantId,
       'p_liked': liked,
       'p_source': source,
-      // `p_super_like` is the wire name for "save for later". The design
-      // retired the super like and rebound the up gesture to Later, so the
-      // client speaks of `later` everywhere and this is the one place the old
-      // column name survives. Renaming `swipes.super_like` to `later` is a
-      // migration against the live database, so it is deliberately not
-      // bundled with a client change — see docs/Redesign/GAP-ANALYSIS.md §2.
-      //
-      // Only sent when set, so an ordinary swipe's payload is unchanged.
-      if (later) 'p_super_like': true,
       if (latitude != null) 'p_latitude': latitude,
       if (longitude != null) 'p_longitude': longitude,
     }).timeout(_timeout);
