@@ -42,7 +42,8 @@ class AuthRepository {
 
   static const String _profileColumns =
       'id, name, avatar_url, onboarded_at, search_radius_km, last_place_name, '
-      'filter_cuisine_ids, filter_dietary_tag_ids, filter_min_rating';
+      'filter_cuisine_ids, filter_dietary_tag_ids, filter_min_rating, '
+      'created_at, halal_only, vegetarian, spice_level, budget_min, budget_max';
 
   GoTrueClient get _auth => _client.auth;
 

@@ -790,3 +790,40 @@ class AppTagChip extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Diet & budget controls (first-run step 01e, Settings) and the You tab (S10).
+//
+// The prototype draws these three controls at fixed sizes, and all three now
+// appear on two screens each, so the numbers live here rather than in either
+// call site: a switch on Settings that is two pixels off the one in the wizard
+// reads as a second control, not the same one.
+// ---------------------------------------------------------------------------
+
+/// The `.switch` track and its cream thumb. The thumb sits 4 px inside the
+/// track, so its travel is width - height.
+const double kSwitchWidth = 50;
+const double kSwitchHeight = 30;
+const double kSwitchThumbSize = 22;
+
+/// The `.seg` pill: a [kSurfacePanel] track with [kSegmentTrackPadding] around
+/// buttons [kSegmentHeight] tall.
+const double kSegmentHeight = 36;
+const double kSegmentTrackPadding = 4;
+
+/// The `.steps` bar in the first-run topbar: hairline segments, one per step.
+const double kStepBarHeight = 3;
+const double kStepBarGap = 5;
+
+/// The You tab's portrait, ringed in ember — the one round ember border in the
+/// app, and the reason the row reads as "you" rather than as a list item.
+const double kProfileAvatarSize = 64;
+
+/// The three numbers on the You tab's stat tiles, the name beside the
+/// portrait, and the live read-out over a range control.
+const double kFontSizeStatValue = 28;
+const double kFontSizeProfileName = 24;
+const double kFontSizeRangeOutput = 16;
+
+/// A single spice pip on the You tab's taste list.
+const double kSpicePipSize = 8;

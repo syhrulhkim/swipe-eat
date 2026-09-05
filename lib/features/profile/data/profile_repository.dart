@@ -43,6 +43,32 @@ class ProfileRepository {
     });
   }
 
+  /// The diet & budget answers, edited one row at a time from the You tab and
+  /// from Settings. Every argument is optional and null means "leave it as it
+  /// is", so a sheet that changes one thing sends one thing.
+  ///
+  /// The budget is the exception, and it is why [clearBudget] exists: the two
+  /// ends move together. Sending [budgetMin] makes the pair authoritative, so
+  /// a null [budgetMax] alongside it reads as "RM 10 and up" rather than as
+  /// "keep the old ceiling". [clearBudget] is the only way back to "Any".
+  Future<AppUser> updatePreferences({
+    bool? halalOnly,
+    bool? vegetarian,
+    int? spiceLevel,
+    int? budgetMin,
+    int? budgetMax,
+    bool clearBudget = false,
+  }) {
+    return _rpc('update_preferences', {
+      if (halalOnly != null) 'p_halal_only': halalOnly,
+      if (vegetarian != null) 'p_vegetarian': vegetarian,
+      if (spiceLevel != null) 'p_spice_level': spiceLevel,
+      if (budgetMin != null) 'p_budget_min': budgetMin,
+      if (budgetMin != null) 'p_budget_max': budgetMax,
+      if (clearBudget) 'p_clear_budget': true,
+    });
+  }
+
   /// The discovery filter sheet. Full overwrite on every call, matching the
   /// RPC's contract — and the RPC has no parameter defaults, so all three
   /// keys must always be sent, nulls included.

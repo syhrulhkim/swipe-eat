@@ -42,7 +42,11 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  static const _stepCount = 5;
+  static const _stepCount = 6;
+
+  /// "Any rules?" — the only skippable step, and the only one whose answers
+  /// hide restaurants rather than reorder them.
+  static const _rulesStep = 2;
 
   late final OnboardingRepository _repository;
   late final OnboardingDraft _draft;
@@ -104,8 +108,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
   }
 
-  /// Whether the current step has enough to move on. Steps 3 and 4 are always
-  /// satisfiable — every tile and the location itself have valid defaults.
+  /// Whether the current step has enough to move on. Everything past the taste
+  /// step is always satisfiable — the rules, the tiles and the location itself
+  /// all have valid defaults.
   bool get _canAdvance {
     switch (_step) {
       case 0:
@@ -141,6 +146,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
     await _finish();
+  }
+
+  /// Skipping the rules step is an answer, not an escape hatch: it clears the
+  /// defaults sitting on screen before moving on, so nobody who never looked
+  /// at the step ends up with a budget cap they did not choose.
+  void _skipRules() {
+    setState(_draft.clearRules);
+    _goToStep(_step + 1);
   }
 
   Future<void> _useLocation() async {
@@ -257,7 +270,36 @@ class _OnboardingPageState extends State<OnboardingPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _StepProgress(step: _step, total: _stepCount),
+        // The design's first-run topbar: back, the progress bar, and — on the
+        // one skippable step — a Skip. The two 44 px slots are always there so
+        // the bar itself never shifts between steps.
+        Row(
+          children: [
+            if (_step > 0)
+              AppIconButton(
+                key: const ValueKey('onboarding-back'),
+                icon: Icons.chevron_left_rounded,
+                size: kUtilityButtonSize,
+                background: kGlass,
+                semanticLabel: 'Back',
+                onTap: _saving ? () {} : () => _goToStep(_step - 1),
+              )
+            else
+              const SizedBox(width: kUtilityButtonSize),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm + 4,
+                ),
+                child: _StepProgress(step: _step, total: _stepCount),
+              ),
+            ),
+            if (_step == _rulesStep)
+              _SkipButton(onPressed: _saving ? null : _skipRules)
+            else
+              const SizedBox(width: kUtilityButtonSize),
+          ],
+        ),
         const SizedBox(height: AppSpacing.lg),
         Expanded(
           child: PageView(
@@ -276,6 +318,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 draft: _draft,
                 onChanged: () => setState(() {}),
               ),
+              OnboardingRulesStep(
+                draft: _draft,
+                onChanged: () => setState(() {}),
+              ),
               OnboardingHabitsStep(
                 draft: _draft,
                 onChanged: () => setState(() {}),
@@ -291,28 +337,55 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            if (_step > 0)
-              AppSecondaryButton(
-                label: 'Back',
-                onPressed: _saving ? null : () => _goToStep(_step - 1),
-              ),
-            const Spacer(),
-            // Disabled rather than busy: the wizard hands off to the router on
-            // success and never rebuilds itself out of the saving state, so a
-            // spinner here would keep spinning after the work is done.
-            AppPrimaryButton(
-              label: _primaryLabel,
-              onPressed: _canAdvance && !_saving && !_locating ? _next : null,
-            ),
-          ],
+        // One block button in the foot, as the design draws it. Back moved to
+        // the topbar, which is what freed the width.
+        //
+        // Disabled rather than busy: the wizard hands off to the router on
+        // success and never rebuilds itself out of the saving state, so a
+        // spinner here would keep spinning after the work is done.
+        AppPrimaryButton(
+          label: _primaryLabel,
+          expand: true,
+          onPressed: _canAdvance && !_saving && !_locating ? _next : null,
         ),
       ],
     );
   }
 }
 
+/// The design's `.textbtn`: a quiet word, no fill, no border. It is the only
+/// control on these screens that is neither primary nor a switch, and it looks
+/// like it — a Skip that looked like a button would be pressed by accident.
+class _SkipButton extends StatelessWidget {
+  const _SkipButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(kUtilityButtonSize, kUtilityButtonSize),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        foregroundColor: kCreamSecondary,
+        textStyle: const TextStyle(
+          fontFamily: kTextFontFamily,
+          fontSize: kFontSizeSmall,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      child: const Text('Skip'),
+    );
+  }
+}
+
+/// The design's `.steps`: one hairline segment per step, ember for where you
+/// are, muted cream for what is behind you, hairline for what is ahead.
+///
+/// The three states matter. A bar that fills solid says "this much is done";
+/// this one says "you are here, and there are four more" — which is the
+/// question someone halfway through a first run is actually asking.
 class _StepProgress extends StatelessWidget {
   const _StepProgress({required this.step, required this.total});
 
@@ -326,15 +399,18 @@ class _StepProgress extends StatelessWidget {
       child: Row(
         children: [
           for (var index = 0; index < total; index++) ...[
-            if (index > 0) const SizedBox(width: 6),
+            if (index > 0) const SizedBox(width: kStepBarGap),
             Expanded(
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                height: 4,
+                duration: kMotionDuration,
+                curve: kMotionEase,
+                height: kStepBarHeight,
                 decoration: BoxDecoration(
-                  color: index <= step
+                  color: index == step
                       ? kAccentEmber
-                      : Colors.white.withValues(alpha: 0.14),
+                      : index < step
+                          ? kCreamMuted
+                          : kHairline,
                   borderRadius: BorderRadius.circular(kRadiusPill),
                 ),
               ),
