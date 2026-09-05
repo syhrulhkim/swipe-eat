@@ -223,7 +223,11 @@ class _SwipeDeckState extends State<SwipeDeck>
   }
 
   Future<void> _openFilters() {
-    return showDiscoveryFilterSheet(context, deck: _deck);
+    return showDiscoveryFilterSheet(
+      context,
+      authController: _deck.authController,
+      onApply: _deck.applyDiscoveryFilters,
+    );
   }
 
   /// The info block's tap: the restaurant's own screen, handed the card so it

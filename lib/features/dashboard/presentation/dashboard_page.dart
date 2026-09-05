@@ -4,15 +4,16 @@ import 'package:flutter/material.dart';
 
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../nearby/presentation/nearby_tab.dart';
 import '../../profile/presentation/profile_tab.dart';
 import '../../restaurants/data/likes_migration.dart';
 import '../../restaurants/data/visit_prompt_cache.dart';
 import '../../restaurants/presentation/swipe_deck.dart';
 import '../../restaurants/presentation/visit_prompt_sheet.dart';
+import '../../restaurants/state/deck_handoff.dart';
 import '../../restaurants/state/likes_controller.dart';
 import '../../restaurants/state/visit_prompt_controller.dart';
 import 'dashboard_bottom_nav.dart';
-import 'explore_tab.dart';
 import 'group_tab.dart';
 import 'likes_tab.dart';
 
@@ -22,12 +23,16 @@ class DashboardPage extends StatelessWidget {
     super.key,
     required this.authController,
     this.visitPrompts,
+    this.handoff,
   });
 
   final AuthController authController;
 
   /// Injected by tests; in the app the shared instance is used.
   final VisitPromptController? visitPrompts;
+
+  /// Which deck hand-off to listen to. Defaults to the shared instance.
+  final DeckHandoff? handoff;
 
   @override
   Widget build(BuildContext context) {
@@ -36,16 +41,22 @@ class DashboardPage extends StatelessWidget {
       builder: (context, _) => _DashboardShell(
         authController: authController,
         visitPrompts: visitPrompts,
+        handoff: handoff,
       ),
     );
   }
 }
 
 class _DashboardShell extends StatefulWidget {
-  const _DashboardShell({required this.authController, this.visitPrompts});
+  const _DashboardShell({
+    required this.authController,
+    this.visitPrompts,
+    this.handoff,
+  });
 
   final AuthController authController;
   final VisitPromptController? visitPrompts;
+  final DeckHandoff? handoff;
 
   @override
   State<_DashboardShell> createState() => _DashboardShellState();
@@ -57,6 +68,12 @@ class _DashboardShellState extends State<_DashboardShell>
 
   late final VisitPromptController _visitPrompts =
       widget.visitPrompts ?? VisitPromptController.instance;
+
+  late final DeckHandoff _handoff = widget.handoff ?? DeckHandoff.instance;
+
+  /// The hand-off revision this shell has already reacted to, so a rebuild
+  /// cannot pull the user back to the deck they just navigated away from.
+  late int _handoffRevision = _handoff.revision;
 
   /// One question at a time. The prompt is triggered from two places that can
   /// both fire around a resume, and two sheets over each other would be a bug
@@ -80,6 +97,7 @@ class _DashboardShellState extends State<_DashboardShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _handoff.addListener(_onHandoff);
     // One-time move of pre-auth device likes into the swipes table. Never
     // blocks the dashboard; a failed run retries on the next launch.
     unawaited(migrateDeviceLikes().then((migrated) {
@@ -100,6 +118,7 @@ class _DashboardShellState extends State<_DashboardShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _handoff.removeListener(_onHandoff);
     _tabFade.dispose();
     super.dispose();
   }
@@ -186,6 +205,16 @@ class _DashboardShellState extends State<_DashboardShell>
     );
   }
 
+  /// "Swipe all N" on the map: the deck deals the handed-over list itself
+  /// (see [DeckController]); the only thing left is to bring it forward.
+  void _onHandoff() {
+    if (_handoff.revision == _handoffRevision) {
+      return;
+    }
+    _handoffRevision = _handoff.revision;
+    _setSelectedIndex(0);
+  }
+
   void _setSelectedIndex(int index) {
     if (_selectedIndex == index) {
       return;
@@ -215,7 +244,7 @@ class _DashboardShellState extends State<_DashboardShell>
           index: _selectedIndex,
           children: [
             SwipeDeck(authController: widget.authController),
-            const ExploreTab(),
+            NearbyTab(authController: widget.authController),
             const LikesTab(),
             const GroupTab(),
             ProfileTab(authController: widget.authController),
