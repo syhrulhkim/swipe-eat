@@ -1,9 +1,16 @@
-Status: ACTIVE
+Status: SUPERSEDED 2026-09-05 by Nearby-Map.md
 Owner: Swipe Eat team
-Last updated: 2026-09-03
-Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md)
+Last updated: 2026-09-05
+Cross-references: [Nearby-Map.md](Nearby-Map.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md)
 
 # Explore & Search
+
+> **Superseded 2026-09-05 by [Nearby-Map.md](Nearby-Map.md).** Tab 1 is now the
+> map. The cuisine grid, the per-cuisine page and `ExploreController` are
+> deleted (D102); `RestaurantRepository.search()` and the `search_restaurants`
+> function survive, and so do `get_cuisine_counts` / `get_top_picks` — no
+> database object was dropped. What follows describes the retired screens and
+> is kept because D19–D23 still point at it.
 
 > **Changed 2026-09-04.** The tab is called **Nearby** (D87) — still the
 > cuisine grid, not the design's map, which needs a package and the 474

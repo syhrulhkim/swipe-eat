@@ -795,3 +795,53 @@ class AppTagChip extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Nearby map. The map is the one screen the app does not draw itself — the
+// tiles come from a server — so every element laid over it is sized here
+// rather than by eye, and a pin is the same object at both of its two sizes.
+// ---------------------------------------------------------------------------
+
+/// The "you are here" dot: an ember disc, ringed in the background colour so
+/// it reads as a hole punched through the map rather than a sticker on it.
+const double kNearbyMeDotSize = 18;
+const double kNearbyMeDotBorder = 4;
+
+/// The soft halo around the dot — lava at 22 %, spread rather than blurred, so
+/// it stays a ring at every zoom.
+const double kNearbyMeHaloSpread = 12;
+const Color kNearbyMeHalo = Color(0x38E8541C);
+
+/// A pin: a circular blob carrying the cover photo, with the name, cuisine and
+/// open line stacked under it. The two closest results use [kNearbyPinBigSize]
+/// and an ember ring — the map's way of saying "start here".
+const double kNearbyPinSize = 76;
+const double kNearbyPinBigSize = 96;
+
+/// The column under the blob is wider than the blob, so two lines of name fit
+/// without the pin's own width changing between its two sizes.
+const double kNearbyPinWidth = 88;
+
+/// The bite on a pin. A pin is a quarter the size of a card, and the notch is
+/// a proportion of the surface it marks, not a fixed dot.
+const double kNearbyPinBiteRadius = 18;
+
+/// The ember distance badge on a blob's top-right corner.
+const double kNearbyDistanceFontSize = 10;
+
+/// The radius stepper's number and its unit — a display 30 against a 14, the
+/// only place in the app where one word is set at two sizes.
+const double kNearbyRadiusValueFontSize = 30;
+const double kNearbyRadiusUnitFontSize = 14;
+
+/// The results bar's figures ("RM 8", "6"), and the height of the Swipe-all
+/// button — shorter than a full [AppPrimaryButton], because the bar is a strip
+/// rather than a screen's one action.
+const double kNearbyResultFigureFontSize = 18;
+const double kNearbyResultButtonHeight = 46;
+
+/// The wash over the map tiles. The tile server serves a light street map and
+/// the app is near-black; without this the one screen that is not ours would
+/// be the brightest thing in the product. Dark enough that cream pins read
+/// against it, light enough that the streets still say where you are.
+const Color kNearbyMapScrim = Color(0xAD0B0605);

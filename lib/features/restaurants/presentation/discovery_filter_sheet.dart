@@ -5,19 +5,32 @@ import 'package:flutter/material.dart';
 import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
+import '../../auth/state/auth_controller.dart';
 import '../../onboarding/data/onboarding_repository.dart';
 import '../../onboarding/models/taste_option.dart';
-import '../state/deck_controller.dart';
 
 /// The minimum-rating steps the sheet offers. Null is "any rating".
 const List<double?> kMinRatingOptions = [null, 3.0, 3.5, 4.0, 4.5];
 
-/// Opens the discovery filter sheet over the deck. The sheet edits a local
-/// copy of the profile's filter state and writes it in one shot on Apply —
-/// the same full-overwrite contract as `set_discovery_filters`.
+/// Writes the sheet's state to the profile and reports whether it landed.
+///
+/// Matched by `DeckController.applyDiscoveryFilters` and
+/// `NearbyController.applyDiscoveryFilters`: the sheet is opened from the deck
+/// and from the map, and neither screen owns the other's controller. Taking
+/// the write as a function is what lets one sheet serve both.
+typedef DiscoveryFilterWriter = Future<bool> Function({
+  required List<int> cuisineIds,
+  required List<int> dietaryTagIds,
+  double? minRating,
+});
+
+/// Opens the discovery filter sheet. The sheet edits a local copy of the
+/// profile's filter state and writes it in one shot on Apply — the same
+/// full-overwrite contract as `set_discovery_filters`.
 Future<void> showDiscoveryFilterSheet(
   BuildContext context, {
-  required DeckController deck,
+  required AuthController authController,
+  required DiscoveryFilterWriter onApply,
   OnboardingRepository? catalog,
 }) {
   return showModalBottomSheet<void>(
@@ -28,22 +41,26 @@ Future<void> showDiscoveryFilterSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusSheet)),
     ),
     builder: (sheetContext) => DiscoveryFilterSheet(
-      deck: deck,
+      authController: authController,
+      onApply: onApply,
       catalog: catalog ?? OnboardingRepository(),
     ),
   );
 }
 
-/// Cuisine, dietary and minimum-rating limits on the deck — Tinder's
-/// discovery settings, restated for restaurants.
+/// Cuisine, dietary and minimum-rating limits on discovery — Tinder's
+/// discovery settings, restated for restaurants. Shared by the deck and the
+/// Nearby map, so a filter means the same thing on both.
 class DiscoveryFilterSheet extends StatefulWidget {
   const DiscoveryFilterSheet({
     super.key,
-    required this.deck,
+    required this.authController,
+    required this.onApply,
     required this.catalog,
   });
 
-  final DeckController deck;
+  final AuthController authController;
+  final DiscoveryFilterWriter onApply;
   final OnboardingRepository catalog;
 
   @override
@@ -56,12 +73,12 @@ class _DiscoveryFilterSheetState extends State<DiscoveryFilterSheet> {
   bool _saving = false;
 
   late final Set<int> _cuisineIds = {
-    ...widget.deck.authController.user?.filterCuisineIds ?? const <int>[],
+    ...widget.authController.user?.filterCuisineIds ?? const <int>[],
   };
   late final Set<int> _dietaryTagIds = {
-    ...widget.deck.authController.user?.filterDietaryTagIds ?? const <int>[],
+    ...widget.authController.user?.filterDietaryTagIds ?? const <int>[],
   };
-  late double? _minRating = widget.deck.authController.user?.filterMinRating;
+  late double? _minRating = widget.authController.user?.filterMinRating;
 
   @override
   void initState() {
@@ -98,7 +115,7 @@ class _DiscoveryFilterSheetState extends State<DiscoveryFilterSheet> {
       _saving = true;
     });
 
-    final saved = await widget.deck.applyDiscoveryFilters(
+    final saved = await widget.onApply(
       cuisineIds: _cuisineIds.toList()..sort(),
       dietaryTagIds: _dietaryTagIds.toList()..sort(),
       minRating: _minRating,
@@ -111,8 +128,8 @@ class _DiscoveryFilterSheetState extends State<DiscoveryFilterSheet> {
       Navigator.of(context).pop();
       return;
     }
-    // The controller already raised its toast; the sheet keeps the edits so
-    // the user can retry.
+    // The caller already raised its toast; the sheet keeps the edits so the
+    // user can retry.
     setState(() {
       _saving = false;
     });
@@ -163,7 +180,7 @@ class _DiscoveryFilterSheetState extends State<DiscoveryFilterSheet> {
                 ],
               ),
               Text(
-                'Hard limits on the deck — only places that pass are dealt.',
+                'Hard limits on discovery — only places that pass are shown.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: kTextOnPhotoMuted,
                     ),

@@ -55,6 +55,7 @@ not the row number.
 | D18 | `DeckRanker` gives unlocated rows neutral half-credit rather than excluding them. | [Swipe-Deck](../Features/Swipe-Deck.md) | locked 2026-08-31 |
 | D34 | Filters are applied in `deck_scored`'s `candidates` CTE so they bind the exhaustion fallback too, not just the fresh-cards query. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-31 |
 | D36 | The three taste switches are weights; radius and dietary tags are hard filters. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-23 |
+| D103 | "Swipe all" hands the map's result **list** to the deck through `DeckHandoff` rather than re-querying; the deck deals what the map already fetched. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-05 |
 
 ## Feature behaviour
 
@@ -75,6 +76,7 @@ not the row number.
 | D32 | `morning_mode` and `spice_bias` apply through the cuisine taxonomy (`is_breakfast`, `spice_level`), not columns on `restaurants`. | [Onboarding-Taste](../Features/Onboarding-Taste.md) | locked 2026-08-23 |
 | D54 | The cold-start taste signal is collected in onboarding, not by a quiz tab — it runs before the first card. | [Quiz](../Features/Quiz.md) | locked 2026-08-23 |
 | D55 | Quiz schema retained at the redesign rather than dropped with the tab. | [Quiz](../Features/Quiz.md) | **open** |
+| D102 | The Nearby map **replaces** the cuisine grid and the per-cuisine page, which are deleted rather than kept alongside it. This retires the surfaces D22 and D23 govern without striking those decisions: the DB functions behind them (`get_cuisine_counts`, `get_top_picks`) are retained. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-05 |
 
 ## TikTok player
 
@@ -108,6 +110,7 @@ not the row number.
 | D58 | Repositories resolve `Supabase.instance` per call, not in their constructor, so widgets are testable without an initialised client. | [Frontend/STACK](../Frontend/STACK.md) | locked 2026-08-29 |
 | D59 | Catches name their exception type; `AuthRepository` maps each to an actionable sentence. | [Frontend/STACK](../Frontend/STACK.md) | locked 2026-08-29 |
 | D60 | Platform-channel dependencies are constructor-injected with defaults, because `flutter test` has no implementation for them. | [Frontend/STACK](../Frontend/STACK.md) | locked 2026-08-29 |
+| D101 | The map is `flutter_map` with a **constructor-injected** `TileProvider`. The OpenStreetMap default is development only under their usage policy; production swaps a URL template, and tests pass a fake so the suite never reaches the network. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-05 |
 
 ## Design system
 

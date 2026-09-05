@@ -1,0 +1,448 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
+
+import '../../../core/ui/app_lottie.dart';
+import '../../../core/ui/design_tokens.dart';
+import '../../../core/ui/empty_state.dart';
+import '../../auth/state/auth_controller.dart';
+import '../../restaurants/models/restaurant_card.dart';
+import '../../restaurants/models/restaurant_detail_data.dart';
+import '../../restaurants/presentation/discovery_filter_sheet.dart';
+import '../../restaurants/state/likes_controller.dart';
+import '../domain/nearby_format.dart';
+import '../models/nearby_place.dart';
+import '../state/nearby_controller.dart';
+import 'nearby_pin.dart';
+import 'nearby_radius_stepper.dart';
+import 'nearby_results_bar.dart';
+
+/// The public OpenStreetMap tile server.
+///
+/// **Development only.** OSM's tile usage policy forbids a released app from
+/// pointing at it: no heavy use, no bulk downloading, and it may be cut off
+/// without notice. Shipping means a tile account (MapTiler, Stadia, Mapbox,
+/// Thunderforest, or a self-hosted renderer) and swapping this template plus
+/// its attribution — see `docs/Features/Nearby-Map.md`.
+const String kOsmTileUrlTemplate =
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+/// Sent as the `User-Agent`, as OSM's policy requires. The app's real
+/// application id, so a blocked client is identifiable rather than anonymous.
+const String kTileUserAgentPackageName = 'com.swipeeat.app';
+
+/// The Nearby map: what is actually around you right now, at a radius you set
+/// with your thumb.
+///
+/// Replaces the Explore cuisine grid. A grid of cravings answered "what kinds
+/// of food exist"; a hungry person is asking "what is near me and open", and
+/// only a map answers that in one look.
+class NearbyTab extends StatefulWidget {
+  const NearbyTab({
+    super.key,
+    required this.authController,
+    this.controller,
+    this.tileProvider,
+    this.likes,
+  });
+
+  final AuthController authController;
+
+  /// Injected by tests; in the app the tab builds its own.
+  final NearbyController? controller;
+
+  /// The tiles. Defaults to the network provider, which is why it is injected
+  /// at all: a widget test hands over one that serves a transparent pixel and
+  /// never opens a socket.
+  final TileProvider? tileProvider;
+
+  /// Which places are already bitten. Defaults to the shared instance.
+  final LikesController? likes;
+
+  @override
+  State<NearbyTab> createState() => _NearbyTabState();
+}
+
+class _NearbyTabState extends State<NearbyTab> {
+  late final NearbyController _nearby = widget.controller ??
+      NearbyController(authController: widget.authController);
+  late final bool _ownsController = widget.controller == null;
+  late final LikesController _likes = widget.likes ?? LikesController.instance;
+
+  final MapController _map = MapController();
+
+  /// The camera only follows the radius once the map has been laid out —
+  /// `fitCamera` before that has no viewport to fit into.
+  bool _mapReady = false;
+
+  /// What the camera was last fitted to, so a rebuild that changes neither
+  /// does not fight the user's own panning.
+  double? _fittedRadiusKm;
+  double? _fittedLatitude;
+  double? _fittedLongitude;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_ownsController) {
+      unawaited(_nearby.load());
+    }
+    _nearby.addListener(_onNearbyChanged);
+  }
+
+  @override
+  void dispose() {
+    _nearby.removeListener(_onNearbyChanged);
+    if (_ownsController) {
+      _nearby.dispose();
+    }
+    _map.dispose();
+    super.dispose();
+  }
+
+  void _onNearbyChanged() {
+    if (!_mapReady) {
+      return;
+    }
+    // After the frame: the notification can arrive mid-build, and moving the
+    // camera during a build is a setState during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _fitToRadius();
+      }
+    });
+  }
+
+  /// Fits the camera to a box the width of the current radius, so the circle
+  /// the stepper names is the circle the map is showing.
+  void _fitToRadius() {
+    final origin = _nearby.origin;
+    if (origin == null) {
+      return;
+    }
+    if (_fittedRadiusKm == _nearby.radiusKm &&
+        _fittedLatitude == origin.latitude &&
+        _fittedLongitude == origin.longitude) {
+      return;
+    }
+
+    _fittedRadiusKm = _nearby.radiusKm;
+    _fittedLatitude = origin.latitude;
+    _fittedLongitude = origin.longitude;
+    _map.fitCamera(_cameraFit(origin.latitude, origin.longitude, _nearby.radiusKm));
+  }
+
+  static CameraFit _cameraFit(double latitude, double longitude, double km) {
+    // A degree of latitude is ~111 km everywhere; a degree of longitude
+    // shrinks with the cosine of the latitude. Malaysia sits near the equator,
+    // so the two are almost equal here — the cosine is kept anyway because the
+    // app should not be wrong the day the catalogue leaves the tropics.
+    final deltaLatitude = km / 111.0;
+    final cosine = math.cos(latitude * math.pi / 180).abs();
+    final deltaLongitude = km / (111.0 * math.max(cosine, 0.01));
+
+    return CameraFit.bounds(
+      bounds: LatLngBounds(
+        LatLng(latitude - deltaLatitude, longitude - deltaLongitude),
+        LatLng(latitude + deltaLatitude, longitude + deltaLongitude),
+      ),
+      // Room for the pins, which hang below their coordinate, and for the
+      // floating controls at the top and bottom of the map.
+      padding: const EdgeInsets.fromLTRB(48, 96, 48, 120),
+    );
+  }
+
+  Future<void> _openFilters() {
+    return showDiscoveryFilterSheet(
+      context,
+      authController: widget.authController,
+      onApply: _applyFilters,
+    );
+  }
+
+  /// The sheet only reports whether the write landed; the toast is the
+  /// screen's job, the same way the deck raises its own.
+  Future<bool> _applyFilters({
+    required List<int> cuisineIds,
+    required List<int> dietaryTagIds,
+    double? minRating,
+  }) async {
+    final saved = await _nearby.applyDiscoveryFilters(
+      cuisineIds: cuisineIds,
+      dietaryTagIds: dietaryTagIds,
+      minRating: minRating,
+    );
+    if (!saved && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save your filters.')),
+      );
+    }
+    return saved;
+  }
+
+  void _openPlace(NearbyPlace place) {
+    context.push(
+      '/restaurant/${place.id}',
+      extra:
+          RestaurantCard.fromRestaurant(place.restaurant).toDetailPayload(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_nearby, _likes, widget.authController]),
+      builder: (context, _) {
+        return ColoredBox(
+          color: kBackgroundDark,
+          child: Column(
+            children: [
+              Expanded(child: _buildMapArea(context)),
+              if (!_nearby.needsLocation &&
+                  _nearby.error == null &&
+                  _nearby.places.isNotEmpty)
+                NearbyResultsBar(
+                  resultCount: _nearby.places.length,
+                  openNowCount: _nearby.openNowCount,
+                  minPriceFrom: _nearby.minPriceFrom,
+                  onSwipeAll: _nearby.swipeAll,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMapArea(BuildContext context) {
+    if (_nearby.needsLocation) {
+      return _buildEmptyState();
+    }
+
+    final origin = _nearby.origin;
+    if (origin == null) {
+      return _nearby.error != null
+          ? _buildError(_nearby.error!)
+          : const Center(child: AppLottie(motion: AppMotion.pin, size: 88));
+    }
+
+    final now = _nearby.now;
+    final centre = LatLng(origin.latitude, origin.longitude);
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: FlutterMap(
+            mapController: _map,
+            options: MapOptions(
+              initialCenter: centre,
+              initialCameraFit:
+                  _cameraFit(origin.latitude, origin.longitude, _nearby.radiusKm),
+              // Rotation off: every label on this map is upright type, and a
+              // tilted "Closes 10 pm" is unreadable for no gain.
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
+              backgroundColor: kBackgroundDark,
+              onMapReady: () {
+                _mapReady = true;
+                _fittedRadiusKm = _nearby.radiusKm;
+                _fittedLatitude = origin.latitude;
+                _fittedLongitude = origin.longitude;
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: kOsmTileUrlTemplate,
+                userAgentPackageName: kTileUserAgentPackageName,
+                tileProvider: widget.tileProvider,
+                // The tiles are somebody else's raster; fading them in over
+                // the app's own motion timing keeps the screen from flashing.
+                tileDisplay: const TileDisplay.fadeIn(
+                  duration: kMotionDuration,
+                ),
+              ),
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: ColoredBox(color: kNearbyMapScrim),
+                ),
+              ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: centre,
+                    width: kNearbyMeDotSize + kNearbyMeHaloSpread * 2,
+                    height: kNearbyMeDotSize + kNearbyMeHaloSpread * 2,
+                    child: const NearbyMeDot(),
+                  ),
+                ],
+              ),
+              MarkerLayer(
+                markers: [
+                  for (final place in _nearby.pins)
+                    _markerFor(place, now: now),
+                ],
+              ),
+            ],
+          ),
+        ),
+        _buildAttribution(context),
+        _buildTopBar(context),
+        _buildStepper(context),
+        if (_nearby.error != null) _buildOverlayMessage(_nearby.error!),
+        if (!_nearby.loading &&
+            _nearby.error == null &&
+            _nearby.places.isEmpty)
+          _buildOverlayMessage(
+            // The same string the stepper shows, so the sentence names the
+            // circle the thumb just set rather than a rounded cousin of it.
+            'Nothing within ${formatNearbyDistance(_nearby.radiusKm).label}. '
+            'Widen the circle.',
+          ),
+      ],
+    );
+  }
+
+  Marker _markerFor(NearbyPlace place, {required DateTime now}) {
+    final prominent = _nearby.isProminent(place);
+
+    return Marker(
+      key: ValueKey<int>(place.id),
+      point: LatLng(place.restaurant.latitude, place.restaurant.longitude),
+      width: kNearbyPinWidth,
+      height: NearbyPin.heightFor(prominent: prominent),
+      alignment: NearbyPin.alignmentFor(prominent: prominent),
+      child: NearbyPin(
+        place: place,
+        saved: _likes.isLiked(place.id),
+        prominent: prominent,
+        now: now,
+        onTap: () => _openPlace(place),
+      ),
+    );
+  }
+
+  Widget _buildTopBar(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.paddingOf(context).top + 12,
+      left: 20,
+      right: 20,
+      // No Back button: the prototype draws Nearby as a pushed screen, but
+      // here it is a tab and the nav bar is already the way out.
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: AppIconButton(
+          icon: Icons.tune_rounded,
+          size: kUtilityButtonSize,
+          iconSize: 20,
+          onPhoto: false,
+          background: kGlass,
+          semanticLabel: 'Filters',
+          badgeCount: widget.authController.user?.activeFilterCount ?? 0,
+          onTap: () => unawaited(_openFilters()),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepper(BuildContext context) {
+    return Positioned(
+      right: 20,
+      bottom: 20,
+      child: NearbyRadiusStepper(
+        radiusKm: _nearby.radiusKm,
+        canNarrow: _nearby.canNarrow,
+        canWiden: _nearby.canWiden,
+        onNarrow: () => unawaited(_nearby.narrow()),
+        onWiden: () => unawaited(_nearby.widen()),
+      ),
+    );
+  }
+
+  /// OSM's licence requires the credit, wherever the tiles come from.
+  Widget _buildAttribution(BuildContext context) {
+    return const Positioned(
+      left: 20,
+      bottom: 20,
+      child: IgnorePointer(
+        child: Text(
+          '© OpenStreetMap',
+          style: TextStyle(
+            fontFamily: kTextFontFamily,
+            fontSize: kFontSizeMicro,
+            color: kCreamMuted,
+            height: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverlayMessage(String message) {
+    return Positioned(
+      left: 20,
+      right: 20,
+      top: MediaQuery.paddingOf(context).top + 72,
+      child: IgnorePointer(
+        child: Align(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: kSurfaceDark,
+              borderRadius: BorderRadius.circular(kRadiusPill),
+              border: Border.all(color: kHairline),
+            ),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: kTextFontFamily,
+                fontSize: kFontSizeSmall,
+                color: kCreamSecondary,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildError(String message) {
+    return AppEmptyState(
+      eyebrow: 'Map unavailable',
+      title: 'Something went wrong',
+      message: message,
+      actionLabel: 'Try again',
+      onAction: () => unawaited(_nearby.load()),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return AppEmptyState(
+      eyebrow: 'Nearby',
+      title: 'Where are you eating?',
+      message:
+          'The map draws itself around you, so it needs to know where "around" is.',
+      actionLabel: 'Use my location',
+      onAction: () => unawaited(_nearby.load()),
+      secondaryActionLabel: 'Not now',
+      onSecondaryAction: _dismissEmptyState,
+    );
+  }
+
+  /// "Not now" does not navigate: the nav bar is already the way off this
+  /// screen. It says what the consequence is instead, so a user who declines
+  /// is not left staring at the same page wondering whether the tap landed.
+  void _dismissEmptyState() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('The map stays empty until you share your location.'),
+      ),
+    );
+  }
+}

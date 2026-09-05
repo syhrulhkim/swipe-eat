@@ -2,7 +2,6 @@ import 'package:swipe_eat/core/ui/design_tokens.dart';
 
 import 'package:swipe_eat/features/restaurants/data/restaurant_repository.dart';
 import 'package:swipe_eat/features/restaurants/data/swipe_repository.dart';
-import 'package:swipe_eat/features/restaurants/models/cuisine_count.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 
 /// A minimal but real [Restaurant] for list/like fixtures.
@@ -31,27 +30,19 @@ class FakeRestaurantRepository implements RestaurantRepository {
   /// Rows the detail route can open by id.
   List<Restaurant> catalogRows = const [];
 
-  /// What `get_cuisine_counts` would return, biggest category first.
-  List<CuisineCount> cuisineRows = const [];
-
   /// What `get_visited_restaurants` / `get_reviewed_restaurants` /
   /// `get_super_liked_ids` would return.
   List<Restaurant> visitedRows = const [];
   List<Restaurant> reviewedRows = const [];
   Set<int> laterRows = const {};
 
-  /// What `get_top_picks` / `get_swipe_stats` would return.
-  List<Restaurant> topPicksRows = const [];
-
   bool failDeck = false;
   bool failLiked = false;
   bool failSearch = false;
   bool failFetchById = false;
-  bool failCuisines = false;
   bool failVisited = false;
   bool failReviewed = false;
   bool failSuperLiked = false;
-  bool failTopPicks = false;
 
   /// The cuisineId of the latest [search] call, null included.
   int? lastSearchCuisineId;
@@ -108,14 +99,6 @@ class FakeRestaurantRepository implements RestaurantRepository {
   }
 
   @override
-  Future<List<CuisineCount>> cuisineCounts() async {
-    if (failCuisines) {
-      throw Exception('cuisines unavailable');
-    }
-    return List.of(cuisineRows);
-  }
-
-  @override
   Future<List<Restaurant>> visitedRestaurants({
     int limit = 50,
     int offset = 0,
@@ -135,14 +118,6 @@ class FakeRestaurantRepository implements RestaurantRepository {
       throw Exception('reviewed unavailable');
     }
     return List.of(reviewedRows);
-  }
-
-  @override
-  Future<List<Restaurant>> topPicks({int limit = 10}) async {
-    if (failTopPicks) {
-      throw Exception('top picks unavailable');
-    }
-    return List.of(topPicksRows);
   }
 
   final Map<int, int> ngapCounts = {};

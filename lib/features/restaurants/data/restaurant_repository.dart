@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../models/cuisine_count.dart';
 import '../models/restaurant.dart';
 
 class RestaurantRepository {
@@ -79,12 +78,12 @@ class RestaurantRepository {
     return rows.map(Restaurant.fromJson).toList();
   }
 
-  /// Explore. A null [query] browses the catalog; either way the RPC applies
-  /// the same radius rule as the deck — what the user cannot be served, they
-  /// cannot find. [cuisineId] narrows the rows to one cuisine, which is how a
-  /// tap on an Explore category tile becomes a list. The RPC caps at 100 rows,
-  /// so with no radius set a 288-row catalog does not fit: the closest 100
-  /// win, which is the right 100 for a browse surface.
+  /// Catalogue search. A null [query] browses everything; either way the RPC
+  /// applies the same radius rule as the deck — what the user cannot be
+  /// served, they cannot find. [cuisineId] narrows the rows to one cuisine.
+  /// The RPC caps at 100 rows, so with no radius set the whole catalogue does
+  /// not fit: the closest 100 win, which is the right 100 for a browse
+  /// surface.
   Future<List<Restaurant>> search({
     String? query,
     double? latitude,
@@ -151,32 +150,6 @@ class RestaurantRepository {
         .timeout(_timeout) as List<dynamic>;
 
     return {for (final id in rows) (id as num).toInt()};
-  }
-
-  /// Today's shortlist: the head of the deck ranking, unswiped rows only.
-  /// The rail thins out as the user swipes, and reshuffles at midnight with
-  /// the deck seed. No coordinates passed — the RPC resolves the profile's
-  /// stored fix server-side. Server caps the limit at 20.
-  Future<List<Restaurant>> topPicks({int limit = 10}) async {
-    final rows = await _client
-        .rpc<dynamic>('get_top_picks', params: {'p_limit': limit})
-        .select(_deckColumns)
-        .timeout(_timeout);
-
-    return rows.map(Restaurant.fromJson).toList();
-  }
-
-  /// The Explore grid: every active cuisine, its restaurant count and a cover
-  /// photo. Ordered by count descending server-side — the biggest categories
-  /// lead, and the client must not re-sort.
-  Future<List<CuisineCount>> cuisineCounts() async {
-    final rows = await _client
-        .rpc<dynamic>('get_cuisine_counts')
-        .timeout(_timeout) as List<dynamic>;
-
-    return rows
-        .map((row) => CuisineCount.fromJson(row as Map<String, dynamic>))
-        .toList();
   }
 
   /// How many people have bitten this place, across every account. Backed by

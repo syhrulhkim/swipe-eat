@@ -488,27 +488,27 @@ void main() {
   });
 
   group('DashboardBottomNav layout', () {
-    // Every case selects Explore: the longest label, so the pill is under the
-    // most pressure it ever sees.
-    const explore = 1;
+    // Every case selects Nearby, the second tab, so the pill is measured on a
+    // label that is neither the shortest nor the longest.
+    const nearby = 1;
 
     testWidgets('lays out without overflow on a phone', (tester) async {
       useViewport(tester, _phoneViewport);
-      await _pumpNav(tester, selectedIndex: explore);
+      await _pumpNav(tester, selectedIndex: nearby);
 
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('lays out without overflow on a narrow phone', (tester) async {
       useViewport(tester, _narrowViewport);
-      await _pumpNav(tester, selectedIndex: explore);
+      await _pumpNav(tester, selectedIndex: nearby);
 
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('lays out without overflow on a tablet', (tester) async {
       useViewport(tester, _tabletViewport, dpr: 2.0);
-      await _pumpNav(tester, selectedIndex: explore);
+      await _pumpNav(tester, selectedIndex: nearby);
 
       expect(tester.takeException(), isNull);
     });
@@ -518,7 +518,7 @@ void main() {
       useViewport(tester, _narrowViewport);
       await _pumpNav(
         tester,
-        selectedIndex: explore,
+        selectedIndex: nearby,
         textScaler: _hugeTextScale,
       );
 

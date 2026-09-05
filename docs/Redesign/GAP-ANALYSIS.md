@@ -328,7 +328,7 @@ Each phase is independently shippable and each unblocks the next.
 | ~~**2**~~ | ~~The design system: tokens, both fonts bundled, radii, buttons, drop eyebrows~~ | ✅ **Delivered 2026-09-04.** See [Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md) |
 | **3** | Reskin the existing five tabs in place, no new features | Ships a coherent Ngap look with today's features. **Partly delivered 2026-09-04** — see below |
 | **4** | Price band + neighbourhood + dishes, and the new detail screen | The detail screen is where the product argues for itself |
-| **5** | Nearby: the map replaces the cuisine grid | Needs coordinates; the 474 gap becomes urgent here |
+| ~~**5**~~ | ~~Nearby: the map replaces the cuisine grid~~ | ✅ **Delivered 2026-09-05.** See [Features/Nearby-Map.md](../Features/Nearby-Map.md). The 474 ungeocoded rows and the missing KL catalogue are now visible rather than urgent: they simply do not pin. |
 | **6** | Wishlist + the up-swipe rebind + retire super like | Small, self-contained, completes the three-gesture story |
 | **7** | Plans + Calendar (solo only, no friends) | Delivers "pick a day" — the tagline's third verb — without the social graph |
 | **8** | Friends, invites, time voting, and the RLS work | Largest and riskiest; the only phase that relaxes `profiles` |
@@ -359,10 +359,9 @@ Also landed, once §4.5 was resolved:
 
 Not yet, and still Phase 3 and beyond:
 
-- **Nearby is still the cuisine grid, not a map**, and Calendar is still an
-  empty state. Both now say what is coming rather than describing the old
-  feature, but the map needs a package and the 474 ungeocoded rows, and the
-  calendar needs a `plans` table.
+- ~~**Nearby is still the cuisine grid, not a map**~~ — **done 2026-09-05**
+  (phase 5, [Features/Nearby-Map.md](../Features/Nearby-Map.md)). Calendar is
+  still an empty state saying what is coming; it needs a `plans` table.
 - **The bite on the swipe card.** The deck deals unswiped restaurants, so the
   flag would be false at every call site — dead code rather than a reskin. It
   needs the deck to know which places are already saved, which is plumbing, not

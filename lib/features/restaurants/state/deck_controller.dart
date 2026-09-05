@@ -13,7 +13,9 @@ import '../../../core/storage/cached_at.dart';
 import '../data/deck_cache.dart';
 import '../data/restaurant_repository.dart';
 import '../data/swipe_repository.dart';
+import '../models/restaurant.dart';
 import '../models/restaurant_card.dart';
+import 'deck_handoff.dart';
 import 'likes_controller.dart';
 import 'tiktok_player_cache.dart';
 
@@ -32,6 +34,7 @@ class DeckController extends ChangeNotifier {
     LikesController? likes,
     TikTokPlayerCache? players,
     DeckCache? cache,
+    DeckHandoff? handoff,
     Future<Position> Function()? resolvePosition,
   })  : _restaurants = restaurants ?? RestaurantRepository(),
         _cache = cache ?? const DeckCache(),
@@ -39,9 +42,12 @@ class DeckController extends ChangeNotifier {
         _profiles = profiles ?? ProfileRepository(),
         _likes = likes ?? LikesController.instance,
         players = players ?? TikTokPlayerCache(),
+        _handoff = handoff ?? DeckHandoff.instance,
         _resolvePosition = resolvePosition ?? resolveUserPosition {
     _appliedDeckSignature = _deckSignature(authController.user);
     authController.addListener(_onAuthChanged);
+    _handoffRevision = _handoff.revision;
+    _handoff.addListener(_onHandoff);
   }
 
   final AuthController authController;
@@ -50,7 +56,12 @@ class DeckController extends ChangeNotifier {
   final ProfileRepository _profiles;
   final LikesController _likes;
   final DeckCache _cache;
+  final DeckHandoff _handoff;
   final Future<Position> Function() _resolvePosition;
+
+  /// The hand-off revision this deck has already dealt, so a rebuild-driven
+  /// notification cannot re-deal a list the deck is already showing.
+  late int _handoffRevision;
 
   /// Warm players for the cards around the top one; the widget hands these to
   /// the card it is building.
@@ -134,9 +145,50 @@ class DeckController extends ChangeNotifier {
   @override
   void dispose() {
     authController.removeListener(_onAuthChanged);
+    _handoff.removeListener(_onHandoff);
     unawaited(_messages.close());
     super.dispose();
   }
+
+  void _onHandoff() {
+    if (_handoff.revision == _handoffRevision) {
+      return;
+    }
+    _handoffRevision = _handoff.revision;
+    dealFrom(_handoff.restaurants, label: _handoff.label);
+  }
+
+  /// Replaces the deck with a list another screen has already fetched — the
+  /// Nearby map's "Swipe all N". No RPC: the rows are the ones the map is
+  /// showing, and re-querying would risk dealing a different set than the one
+  /// the user just looked at.
+  ///
+  /// Takes the load generation with it, or a `load()` still in flight would
+  /// land afterwards and quietly throw the hand-off away.
+  void dealFrom(List<Restaurant> restaurants, {String? label}) {
+    if (restaurants.isEmpty) {
+      return;
+    }
+
+    _loadGeneration += 1;
+    _cards = restaurants.map(RestaurantCard.fromRestaurant).toList();
+    _index = 0;
+    _loading = false;
+    _error = null;
+    // Not a cached deck: these rows came off the server a moment ago, so the
+    // staleness chip must not appear over them.
+    _dealtFromCacheAt = null;
+    _handoffLabel = label;
+    players.clear();
+    notifyListeners();
+    _warmPlayers(from: 0, count: 5);
+  }
+
+  String? _handoffLabel;
+
+  /// Where the cards on screen came from when they were handed over rather
+  /// than dealt ("Nearby · 6 places"). Null for an ordinary deck.
+  String? get handoffLabel => _handoffLabel;
 
   void _onAuthChanged() {
     final signature = _deckSignature(authController.user);
@@ -181,6 +233,7 @@ class DeckController extends ChangeNotifier {
       _index = 0;
       _loading = false;
       _dealtFromCacheAt = null;
+      _handoffLabel = null;
       players.clear();
       notifyListeners();
       _warmPlayers(from: 0, count: 5);

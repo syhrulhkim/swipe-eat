@@ -182,11 +182,23 @@ shortlist is stable for a day and rerolls at midnight for free.
 | `get_super_liked_ids` | `() → setof bigint` |
 | `search_restaurants` | `(p_query text, p_limit int, p_latitude, p_longitude, p_radius_km int, p_cuisine_id bigint) → setof restaurants` — caps at 100 |
 | `get_cuisine_counts` | `() → table(cuisine_id, slug, label, emoji, restaurant_count, cover_url)` — ordered by count desc |
+| `get_nearby` | `(p_latitude, p_longitude, p_radius_km double precision default 3, p_limit int default 60) → table(<restaurant columns>, restaurant_images jsonb, dishes jsonb, reviews jsonb, distance_km, open_now)` — ordered by distance, hard cap 200 |
 
 `get_super_liked_ids` is a second call rather than a flag on
 `get_liked_restaurants` because that function returns `setof public.restaurants`,
 which is what lets PostgREST embed images and reviews. Widening the return type
 to carry a flag would cost the embed; a cheap second call is the smaller price.
+
+`get_nearby` (2026-09-05, [Nearby-Map.md](Nearby-Map.md)) pays that price in the
+other direction, deliberately. `distance_km` and `open_now` are the whole point
+of the call, so it must return `table(...)` — and a table-returning RPC cannot
+be `.select()`-embedded, so it aggregates images, dishes and reviews into
+`jsonb` itself and still costs one round trip. It excludes inactive rows and
+rows at `(0, 0)`, applies the same profile filters `deck_scored` applies, and
+falls back to the caller's stored profile coordinates when both arguments are
+null. `open_now` is `public.is_open_at`, which is null for unknown hours.
+`get_cuisine_counts` and `get_top_picks` are retained even though the screens
+that called them are gone (D102).
 
 ### Profile writes
 
@@ -290,3 +302,4 @@ production.
 | D11 | Profile write RPCs return the whole `profiles` row, so the client never needs a follow-up read. | locked 2026-08-23 |
 | D12 | `deck_scored` resolves passport → GPS → last-known server-side, so a client cannot override an active Passport. | locked 2026-08-31 |
 | D13 | `get_super_liked_ids` is a separate call rather than widening `get_liked_restaurants`, to preserve PostgREST embeds. | locked 2026-08-31 |
+| D102 | The Nearby map replaces the cuisine grid; no database object was dropped for it. | locked 2026-09-05 |
