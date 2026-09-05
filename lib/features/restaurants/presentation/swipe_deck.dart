@@ -341,8 +341,6 @@ class _SwipeDeckState extends State<SwipeDeck>
     }
 
     final next = _deck.next;
-    final motion = _motionFrame();
-
     // The design's swipe screen, top to bottom: the location header, the
     // deck, the three actions. The card is a rounded surface inside the
     // screen padding, not a full-bleed one under the status bar.
@@ -357,7 +355,7 @@ class _SwipeDeckState extends State<SwipeDeck>
               children: [
                 if (next != null)
                   Positioned.fill(child: _buildBehindCard(next)),
-                Positioned.fill(child: _buildTopCard(current, motion)),
+                Positioned.fill(child: _buildTopCard(current)),
               ],
             ),
           ),
@@ -400,7 +398,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
-  Widget _buildTopCard(RestaurantCard current, _MotionFrame motion) {
+  Widget _buildTopCard(RestaurantCard current) {
     final gesturesLocked = _motionType != _SwipeMotionType.idle;
 
     return GestureDetector(
@@ -458,6 +456,13 @@ class _SwipeDeckState extends State<SwipeDeck>
               ? ui.lerpDouble(1, 0.84, frame.progress) ?? 1
               : 1.0;
 
+          // The stamps live here, not in the card: this builder ticks every
+          // frame while the card (a WebView host) is built once as `child`.
+          final likeOpacity =
+              frame.offset.dx > 20 ? frame.dragPercentage : 0.0;
+          final nopeOpacity =
+              frame.offset.dx < -20 ? frame.dragPercentage : 0.0;
+
           return Opacity(
             opacity: opacity,
             child: Transform.translate(
@@ -466,7 +471,32 @@ class _SwipeDeckState extends State<SwipeDeck>
                 angle: frame.offset.dx / 900,
                 child: Transform.scale(
                   scale: scale,
-                  child: child,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      child!,
+                      Positioned(
+                        top: 26,
+                        right: 22,
+                        child: SwipeStamp(
+                          label: 'Ngap!',
+                          color: kAccentEmber,
+                          angle: -12,
+                          opacity: likeOpacity,
+                        ),
+                      ),
+                      Positioned(
+                        top: 26,
+                        left: 22,
+                        child: SwipeStamp(
+                          label: 'Skip',
+                          color: kAccentCream,
+                          angle: 12,
+                          opacity: nopeOpacity,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -475,8 +505,6 @@ class _SwipeDeckState extends State<SwipeDeck>
         child: SwipeCard(
           key: ValueKey(current.id),
           data: current,
-          likeOpacity: motion.offset.dx > 20 ? motion.dragPercentage : 0,
-          nopeOpacity: motion.offset.dx < -20 ? motion.dragPercentage : 0,
           distanceText: _deck.distanceLabelFor(current),
           onTap: () => unawaited(_openVideoPlayer(current)),
           onOpenDetail: () => _openDetail(current),

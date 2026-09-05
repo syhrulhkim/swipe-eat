@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
+import '../../../core/ui/progress_dots.dart';
 import '../data/tiktok_player_factory.dart';
+import '../domain/opening_hours.dart';
 import '../models/restaurant_card.dart';
-import 'review_carousel.dart';
 import 'tiktok_player.dart';
 
 /// One restaurant as a full-bleed card: its clip or photos behind, and low
@@ -23,12 +24,8 @@ class SwipeCard extends StatefulWidget {
     this.tiktokPlayerFuture,
     this.videoHiddenForFullscreen = false,
     this.isBehind = false,
-    this.likeOpacity = 0,
-    this.nopeOpacity = 0,
-    this.clock = _defaultClock,
+    this.clock = OpeningHours.kualaLumpurNow,
   });
-
-  static DateTime _defaultClock() => DateTime.now();
 
   final RestaurantCard data;
   final String distanceText;
@@ -47,10 +44,10 @@ class SwipeCard extends StatefulWidget {
   final bool videoHiddenForFullscreen;
 
   final bool isBehind;
-  final double likeOpacity;
-  final double nopeOpacity;
 
-  /// What time it is, for the "open now" chip. Injected so a test can pin it.
+  /// What time it is in Kuala Lumpur, for the "open now" chip. Injected so a
+  /// test can pin it; see [OpeningHours.kualaLumpurNow] for why not the
+  /// device clock.
   final DateTime Function() clock;
 
   @override
@@ -137,28 +134,6 @@ class _SwipeCardState extends State<SwipeCard> {
                     ),
                   ),
                 ),
-              // The stamps: "Ngap!" rotates in from the right as the card
-              // drags right, "Skip" from the left.
-              Positioned(
-                top: 26,
-                right: 22,
-                child: _Stamp(
-                  label: 'Ngap!',
-                  color: kAccentEmber,
-                  angle: -12,
-                  opacity: widget.likeOpacity,
-                ),
-              ),
-              Positioned(
-                top: 26,
-                left: 22,
-                child: _Stamp(
-                  label: 'Skip',
-                  color: kAccentCream,
-                  angle: 12,
-                  opacity: widget.nopeOpacity,
-                ),
-              ),
               Positioned(
                 left: 20,
                 right: 20,
@@ -323,11 +298,15 @@ class RestaurantInfoBlock extends StatelessWidget {
       if (data.isHalal == true) const AppTagChip(label: 'Halal'),
     ];
 
+    // Read what is shown, no more and no less: the open chip only while it is
+    // painted, and the cuisine and halal chips the sighted user gets too.
     return Semantics(
       button: true,
       label: [
         data.title,
-        if (openLabel != null) openLabel,
+        if (isOpen && openLabel != null) openLabel,
+        if (data.tag.trim().isNotEmpty) data.tag,
+        if (data.isHalal == true) 'Halal',
         distanceText,
         if (neighbourhood != null) neighbourhood,
         if (priceLabel != null) priceLabel,
@@ -414,7 +393,16 @@ class _MetaLine extends StatelessWidget {
         ),
         if (priceLabel != null) ...[
           const SizedBox(width: 10),
-          Text(priceLabel!, style: muted.merge(strong)),
+          // Flexible too, or the price takes its full width first and the
+          // distance span is left with less than nothing at large text.
+          Flexible(
+            child: Text(
+              priceLabel!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: muted.merge(strong),
+            ),
+          ),
         ],
       ],
     );
@@ -422,8 +410,13 @@ class _MetaLine extends StatelessWidget {
 }
 
 /// "Ngap!" or "Skip", rubber-stamped across the top corner as the card drags.
-class _Stamp extends StatelessWidget {
-  const _Stamp({
+///
+/// Painted by the deck over the top card, not by the card itself: the deck's
+/// fly-out ticks without rebuilding the card (it hosts a WebView), so a stamp
+/// inside the card would freeze at the release value.
+class SwipeStamp extends StatelessWidget {
+  const SwipeStamp({
+    super.key,
     required this.label,
     required this.color,
     required this.angle,

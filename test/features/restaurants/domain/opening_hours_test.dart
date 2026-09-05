@@ -233,6 +233,37 @@ void main() {
     });
   });
 
+  group('the all-day place on its closed weekday', () {
+    const hours = OpeningHours(
+      opensAtMinutes: 0,
+      closesAtMinutes: 0,
+      closedWeekdays: {DateTime.monday},
+    );
+
+    test('is closed, and says so rather than "Open 24 h"', () {
+      expect(hours.isOpenAt(monday(12)), isFalse);
+      expect(hours.statusLabel(monday(12)), 'Closed today');
+      expect(hours.statusLabel(tuesday(12)), 'Open 24 h');
+    });
+  });
+
+  group('parseClockMinutes rejects what a clock cannot say', () {
+    test('24:30, negatives and non-numbers are null', () {
+      expect(OpeningHours.parseClockMinutes('24:30'), isNull);
+      expect(OpeningHours.parseClockMinutes('-1:00'), isNull);
+      expect(OpeningHours.parseClockMinutes('10:-5'), isNull);
+      expect(OpeningHours.parseClockMinutes('24:00'), 0);
+    });
+  });
+
+  test('kualaLumpurNow reads UTC+8 whatever the device zone', () {
+    final now = OpeningHours.kualaLumpurNow();
+    final utc = DateTime.now().toUtc();
+    final expected = utc.add(const Duration(hours: 8));
+    expect(now.hour, expected.hour);
+    expect(now.weekday, expected.weekday);
+  });
+
   group('formatClock', () {
     test('writes the short 12-hour form the design uses', () {
       expect(OpeningHours.formatClock(0), '12 am');

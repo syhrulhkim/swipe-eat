@@ -35,6 +35,16 @@ class OpeningHours {
   static const OpeningHours unknown =
       OpeningHours(opensAtMinutes: null, closesAtMinutes: null);
 
+  /// The current wall-clock time in Kuala Lumpur, as a [DateTime] whose
+  /// `hour`, `minute` and `weekday` read in that zone.
+  ///
+  /// The hours in the catalogue are Malaysian and the server's `is_open_at`
+  /// evaluates in Asia/Kuala_Lumpur, so the client asks the same question in
+  /// the same zone — a user roaming abroad still sees the true state of a
+  /// mamak in Johor. Malaysia keeps UTC+8 all year, so no DST table is needed.
+  static DateTime kualaLumpurNow() =>
+      DateTime.now().toUtc().add(const Duration(hours: 8));
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'opens_at': clockString(opensAtMinutes),
@@ -94,11 +104,12 @@ class OpeningHours {
     if (open == null) {
       return null;
     }
-    if (isAllDay) {
-      return 'Open 24 h';
-    }
+    // Open first, shape second: an all-day place on its closed weekday is
+    // closed, and must not read "Open 24 h".
     if (open) {
-      return 'Open till ${formatClock(closesAtMinutes!)}';
+      return isAllDay
+          ? 'Open 24 h'
+          : 'Open till ${formatClock(closesAtMinutes!)}';
     }
     final minute = now.hour * 60 + now.minute;
     final opensLaterToday =
@@ -132,7 +143,13 @@ class OpeningHours {
     }
     final hour = int.tryParse(parts[0]);
     final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null || hour > 24 || minute > 59) {
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        minute < 0 ||
+        minute > 59 ||
+        hour > 24 ||
+        (hour == 24 && minute != 0)) {
       return null;
     }
     return (hour % 24) * 60 + minute;

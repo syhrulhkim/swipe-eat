@@ -65,6 +65,43 @@ double stampOpacity(WidgetTester tester, String label) {
       .opacity;
 }
 
+Future<void> pumpStamps(
+  WidgetTester tester, {
+  required double like,
+  required double nope,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: Stack(
+          children: [
+            Positioned(
+              top: 26,
+              right: 22,
+              child: SwipeStamp(
+                label: 'Ngap!',
+                color: kAccentEmber,
+                angle: -12,
+                opacity: like,
+              ),
+            ),
+            Positioned(
+              top: 26,
+              left: 22,
+              child: SwipeStamp(
+                label: 'Skip',
+                color: kAccentCream,
+                angle: 12,
+                opacity: nope,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// Pumps a whole [SwipeCard] in a card-shaped box.
 ///
 /// A card with a clip is handed a player future that never completes: the
@@ -74,8 +111,6 @@ double stampOpacity(WidgetTester tester, String label) {
 Future<void> pumpCard(
   WidgetTester tester,
   RestaurantCard data, {
-  double likeOpacity = 0,
-  double nopeOpacity = 0,
   bool isBehind = false,
   VoidCallback? onTap,
   VoidCallback? onOpenDetail,
@@ -99,8 +134,6 @@ Future<void> pumpCard(
                   ? null
                   : Completer<TikTokPlayerHandle>().future,
               isBehind: isBehind,
-              likeOpacity: likeOpacity,
-              nopeOpacity: nopeOpacity,
               clock: eightPm,
             ),
           ),
@@ -216,6 +249,66 @@ void main() {
       );
     });
 
+    testWidgets('the label reads the chips too, and only an open chip',
+        (tester) async {
+      await pumpBlock(
+        tester,
+        card(
+          hours: const OpeningHours(
+            opensAtMinutes: 9 * 60,
+            closesAtMinutes: 17 * 60,
+          ),
+          isHalal: true,
+        ),
+      );
+      final closed = tester.getSemantics(find.byType(RestaurantInfoBlock));
+      expect(closed.label, contains('Malay'));
+      expect(closed.label, contains('Halal'));
+      expect(closed.label, isNot(contains('Closed')));
+      expect(closed.label, isNot(contains('Open')));
+
+      await pumpBlock(
+        tester,
+        card(
+          hours: const OpeningHours(
+            opensAtMinutes: 17 * 60,
+            closesAtMinutes: 23 * 60,
+          ),
+        ),
+      );
+      final open = tester.getSemantics(find.byType(RestaurantInfoBlock));
+      expect(open.label, contains('Open till 11 pm'));
+    });
+
+    testWidgets('does not overflow at 320 px with accessibility text',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Scaffold(
+              backgroundColor: kBackgroundDark,
+              body: Center(
+                child: SizedBox(
+                  width: 320 - 40,
+                  child: RestaurantInfoBlock(
+                    data: card(
+                      priceFrom: 1200,
+                      neighbourhood: 'Bandar Baru Permas Jaya',
+                    ),
+                    distanceText: '12.4 km',
+                    now: eightPm(),
+                    onTap: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('does not overflow on a narrow phone with a long name', (tester) async {
       const data = RestaurantCard(
         id: 1,
@@ -301,23 +394,20 @@ void main() {
       expect(find.text('Tap for sound'), findsNothing);
     });
 
-    testWidgets('both stamps are invisible on a card at rest', (tester) async {
+    testWidgets('the card itself paints no stamps — the deck does',
+        (tester) async {
       await pumpCard(tester, card());
 
-      expect(stampOpacity(tester, 'Ngap!'), 0);
-      expect(stampOpacity(tester, 'Skip'), 0);
+      expect(find.byType(SwipeStamp), findsNothing);
     });
 
-    testWidgets('the stamps follow the drag they belong to', (tester) async {
-      await pumpCard(tester, card(), likeOpacity: 0.6, nopeOpacity: 0.2);
-
+    testWidgets('a stamp follows the opacity it is given, clamped',
+        (tester) async {
+      await pumpStamps(tester, like: 0.6, nope: 0.2);
       expect(stampOpacity(tester, 'Ngap!'), 0.6);
       expect(stampOpacity(tester, 'Skip'), 0.2);
-    });
 
-    testWidgets('an over-driven drag stops at fully opaque', (tester) async {
-      await pumpCard(tester, card(), likeOpacity: 1.7, nopeOpacity: -0.4);
-
+      await pumpStamps(tester, like: 1.7, nope: -0.4);
       expect(stampOpacity(tester, 'Ngap!'), 1.0);
       expect(stampOpacity(tester, 'Skip'), 0.0);
     });
@@ -325,7 +415,7 @@ void main() {
     testWidgets('the stamps are decoration, not something to read or press',
         (tester) async {
       final handle = tester.ensureSemantics();
-      await pumpCard(tester, card(), likeOpacity: 1);
+      await pumpStamps(tester, like: 1, nope: 1);
 
       expect(find.bySemanticsLabel('Ngap!'), findsNothing);
       expect(find.bySemanticsLabel('Skip'), findsNothing);
