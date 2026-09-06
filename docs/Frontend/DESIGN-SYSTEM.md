@@ -536,6 +536,99 @@ fills (D62) — `primary` is the ember gradient, `ghost` the panel and a hairlin
 the one orange mark in the app that is neither a control nor the glow, because
 it is the product's name rather than decoration.
 
+## 7i. The calendar: day cells, plan rows, the picked bar
+
+Three shapes, one feature — [Features/Plans-Calendar.md](../Features/Plans-Calendar.md).
+
+### The day cell
+
+The prototype's `.day` is a 36 px circle (`kCalendarDaySize`) with a 1.5 px
+hairline, in a 7-column grid gapped `5px 2px` (`kCalendarRowGap`,
+`kCalendarColumnGap`). Its colour resolves in one order, and only one wins:
+
+| State | Fill | Border | Ink |
+|---|---|---|---|
+| selected | `kAccentEmber` | ember | `kOnAccent` |
+| today | `kAccentCream` | cream | `kOnAccent` |
+| planned | `kSurfaceDark` | ember | `kTextOnPhoto` |
+| past | transparent | `kHairline` | `kCreamMuted` |
+| otherwise | transparent | `kHairline` | `kTextOnPhoto` |
+
+Chosen beats today beats planned — the same order the prototype's classes
+resolve in, and the same order orange means in this app: acted on first,
+actionable second.
+
+Under the disc sits a 4 px marker (`kCalendarDotSize`): today's ember dot, or
+one pip per plan up to three. A planned day that is neither today nor selected
+draws its restaurant's cover inside an ember ring (`kCalendarRingWidth` 2,
+inset `kCalendarRingInset` 2), falling back to two initials — never an emoji
+(D88).
+
+Two things the CSS does not have to say and Flutter does:
+
+- The **cell** is the tap target, not the disc. The cell is 48 pt tall
+  (36 + 5 + 4 + 3) and takes its column's width, so the 44 pt minimum is met on
+  the axis that has room. A finger in the gutter between two days used to do
+  nothing.
+- The day number sits in a `FittedBox(scaleDown)`. A circle that cannot grow
+  and a doubled text scale otherwise spill two digits over the ring; the whole
+  date is on the semantics node either way, so nothing is lost to a screen
+  reader.
+
+Every cell announces itself as one sentence — "Fri 4 Sep, today, 2 plans" —
+with `excludeSemantics`, so the tap is re-declared on the node (D83). A past
+day carries no tap action at all.
+
+The month header (`.cal-head`) puts the month against either a pair of 32 px
+arrows (drawn 32, tapped 44) or one trailing chip. **The back arrow is absent,
+not disabled, in the month you are standing in**: an arrow that is always there
+and only sometimes works is a worse answer than one that is not there.
+
+### The plan row
+
+`.plan` is a `kSurfaceDark` card with a hairline: a 48 px logo at radius 14
+(`kPlanLogoSize`, `kRadiusPlanLogo`) carrying the cover or two initials in
+display 16 w800 (`kPlanInitialsFontSize`), the name in body w600 ellipsised,
+a `kCreamSecondary` detail line reading **"Lunch · Kepong · 6 km"**, and an
+ember time pill. Each part of the detail line is dropped rather than faked when
+it is unknown — no distance without a real fix, no neighbourhood placeholder —
+so the row never carries a dangling separator.
+
+The row answers a tap (open the restaurant) and a long press (cancel). Both are
+re-declared on the semantics node beside the one-sentence label, because
+`excludeSemantics` drops them (D83). Cancelling confirms in a **bottom sheet**,
+which keeps the row on screen behind it, rather than in a dialog.
+
+### The picked bar
+
+`.picked` is the answer read back: a 40 px thumb, "Fri 4 Sep · 20:00" over
+"Kak Ros · Just you", and the primary button. The summary is `nowrap` in CSS
+and must say so explicitly here, or the bar grows a line taller at a large text
+scale.
+
+Below `kPickedBarStackWidth` (340) the bar **stacks** — summary above, button
+across the width beneath. "Lock it in" is a pill that cannot shrink, and at a
+doubled scale it alone is most of a 320 pt row; ellipsising the answer down to
+nothing to keep it beside the button would be the wrong half to sacrifice.
+
+### Two shared-widget notes
+
+`AppFilterChip` fills whatever width it is handed — its `Center` expands under
+bounded constraints. Two call sites therefore wrap it:
+
+- The time slots (`.slots`, a `Wrap`) put each chip in an `IntrinsicWidth`, or
+  a `Wrap` hands every chip the whole line and stacks the five one per row.
+- The calendar header's trailing chip is an `IntrinsicWidth` inside a
+  `ConstrainedBox` capped at half the row: natural width and flush right at any
+  ordinary size, and it gives ground to the month rather than pushing it off
+  the screen at 2×.
+
+The slot chips are drawn at `AppFilterChip`'s 36 px rather than the
+prototype's `.slots .chip{height:40px}`, and "Lock it in" is `AppPrimaryButton`
+at 46 rather than the prototype's 40. Both are deliberate: D62 allows exactly
+two button fills and one chip, and forking a control to gain 4 px is a worse
+trade than the 4 px.
+
 ## 8. Testing
 
 `test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the
@@ -619,3 +712,4 @@ instances and their licences already existed. Lexend was removed in turn.
 | D101 | The map's `TileProvider` is constructor-injected; the OSM default is development only, and a fake keeps the widget tests off the network. | locked 2026-09-05 |
 
 | D106 | The preference controls (`.setrow`, `.switch`, `.seg`, the budget range) are one shared vocabulary across the wizard, the You tab and Settings, and each encodes "not answered yet" as a state it can draw. | locked 2026-09-05 |
+| D110 | The plan time is five fixed chips, reusing `AppFilterChip` at its own 36 px rather than forking a 40 px variant. See §7i. | locked 2026-09-06 |

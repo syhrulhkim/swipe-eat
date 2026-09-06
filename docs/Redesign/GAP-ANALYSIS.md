@@ -365,7 +365,7 @@ Each phase is independently shippable and each unblocks the next.
 | ~~**4**~~ | ~~Price band + neighbourhood + dishes, and the new detail screen~~ | ✅ **Delivered 2026-09-06** (detail screen; dishes data still empty). See [Features/Restaurant-Detail.md](../Features/Restaurant-Detail.md) |
 | ~~**5**~~ | ~~Nearby: the map replaces the cuisine grid~~ | ✅ **Delivered 2026-09-05.** See [Features/Nearby-Map.md](../Features/Nearby-Map.md). The 474 ungeocoded rows and the missing KL catalogue are now visible rather than urgent: they simply do not pin. |
 | ~~**6**~~ | ~~Wishlist + the up-swipe rebind + retire super like~~ | ✅ **Delivered 2026-09-05.** See [Features/Wishlist.md](../Features/Wishlist.md) |
-| **7** | Plans + Calendar (solo only, no friends) | Delivers "pick a day" — the tagline's third verb — without the social graph |
+| ~~**7**~~ | ~~Plans + Calendar (solo only, no friends)~~ | ✅ **Delivered 2026-09-06.** See [Features/Plans-Calendar.md](../Features/Plans-Calendar.md) |
 | **8** | Friends, invites, time voting, and the RLS work | Largest and riskiest; the only phase that relaxes `profiles` |
 | **9** | KL catalogue scrape, if §0 decided that way | Can run in parallel from phase 1 |
 
@@ -425,12 +425,40 @@ Still Phase 3 and beyond:
 - **Nearby is still the cuisine grid, not a map**, and Calendar is still an
   empty state.
 - **The bite on the swipe card** (D81).
-- **The plan chips have no ids to filter on.** `plannedRestaurantIds` is empty
-  until Phase 7 feeds it, so "Planned" is correctly empty and "Not planned yet"
-  is correctly everything. The same goes for the day pill on a tile and the
-  "Planned" label on a wishlist row.
+- ~~**The plan chips have no ids to filter on.**~~ — **done 2026-09-06**
+  (phase 7). `PlansController` feeds `plannedRestaurantIds`, the day pill on a
+  tile and the "Planned" label on a wishlist row.
 - **Friend rows say "From a friend"**, not "From Aiman" — the friend graph is
   Phase 8.
+
+### Phase 7 progress (2026-09-06)
+
+Delivered. See [Features/Plans-Calendar.md](../Features/Plans-Calendar.md),
+which also supersedes [Features/Group-Dining.md](../Features/Group-Dining.md).
+
+- **Plans have a schema.** `plans`, `plan_members` and `plan_time_votes`, with
+  `create_plan`, `mark_plan_kept` and `plan_stats`, and membership answered by
+  the `security definer` helper `is_plan_member` rather than by policies that
+  would recurse (D107–D110). Additive only; nothing was dropped.
+- **Pick a date** is built at `/plans/new` — the month grid, the five time
+  chips, "Bring friends", and the `.picked` summary that reads the answer back
+  before "Lock it in" commits it.
+- **The Calendar tab** replaces `GroupTab` at index 3 — the month card with
+  covers on planned days, plans grouped under day headings, search over plan
+  names, cancel-in-a-sheet, and an empty state that points at the deck.
+- **The stubbed planned state is live everywhere** — the Bites chips, the day
+  pill on a tile, the wishlist row's label, and the You tab's "plans kept" and
+  "week streak".
+
+Still Phase 8 and beyond:
+
+- **Every plan is a party of one.** `plan_members` and `plan_time_votes` have
+  no write path, so "Bring friends" is stored and nothing else, the summary
+  bar says "Just you", and the avatar stack on a plan row is empty.
+- **Other people's plans do not show as pips.** Nothing selects another user's
+  plans, so every pip in the grid is your own.
+- **`/plans/:id/invite` does not exist.** Locking in with "Bring friends" on
+  lands on the Calendar and says "Invites arrive with Friends".
 
 ## 7. What this is not
 

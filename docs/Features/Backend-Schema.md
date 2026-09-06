@@ -52,6 +52,9 @@ skill:
 | `profile_dietary_tags` | — | Dietary needs from onboarding |
 | `swipes` | 33 | Every deck decision. Also the Liked list and the visit stamp |
 | `wishlist_items` | 3 | Places to try. The store behind Later (D94) |
+| `plans` | — | One owner, one restaurant, one date (D107). The Calendar tab |
+| `plan_members` | — | Who else is on a plan. No write path until Friends |
+| `plan_time_votes` | — | A member's vote on the time. No write path until Friends |
 | `quiz_questions` | 1 | **Orphaned** — see [Quiz.md](Quiz.md) |
 | `quiz_options` | — | **Orphaned** |
 | `quiz_responses` | — | **Orphaned** |
@@ -133,6 +136,29 @@ each foreign key.
 
 Backfilled from `swipes where super_like` with the swipe's own `updated_at` as
 `created_at`: **3 rows, 1 user**.
+
+### `plans`
+
+`id` identity, `owner_id` → `profiles`, `restaurant_id` → `restaurants` (both
+cascade), `plan_date date`, `plan_time time` (null for "Late"), `time_label text
+check in ('late')`, `with_friends boolean`, `status text check in
+('planned','kept','cancelled')`, `created_at` / `updated_at`.
+
+`plans_owner_restaurant_date_key` is the unique index behind D107 and the ON
+CONFLICT target of `create_plan`. Also `plans_owner_date_idx` and
+`plans_restaurant_idx`. `updated_at` rides the shared `touch_updated_at`
+trigger.
+
+`plan_date` is a `date`, never a timestamp: the client formats it from the
+phone's local parts so a device east of UTC cannot post yesterday.
+
+`plan_members` is `(plan_id, user_id)` with `status in
+('invited','going','declined')` and `invited_at`, indexed on `user_id`.
+`plan_time_votes` is `(plan_id, user_id)` plus `plan_time` / `time_label`.
+Both are written by the Friends phase; they exist now so the invite flow lands
+against a schema rather than beside one.
+
+See [Plans-Calendar.md](Plans-Calendar.md).
 
 ### `profiles`
 
@@ -300,6 +326,18 @@ moved.
 `update_preferences` needs an explicit `p_clear_radius` because null already
 means "don't change this".
 
+### Plans
+
+| Function | Returns | Notes |
+|---|---|---|
+| `create_plan(p_restaurant_id, p_plan_date, p_plan_time, p_time_label, p_with_friends)` | `plans` | Upserts on `(owner_id, restaurant_id, plan_date)` (D107). A cancelled plan comes back `planned`. |
+| `mark_plan_kept(p_today date default current_date)` | `integer` | Flips the caller's past `planned` rows to `kept` (D108). Returns the count. Called by the client on every load. |
+| `plan_stats(p_today date default current_date)` | `table(plans_kept int, streak_weeks int)` | The You tab's two figures. The streak counts consecutive ISO weeks back from the most recent past week holding a plan; that week must be the current one or the one before, else the streak is 0. |
+| `is_plan_member(p_plan_id bigint)` | `boolean` | RLS helper, `security definer` (D109). Checks `auth.uid()` inside itself, so it can only answer about the caller. |
+
+`p_today` is passed by the client rather than defaulted, so "today" is the
+phone's day and not the database server's.
+
 ### Triggers and internals
 
 | Function | Purpose |
@@ -329,7 +367,22 @@ Owner-only — to `authenticated`, `using` **and** `with check` on
 `profile_dietary_tags` (all), `wishlist_items` (one policy per verb rather than
 one `all`, because each verb was spelled out when the table was added),
 `profiles` (`select` + `update` only — insert is the trigger's job, and there
-is no delete policy because account deletion goes through the cascade).
+is no delete policy because account deletion goes through the cascade),
+`plans` (owner `all`).
+
+Shared-by-invitation — to `authenticated`, resolved through the
+`security definer` helper `is_plan_member` rather than through policies that
+reference each other and recurse (D109): a member may select a `plan`; the
+plan's owner inserts and deletes `plan_members` rows and a member selects and
+updates their own; members select a plan's `plan_time_votes` and each writes
+only their own.
+
+`is_plan_member` keeps `EXECUTE` granted to `authenticated` — a policy
+expression runs with the querying role's privileges, so revoking it makes
+`select ... from public.plans` fail outright. The security advisor's
+`authenticated_security_definer_function_executable` warning is therefore
+accepted, as it already is for `get_ngap_count`; the reasoning is written into
+the migration.
 
 Catalogue writes happen only via migrations, the scraping scripts (which use
 the publishable key for reads and SQL for writes) and `service_role`. There is
@@ -391,3 +444,6 @@ production.
 | D105 | `halal_only` / `vegetarian` / `budget_max` are hard predicates in `deck_scored`'s `candidates` CTE; unknown halal fails, unknown price passes. | locked 2026-09-05 |
 | D13 | `get_super_liked_ids` is a separate call rather than widening `get_liked_restaurants`, to preserve PostgREST embeds. | locked 2026-08-31 |
 | D102 | The Nearby map replaces the cuisine grid; no database object was dropped for it. | locked 2026-09-05 |
+| D107 | A plan is one owner, one restaurant, one date — a unique index, and `create_plan`'s ON CONFLICT target. | locked 2026-09-06 |
+| D108 | A past plan is kept unless cancelled; `mark_plan_kept()` flips it server-side on load. | locked 2026-09-06 |
+| D109 | `is_plan_member` is a `security definer` helper rather than mutually recursive policies; its `authenticated` grant is required and its advisor warning accepted. | locked 2026-09-06 |

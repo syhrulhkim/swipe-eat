@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/observability/crash_reporting.dart';
+import '../core/ui/design_tokens.dart';
 import '../core/ui/page_transitions.dart';
 import '../features/auth/presentation/phone_sign_in_page.dart';
 import '../features/auth/presentation/sign_up_page.dart';
@@ -8,7 +10,9 @@ import '../features/auth/presentation/splash_page.dart';
 import '../features/auth/presentation/welcome_page.dart';
 import '../features/auth/state/auth_controller.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
+import '../features/dashboard/state/dashboard_tab_request.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
+import '../features/plans/presentation/plan_date_page.dart';
 import '../features/restaurants/models/restaurant_detail_data.dart';
 import '../features/restaurants/presentation/restaurant_detail_route.dart';
 import '../features/settings/presentation/settings_page.dart';
@@ -131,6 +135,36 @@ GoRouter createRouter(AuthController authController) {
         path: '/wishlist',
         builder: (context, state) => const WishlistPage(),
       ),
+      // Pushed from a restaurant's "Set a date". The payload is parsed the
+      // same defensive way `/restaurant/:id` parses its own: a link, or a
+      // caller that has less than the tap had, gets a screen rather than a
+      // crash.
+      GoRoute(
+        path: '/plans/new',
+        builder: (context, state) {
+          final draft = PlanDraft.fromPayload(state.extra);
+          if (draft == null) {
+            return const _PlanDraftMissingPage();
+          }
+
+          return PlanDatePage(
+            draft: draft,
+            onCreated: (context, planId, withFriends) {
+              // `/plans/:id/invite` belongs to the Friends phase. Until it
+              // exists the plan is already saved, so the honest thing is to
+              // land on the calendar showing it and say plainly what has not
+              // arrived yet — not to push a route that would 404.
+              context.go('/dashboard');
+              DashboardTabRequest.instance.show(3);
+              if (withFriends) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invites arrive with Friends')),
+                );
+              }
+            },
+          );
+        },
+      ),
       GoRoute(
         path: '/restaurant/:id',
         builder: (context, state) {
@@ -148,4 +182,29 @@ GoRouter createRouter(AuthController authController) {
       ),
     ],
   );
+}
+
+/// What `/plans/new` shows when it was opened without a restaurant. Reachable
+/// only from a hand-written link or a restored route; the app's own push
+/// always carries the payload.
+class _PlanDraftMissingPage extends StatelessWidget {
+  const _PlanDraftMissingPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBackgroundDark,
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Pick a place first, then a day.',
+            textAlign: TextAlign.center,
+            style: appPanelTitleStyle(context),
+          ),
+        ),
+      ),
+    );
+  }
 }

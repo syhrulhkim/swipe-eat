@@ -1311,3 +1311,52 @@ TextStyle appCoverNameStyle(BuildContext context) {
         height: 1.1,
       );
 }
+
+// ---------------------------------------------------------------------------
+// Plans and the Calendar — the design's `.cal*`, `.day*`, `.slots`, `.picked`
+// and `.plan*` (docs/Redesign/assets/ngap-app-screens.html, S4 and S6).
+// ---------------------------------------------------------------------------
+
+/// A day cell as it is *drawn*: a 36 px circle, same as a chip.
+///
+/// Not the size it is *tapped* at. Seven [kMinTapTarget] cells side by side
+/// need 308 px and a 320 px phone has 280 to give them, so a day takes the
+/// width its column has and 44 px of height, with the disc centred inside.
+/// Height is the axis where the target can be honoured without the grid
+/// breaking, so height is where it is honoured.
+const double kCalendarDaySize = 36;
+
+/// The gaps in the day grid — 5 px between rows, 2 px between columns.
+const double kCalendarRowGap = 5;
+const double kCalendarColumnGap = 2;
+
+/// The ember dot under today, and one pip under a day carrying a plan. Same
+/// number because they are the same mark meaning two different things: "you
+/// are here" and "something is here".
+const double kCalendarDotSize = 4;
+
+/// The month arrows either side of `.cal-head`. Smaller than an icon button
+/// because they step a month rather than leave the screen.
+const double kCalendarArrowSize = 32;
+
+/// The ember ring a planned day wears, and how far inside the cell the cover
+/// photo sits behind it.
+const double kCalendarRingWidth = 2;
+const double kCalendarRingInset = 2;
+
+/// The plan row's logo: a 48 px square at 14, carrying the cover photo or two
+/// letters of the name. Its own radius for the same reason
+/// [kRadiusWishThumb] has one — [kRadiusThumb] on a square this small reads as
+/// no rounding at all.
+const double kPlanLogoSize = 48;
+const double kRadiusPlanLogo = 14;
+const double kPlanInitialsFontSize = 16;
+
+/// The `.picked` summary's own first line. A hair under body size so the
+/// bar's two lines read as a caption rather than as a heading.
+const double kPickedTitleFontSize = 14;
+
+/// Below this the `.picked` bar stacks its button under the summary instead of
+/// beside it: "Lock it in" is a pill that cannot shrink, and at a doubled text
+/// scale it alone would take most of a 320 pt row.
+const double kPickedBarStackWidth = 340;

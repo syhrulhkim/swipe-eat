@@ -38,8 +38,9 @@ bite**. Two further marks sit on it:
 - the **wishlist bookmark** (`.wish`) in the top-right, when the place is still
   on the wishlist. Painted over the notch rather than inside it, because a
   28 px badge at that inset falls wholly within the 30 px bite;
-- the **planned day pill** (`.planned`) in the top-left. Always absent today —
-  see §2.
+- the **planned day pill** (`.planned`) in the top-left — "Today", "Tonight",
+  "Fri 4". **Live since 2026-09-06**: `PlansController` fills it, see
+  [Plans-Calendar.md](Plans-Calendar.md).
 
 The tile's second line is **"Cuisine · Neighbourhood"**, dropping the
 neighbourhood rather than dangling a separator when the row has none. The
@@ -82,10 +83,12 @@ stays lit after taking you away is claiming to be a filter it is not.
 Tapping the chosen plan chip again returns to All — without that there is no
 way out of a filter except finding All again.
 
-`plannedRestaurantIds` is **empty today**; the plans phase feeds it through
-`setPlannedRestaurantIds`. Both chips are real, tested code that starts working
-the day the ids arrive. With nothing planned, "Planned" is correctly empty and
-"Not planned yet" is correctly everything.
+`plannedRestaurantIds` is **live since 2026-09-06**: `PlansController` pushes
+the ids of the user's *upcoming* plans through `setPlannedRestaurantIds` on
+every load and every change — see [Plans-Calendar.md](Plans-Calendar.md). A
+dinner that has already happened is a visit rather than a plan, so it leaves
+the set. With nothing planned, "Planned" is still correctly empty and "Not
+planned yet" correctly everything.
 
 Null `isHalal` means "the caption never said", which is not a yes — a Halal
 filter that returns maybes is not a filter.
@@ -166,7 +169,9 @@ deleted once no install predates the migration.
   whole catalogue and `reviews.user_id` is a hook only.
 - `visited_at` is a single timestamp, so a second visit overwrites the first —
   no visit history.
-- **Planned is inert** until the plans phase lands (§2).
+- ~~**Planned is inert**~~ — resolved 2026-09-06 by
+  [Plans-Calendar.md](Plans-Calendar.md). Both chips and the day pill are fed
+  from real plans.
 
 ## 7. Out of scope
 
