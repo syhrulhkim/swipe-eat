@@ -217,6 +217,13 @@ class FakePlansRepository implements PlansRepository {
             coverUrl: plan.coverUrl,
             tag: plan.tag,
             neighbourhood: plan.neighbourhood,
+            latitude: plan.latitude,
+            longitude: plan.longitude,
+            // Flipping a status must not empty the guest list. The database
+            // updates one column; a fake that rebuilt the row and dropped its
+            // members would make every past dinner look like it was eaten
+            // alone, which is exactly what "Ate with recently" reads.
+            members: plan.members,
           ),
         );
       } else {

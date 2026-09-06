@@ -203,6 +203,22 @@ class FriendsController extends ChangeNotifier {
     return sent;
   }
 
+  /// Puts people on a plan. Returns how many rows were actually added, which
+  /// is not how many were asked for: somebody already invited adds nothing,
+  /// and the screen says "Invited" rather than pretending it sent twice.
+  ///
+  /// Re-reads that one plan's roster afterwards so the calendar card behind
+  /// the screen has the faces before the pop animation finishes.
+  Future<int> invite(int planId, Iterable<String> userIds) async {
+    final ids = userIds.toList();
+    if (ids.isEmpty) {
+      return 0;
+    }
+    final added = await _repository.invite(planId, ids);
+    await loadPlanPeople([planId]);
+    return added;
+  }
+
   /// Who among these numbers is already here. Straight through to the
   /// repository, which hashes them — the controller never holds a number.
   Future<List<FriendProfile>> matchContacts(Iterable<String> rawNumbers) =>
