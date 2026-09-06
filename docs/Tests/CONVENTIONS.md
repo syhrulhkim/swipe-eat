@@ -5,7 +5,7 @@ Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Frontend/STACK.m
 
 # Testing Conventions
 
-**333 tests, all passing; `flutter analyze lib test` reports no issues**
+**918 tests, all passing; `flutter analyze lib test` reports no issues**
 (verified 2026-09-04).
 
 ## 1. Framework

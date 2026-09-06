@@ -426,6 +426,12 @@ class PrefBudgetRow extends StatelessWidget {
 
   /// Reports the pair. A null upper end means the cap was released.
   ///
+  /// The floor is not a control: the design draws one thumb, labelled "Budget
+  /// per person, upper limit", over a fixed "RM 10–" prefix. So the min this
+  /// reports is always [kBudgetDefaultMin] — a second thumb would be a
+  /// question whose answer nothing reads, and `deck_scored` filters on the
+  /// ceiling alone.
+  ///
   /// Fires on every division the thumb crosses, so a caller that writes here
   /// writes a dozen times per drag. Callers that persist should keep the pair
   /// locally from this and save from [onChangeEnd].
@@ -438,7 +444,6 @@ class PrefBudgetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lower = (min ?? kBudgetDefaultMin).toDouble();
     final upper = (max ?? kBudgetCeiling).toDouble();
 
     return PrefRow(
@@ -456,21 +461,25 @@ class PrefBudgetRow extends StatelessWidget {
               inactiveTrackColor: kSurfacePanel,
               thumbColor: kAccentCream,
               overlayColor: kGlass,
-              rangeThumbShape: const RoundRangeSliderThumbShape(
+              thumbShape: const RoundSliderThumbShape(
                 enabledThumbRadius: 10,
               ),
               trackHeight: 4,
               showValueIndicator: ShowValueIndicator.never,
             ),
-            child: RangeSlider(
-              values: RangeValues(lower, upper),
+            child: Slider(
+              value: upper,
               min: kBudgetFloor.toDouble(),
               max: kBudgetCeiling.toDouble(),
               divisions: (kBudgetCeiling - kBudgetFloor) ~/ kBudgetStep,
-              onChanged: (values) => _report(values, onChanged),
+              // Ringgit, not a percentage: without this a screen reader reads
+              // the thumb as "40 per cent".
+              semanticFormatterCallback: (value) =>
+                  budgetRangeLabel(kBudgetDefaultMin, _capOf(value)),
+              onChanged: (value) => _report(value, onChanged),
               onChangeEnd: onChangeEnd == null
                   ? null
-                  : (values) => _report(values, onChangeEnd!),
+                  : (value) => _report(value, onChangeEnd!),
             ),
           ),
           const Row(
@@ -486,15 +495,16 @@ class PrefBudgetRow extends StatelessWidget {
   }
 }
 
-/// Turns a pair of thumb positions into the pair the profile stores.
-void _report(RangeValues values, void Function(int min, int? max) sink) {
-  final newMin = values.start.round();
-  final newMax = values.end.round();
-  sink(
-    newMin,
-    // The top stop releases the ceiling rather than setting one.
-    newMax >= kBudgetCeiling ? null : newMax,
-  );
+/// The top stop releases the ceiling rather than setting a RM 100 one.
+int? _capOf(double value) {
+  final rounded = value.round();
+  return rounded >= kBudgetCeiling ? null : rounded;
+}
+
+/// Turns the thumb's position into the pair the profile stores. The floor is
+/// the design's fixed RM 10, not an answer the user gave.
+void _report(double value, void Function(int min, int? max) sink) {
+  sink(kBudgetDefaultMin, _capOf(value));
 }
 
 class _RangeEnd extends StatelessWidget {

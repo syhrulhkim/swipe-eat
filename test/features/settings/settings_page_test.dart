@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swipe_eat/core/ui/radius_options.dart';
+import 'package:swipe_eat/features/profile/presentation/preference_controls.dart';
 import 'package:swipe_eat/features/onboarding/models/onboarding_draft.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
@@ -29,6 +30,18 @@ AppUser _user({
       spiceLevel: spiceLevel,
       budgetMin: budgetMin,
       budgetMax: budgetMax,
+    );
+
+
+/// The page carries two sliders — the radius above and the budget below — so
+/// each finder names the row it belongs to rather than trusting the order.
+Finder get _radiusSlider => find.byWidgetPredicate(
+      (widget) => widget is Slider && widget.max == kRadiusStops.length - 1,
+      description: 'the radius Slider',
+    );
+Finder get _budgetSlider => find.descendant(
+      of: find.byType(PrefBudgetRow),
+      matching: find.byType(Slider),
     );
 
 void main() {
@@ -72,10 +85,10 @@ void main() {
   /// slider to an exact division is brittle, and the wiring under test is
   /// what happens on change/end, not the gesture math.
   Future<void> moveSliderTo(WidgetTester tester, double value) async {
-    final slider = tester.widget<Slider>(find.byType(Slider));
+    final slider = tester.widget<Slider>(_radiusSlider);
     slider.onChanged!(value);
     await tester.pump();
-    tester.widget<Slider>(find.byType(Slider)).onChangeEnd!(value);
+    tester.widget<Slider>(_radiusSlider).onChangeEnd!(value);
     await tester.pumpAndSettle();
   }
 
@@ -103,7 +116,7 @@ void main() {
 
       expect(find.text('7 km'), findsOneWidget);
       expect(
-        tester.widget<Slider>(find.byType(Slider)).value,
+        tester.widget<Slider>(_radiusSlider).value,
         (kRadiusStops.length - 1).toDouble(),
       );
     });
@@ -292,26 +305,27 @@ void main() {
       // leave the session holding whichever one happened to land last.
       await pumpSettings(tester);
 
-      final slider = tester.widget<RangeSlider>(find.byType(RangeSlider));
+      final slider = tester.widget<Slider>(_budgetSlider);
       for (final end in const [20.0, 35.0, 60.0]) {
-        slider.onChanged!(RangeValues(15, end));
+        slider.onChanged!(end);
         await tester.pump();
       }
 
       expect(profile.preferenceCalls, isEmpty,
           reason: 'nothing is written while the finger is still down');
-      expect(find.text('RM 15\u201360'), findsOneWidget,
+      expect(find.text('RM 10\u201360'), findsOneWidget,
           reason: 'the read-out still tracks the finger');
 
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChangeEnd!(const RangeValues(15, 60));
+          .widget<Slider>(_budgetSlider)
+          .onChangeEnd!(60);
       await tester.pumpAndSettle();
 
       expect(profile.preferenceCalls, hasLength(1));
-      expect(profile.preferenceCalls.single.budgetMin, 15);
+      expect(profile.preferenceCalls.single.budgetMin, kBudgetDefaultMin);
       expect(profile.preferenceCalls.single.budgetMax, 60);
-      expect(auth.user?.budgetMin, 15);
+      expect(auth.user?.budgetMin, kBudgetDefaultMin,
+          reason: 'the design draws one thumb; the floor is fixed at RM 10');
       expect(auth.user?.budgetMax, 60);
     });
 
@@ -323,13 +337,13 @@ void main() {
       await pumpSettings(tester, user: _user(budgetMin: 10, budgetMax: 40));
 
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChanged!(const RangeValues(10, 100));
+          .widget<Slider>(_budgetSlider)
+          .onChanged!(100);
       await tester.pump();
 
       expect(find.text('RM 10+'), findsOneWidget);
       expect(
-        tester.widget<RangeSlider>(find.byType(RangeSlider)).values.end,
+        tester.widget<Slider>(_budgetSlider).value,
         kBudgetCeiling.toDouble(),
         reason: 'the thumb must stay where the finger put it',
       );
@@ -340,12 +354,12 @@ void main() {
       await pumpSettings(tester, user: _user(budgetMin: 10, budgetMax: 40));
 
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChanged!(const RangeValues(10, 100));
+          .widget<Slider>(_budgetSlider)
+          .onChanged!(100);
       await tester.pump();
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChangeEnd!(const RangeValues(10, 100));
+          .widget<Slider>(_budgetSlider)
+          .onChangeEnd!(100);
       await tester.pumpAndSettle();
 
       expect(profile.preferenceCalls.single.budgetMin, 10);
@@ -356,21 +370,21 @@ void main() {
 
     testWidgets('a failed budget write puts the old range back',
         (tester) async {
-      await pumpSettings(tester, user: _user(budgetMin: 15, budgetMax: 60));
+      await pumpSettings(tester, user: _user(budgetMin: 10, budgetMax: 60));
       profile.fail = true;
 
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChanged!(const RangeValues(25, 80));
+          .widget<Slider>(_budgetSlider)
+          .onChanged!(80);
       await tester.pump();
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChangeEnd!(const RangeValues(25, 80));
+          .widget<Slider>(_budgetSlider)
+          .onChangeEnd!(80);
       await tester.pumpAndSettle();
 
       expect(find.text('Could not save that preference.'), findsOneWidget);
-      expect(auth.user?.budgetMin, 15);
-      expect(find.text('RM 15\u201360'), findsOneWidget,
+      expect(auth.user?.budgetMin, 10);
+      expect(find.text('RM 10\u201360'), findsOneWidget,
           reason: 'the read-out must not keep a range the backend refused');
     });
 

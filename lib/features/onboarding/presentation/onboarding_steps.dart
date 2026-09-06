@@ -225,18 +225,10 @@ class OnboardingHabitsStep extends StatelessWidget {
             onChanged();
           },
         ),
-        const SizedBox(height: AppOnboardingGaps.item),
-        PreferenceTile(
-          icon: Icons.local_fire_department_rounded,
-          title: 'Spice bias',
-          subtitle: 'Prioritize bolder flavors',
-          trailingLabel: draft.spiceBias.label,
-          tint: kTintSpice,
-          onTap: () {
-            draft.spiceBias = draft.spiceBias.next;
-            onChanged();
-          },
-        ),
+        // No spice tile here: the rules step already asks the question on its
+        // four-step control, and `complete_onboarding` derives `spice_bias`
+        // from that answer (D104). Two questions about one thing, the second
+        // silently discarded, is worse than one.
         const SizedBox(height: AppOnboardingGaps.item),
         PreferenceTile(
           icon: Icons.pin_drop_rounded,

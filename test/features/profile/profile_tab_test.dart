@@ -7,6 +7,7 @@ import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
 import 'package:swipe_eat/features/profile/presentation/profile_tab.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
+import 'package:swipe_eat/features/onboarding/models/onboarding_draft.dart';
 
 import '../../support/widget_test_support.dart';
 import '../auth/fake_auth_repository.dart';
@@ -364,8 +365,8 @@ void main() {
       // Driven through the callback rather than by gesture: landing a range
       // thumb on an exact division is brittle, and the mapping is the subject.
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChanged!(const RangeValues(10, 100));
+          .widget<Slider>(find.byType(Slider))
+          .onChanged!(100);
       await tester.pumpAndSettle();
       expect(find.text('RM 10+'), findsOneWidget);
 
@@ -447,25 +448,26 @@ void main() {
       expect(auth.user?.spiceLevel, 4);
     });
 
-    testWidgets('the budget sheet sends both ends and nothing else',
+    testWidgets('the budget sheet sends the cap and nothing else',
         (tester) async {
       await pumpTab(tester);
 
       await tester.tap(find.text('Budget per person'));
       await tester.pumpAndSettle();
       tester
-          .widget<RangeSlider>(find.byType(RangeSlider))
-          .onChanged!(const RangeValues(15, 60));
+          .widget<Slider>(find.byType(Slider))
+          .onChanged!(60);
       await tester.pumpAndSettle();
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
 
       final call = profile.preferenceCalls.single;
-      expect(call.budgetMin, 15);
+      expect(call.budgetMin, kBudgetDefaultMin,
+          reason: 'the design draws one thumb over a fixed RM 10 floor');
       expect(call.budgetMax, 60);
       expect(call.halalOnly, isNull);
       expect(call.spiceLevel, isNull);
-      expect(find.text('RM 15\u201360'), findsOneWidget);
+      expect(find.text('RM 10\u201360'), findsOneWidget);
     });
 
     testWidgets('a dragged budget writes once, not once per division',
@@ -479,8 +481,8 @@ void main() {
       await tester.pumpAndSettle();
       for (final end in const [20.0, 35.0, 60.0]) {
         tester
-            .widget<RangeSlider>(find.byType(RangeSlider))
-            .onChanged!(RangeValues(15, end));
+          .widget<Slider>(find.byType(Slider))
+            .onChanged!(end);
         await tester.pump();
       }
       expect(profile.preferenceCalls, isEmpty,
@@ -574,7 +576,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(RangeSlider), findsOneWidget);
+      expect(find.byType(Slider), findsOneWidget);
     });
 
     testWidgets('every preference row clears a 44 pt target', (tester) async {

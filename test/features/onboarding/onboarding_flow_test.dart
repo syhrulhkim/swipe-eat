@@ -193,11 +193,24 @@ void main() {
 
       await tester.tap(find.text('On').first); // morning mode
       await tester.pump();
-      await tester.tap(find.text('High')); // spice bias -> low
-      await tester.pump();
 
       expect(find.text('Off'), findsOneWidget);
-      expect(find.text('Mild'), findsOneWidget);
+    });
+
+    testWidgets('the habits step does not ask about spice a second time',
+        (tester) async {
+      // The rules step already took the answer on its four-step control and
+      // `complete_onboarding` derives the bias from it (D104). A second tile
+      // here would be a question whose answer is thrown away.
+      await pumpWizard(tester);
+      await completeNameStep(tester);
+      await completeTasteStep(tester);
+      await completeRulesStep(tester);
+
+      expect(find.text('How do you eat?'), findsOneWidget);
+      expect(find.text('Spice bias'), findsNothing);
+      expect(find.text('Morning mode'), findsOneWidget);
+      expect(find.text('Nearby focus'), findsOneWidget);
     });
 
     testWidgets('a granted location is written with its place name',
@@ -529,8 +542,8 @@ void main() {
       // priced above it rather than none of them.
       await reachRules(tester);
 
-      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
-            const RangeValues(10, 100),
+      tester.widget<Slider>(find.byType(Slider)).onChanged!(
+            100,
           );
       await tester.pumpAndSettle();
       expect(find.text('RM 10+'), findsOneWidget);
@@ -543,18 +556,19 @@ void main() {
           reason: 'a floor with no ceiling is an answer, not a blank');
     });
 
-    testWidgets('a chosen range reaches the RPC as itself', (tester) async {
+    testWidgets('a chosen ceiling reaches the RPC as itself', (tester) async {
       await reachRules(tester);
 
-      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
-            const RangeValues(15, 60),
+      tester.widget<Slider>(find.byType(Slider)).onChanged!(
+            60,
           );
       await tester.pumpAndSettle();
-      expect(find.text('RM 15–60'), findsOneWidget);
+      expect(find.text('RM 10–60'), findsOneWidget);
 
       await finishFromRules(tester);
 
-      expect(onboarding.sentParams!['p_budget_min'], 15);
+      expect(onboarding.sentParams!['p_budget_min'], kBudgetDefaultMin,
+          reason: 'the design draws one thumb over a fixed RM 10 floor');
       expect(onboarding.sentParams!['p_budget_max'], 60);
     });
 
@@ -589,8 +603,8 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Pedas'));
       await tester.pump();
-      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
-            const RangeValues(15, 60),
+      tester.widget<Slider>(find.byType(Slider)).onChanged!(
+            60,
           );
       await tester.pumpAndSettle();
 
@@ -601,13 +615,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Any rules?'), findsOneWidget);
-      expect(find.text('RM 15–60'), findsOneWidget);
+      expect(find.text('RM 10–60'), findsOneWidget);
 
       await finishFromRules(tester);
 
       expect(onboarding.sentParams!['p_halal_only'], isTrue);
       expect(onboarding.sentParams!['p_spice_level'], 3);
-      expect(onboarding.sentParams!['p_budget_min'], 15);
+      expect(onboarding.sentParams!['p_budget_min'], kBudgetDefaultMin);
       expect(onboarding.sentParams!['p_budget_max'], 60);
     });
 
@@ -644,7 +658,7 @@ void main() {
       // The step is a list, so the budget card starts below the fold at this
       // scale; scrolling to it is what lays it out.
       await tester.scrollUntilVisible(
-        find.byType(RangeSlider),
+        find.byType(Slider),
         200,
         scrollable: find.byType(Scrollable).first,
       );

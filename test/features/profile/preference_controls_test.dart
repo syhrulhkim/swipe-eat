@@ -337,8 +337,8 @@ void main() {
       expect(find.text('RM 5'), findsOneWidget);
       expect(find.text('RM 100+'), findsOneWidget);
       expect(
-        tester.widget<RangeSlider>(find.byType(RangeSlider)).values,
-        const RangeValues(10, 40),
+        tester.widget<Slider>(find.byType(Slider)).value,
+        40,
       );
     });
 
@@ -362,8 +362,8 @@ void main() {
 
       // Driven through the callback: landing a range thumb on an exact
       // division by gesture is brittle, and the mapping is the subject.
-      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
-            const RangeValues(10, 100),
+      tester.widget<Slider>(find.byType(Slider)).onChanged!(
+            100,
           );
       await tester.pump();
 
@@ -385,8 +385,8 @@ void main() {
         ),
       );
 
-      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
-            const RangeValues(15, 60),
+      tester.widget<Slider>(find.byType(Slider)).onChanged!(
+            60,
           );
       await tester.pump();
 
@@ -401,7 +401,7 @@ void main() {
 
       expect(find.text('RM 10+'), findsOneWidget);
       expect(
-        tester.widget<RangeSlider>(find.byType(RangeSlider)).values.end,
+        tester.widget<Slider>(find.byType(Slider)).value,
         kBudgetCeiling.toDouble(),
         reason: 'the upper thumb parks at the top stop when there is no cap',
       );
@@ -419,7 +419,7 @@ void main() {
       );
 
       expect(
-        tester.getSize(find.byType(RangeSlider)).height,
+        tester.getSize(find.byType(Slider)).height,
         greaterThanOrEqualTo(kUtilityButtonSize),
       );
     });
