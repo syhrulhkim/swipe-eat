@@ -49,6 +49,14 @@ class FakeFriendsRepository implements FriendsRepository {
   /// Set to throw from [requests] only, leaving the friends load intact.
   Object? failRequestsWith;
 
+  /// Set to throw from [matchContacts] — the contacts call fails on its own
+  /// often enough (no network at the permission sheet, a capped array) to be
+  /// worth failing on its own here.
+  Object? failMatchWith;
+
+  /// Set to throw from [act], and so from [sendRequests] too.
+  Object? failActWith;
+
   @override
   Future<List<FriendProfile>> friends() async {
     calls.add('friends');
@@ -75,6 +83,10 @@ class FakeFriendsRepository implements FriendsRepository {
     String callingCode = kDefaultCallingCode,
   }) async {
     calls.add('matchContacts');
+    final failure = failMatchWith;
+    if (failure != null) {
+      throw failure;
+    }
     matchedNumbers.add(rawNumbers.toList());
     // The fake hashes exactly the way the real one does, so a test can assert
     // that what leaves is a hash without reaching into the repository.
@@ -85,6 +97,10 @@ class FakeFriendsRepository implements FriendsRepository {
   @override
   Future<void> act(String userId, FriendAction action) async {
     calls.add('act');
+    final failure = failActWith;
+    if (failure != null) {
+      throw failure;
+    }
     actions.add((userId, action));
 
     switch (action) {

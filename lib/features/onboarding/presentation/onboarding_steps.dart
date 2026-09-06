@@ -5,6 +5,8 @@ import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/preference_tile.dart';
 import '../../../core/ui/radius_options.dart';
+import '../../friends/models/friend.dart';
+import '../../friends/presentation/person_row.dart';
 import '../../profile/presentation/preference_controls.dart';
 import '../models/onboarding_draft.dart';
 import '../models/taste_option.dart';
@@ -595,6 +597,134 @@ class _MoveRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The design's 01f — the people you already know who are already here.
+///
+/// Three states, where the prototype draws one. The design shows the middle of
+/// the story: six matched contacts, three of them ticked. The other two are
+/// what the running app shows most of the time, and leaving them out would
+/// mean a screen that works only for the lucky.
+///
+///   * **ask** — nothing has been read yet. One button, and the line about
+///     what happens to the numbers.
+///   * **matched** — the design's screen, with the count read off the result.
+///   * **none** — the contacts were read and nobody matched. Says so, and
+///     leaves Continue as the way out.
+///
+/// The privacy line is not the design's. The prototype says "We don't upload
+/// your contacts. Matching happens on your phone." — and that cannot be true
+/// of any scheme that finds friends among strangers, because the phone has no
+/// way to know who else has an account without asking. What is true is that
+/// the numbers leave scrambled, the names never leave at all, and nothing is
+/// kept. That is what this says (D121).
+class OnboardingFriendsStep extends StatelessWidget {
+  const OnboardingFriendsStep({
+    super.key,
+    required this.matches,
+    required this.selectedIds,
+    required this.hasSearched,
+    required this.isSearching,
+    required this.onFindFriends,
+    required this.onToggle,
+    this.error,
+  });
+
+  /// The contacts who turned out to have accounts. Empty before the search and
+  /// empty after a search that found nobody — [hasSearched] tells them apart.
+  final List<FriendProfile> matches;
+  final Set<String> selectedIds;
+  final bool hasSearched;
+  final bool isSearching;
+  final VoidCallback onFindFriends;
+  final ValueChanged<String> onToggle;
+  final String? error;
+
+  static const String privacyLine =
+      'We send scrambled numbers, never names, and we don\'t keep them.';
+
+  /// "Six of your contacts are already on Ngap" — the design's own sentence,
+  /// with its number made honest. Spelled out to nine because a sentence that
+  /// opens with a digit reads like a receipt.
+  static const _spelled = <String>[
+    'None',
+    'One',
+    'Two',
+    'Three',
+    'Four',
+    'Five',
+    'Six',
+    'Seven',
+    'Eight',
+    'Nine',
+  ];
+
+  String get _lede {
+    if (!hasSearched) {
+      return 'Ngap is better with people you already eat with. We can check '
+          'which of your contacts are here. Optional, always.';
+    }
+    if (matches.isEmpty) {
+      return 'Nobody in your contacts is on Ngap yet. You can add friends '
+          'later from the You tab.';
+    }
+    final count = matches.length;
+    final head = count < _spelled.length ? _spelled[count] : '$count';
+    final are = count == 1 ? 'is' : 'are';
+    final contact = count == 1 ? 'contact' : 'contacts';
+    return '$head of your $contact $are already on Ngap. Add them and you can '
+        'plan a dinner in two taps. Optional, always.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final failure = error;
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _StepHeading(title: 'Eat with people', subtitle: _lede),
+        const SizedBox(height: AppOnboardingGaps.section),
+        if (!hasSearched) ...[
+          AppPrimaryButton(
+            label: isSearching ? 'Checking...' : 'Find friends from contacts',
+            icon: Icons.contacts_rounded,
+            expand: true,
+            onPressed: isSearching ? null : onFindFriends,
+          ),
+          const SizedBox(height: AppOnboardingGaps.item),
+        ],
+        if (failure != null) ...[
+          Text(
+            failure,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: kAccentEmber,
+                  height: 1.35,
+                ),
+          ),
+          const SizedBox(height: AppOnboardingGaps.item),
+        ],
+        for (final person in matches)
+          PersonRow(
+            profile: person,
+            selected: selectedIds.contains(person.id),
+            onTap: () => onToggle(person.id),
+          ),
+        if (matches.isNotEmpty)
+          const SizedBox(height: AppOnboardingGaps.section),
+        // The line sits under whichever state is showing, because it is true
+        // of all three: before the search it says what will happen, after it
+        // says what did.
+        Text(
+          privacyLine,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: kCreamMuted,
+                height: 1.35,
+              ),
+        ),
+      ],
     );
   }
 }

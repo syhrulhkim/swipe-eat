@@ -127,6 +127,16 @@ class OnboardingDraft {
   String? placeName;
   LocationSource locationSource = LocationSource.unknown;
 
+  /// The contacts picked on the friends step, by user id.
+  ///
+  /// Deliberately absent from [toRpcParams]: `complete_onboarding` writes a
+  /// profile, and a friend request is a different thing happening between two
+  /// accounts, one of which does not exist until that RPC returns. The wizard
+  /// sends these afterwards, and a failure to send them does not undo the
+  /// setup — a friend request you can make again is not worth losing a
+  /// completed profile over.
+  final Set<String> friendIds = <String>{};
+
   /// Step 2 needs at least one cuisine: it is the only cold-start taste signal
   /// the ranking gets, and an empty set would score every restaurant alike.
   bool get hasTaste => cuisineIds.isNotEmpty;

@@ -8,6 +8,9 @@ import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../friends/data/contacts_reader.dart';
+import '../../friends/models/friend.dart';
+import '../../friends/state/friends_controller.dart';
 import '../data/onboarding_repository.dart';
 import '../models/onboarding_draft.dart';
 import '../models/taste_option.dart';
@@ -30,6 +33,8 @@ class OnboardingPage extends StatefulWidget {
     this.repository,
     this.resolvePosition = resolveUserPosition,
     this.resolvePlace = resolvePlaceName,
+    this.readContacts = readContactPhoneNumbers,
+    this.friends,
   });
 
   final AuthController authController;
@@ -37,16 +42,34 @@ class OnboardingPage extends StatefulWidget {
   final PositionResolver resolvePosition;
   final PlaceNameResolver resolvePlace;
 
+  /// Injected for the same reason the position resolver is: reading the
+  /// address book is a platform channel with no implementation under
+  /// `flutter test`. Every test runs against a reader that never touches one,
+  /// which is also what makes "Skip sends nothing" a thing a test can assert.
+  final ContactsReader readContacts;
+
+  /// The friend graph, so the requests chosen here can be sent once the
+  /// account exists. Null takes the app-lifetime singleton.
+  final FriendsController? friends;
+
   @override
   State<OnboardingPage> createState() => _OnboardingPageState();
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  static const _stepCount = 6;
+  static const _stepCount = 7;
 
-  /// "Any rules?" — the only skippable step, and the only one whose answers
+  /// "Any rules?" — the diet and budget step. Skippable because its answers
   /// hide restaurants rather than reorder them.
   static const _rulesStep = 2;
+
+  /// "Eat with people" — the other skippable step, and the reason the topbar's
+  /// Skip slot is now asked about twice.
+  ///
+  /// It sits here, immediately after the rules, and not later: `_skipLocation`
+  /// calls `_finish()` outright, so anything placed after the location step is
+  /// silently skipped by everybody who declines location.
+  static const _friendsStep = 3;
 
   late final OnboardingRepository _repository;
   late final OnboardingDraft _draft;
@@ -54,6 +77,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final _pageController = PageController();
 
   TasteCatalog _catalog = const TasteCatalog.empty();
+  List<FriendProfile> _matches = const [];
+  bool _hasSearchedContacts = false;
+  bool _searchingContacts = false;
+  String? _contactsError;
   int _step = 0;
   bool _loading = true;
   bool _locating = false;
@@ -128,7 +155,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
     // The design's words, not "Finish": the last step teaches the gestures,
     // so the button that leaves it should name what is on the other side.
-    return _step == _stepCount - 1 ? 'Show me dinner' : 'Continue';
+    if (_step == _stepCount - 1) {
+      return 'Show me dinner';
+    }
+    // "Add 3 friends", as the design draws it — the button says what pressing
+    // it will do, and its number is the tick count, not the match count.
+    // With nobody ticked it is a plain Continue rather than "Add 0 friends".
+    if (_step == _friendsStep && _draft.friendIds.isNotEmpty) {
+      final count = _draft.friendIds.length;
+      return 'Add $count ${count == 1 ? 'friend' : 'friends'}';
+    }
+    return 'Continue';
   }
 
   void _goToStep(int step) {
@@ -153,6 +190,72 @@ class _OnboardingPageState extends State<OnboardingPage> {
   /// at the step ends up with a budget cap they did not choose.
   void _skipRules() {
     setState(_draft.clearRules);
+    _goToStep(_step + 1);
+  }
+
+  /// Reads the address book, hashes what it finds, and asks the server which
+  /// of those hashes it knows.
+  ///
+  /// The raw numbers never leave this method: [FriendsController.matchContacts]
+  /// takes them and hashes them itself, so there is no version of this call
+  /// that forgets to. A refusal at the permission sheet comes back as an empty
+  /// list, which is the same screen as "nobody matched" — being told you have
+  /// no friends here because you said no would be a strange thing to read.
+  Future<void> _findFriends() async {
+    if (_searchingContacts) {
+      return;
+    }
+    setState(() {
+      _searchingContacts = true;
+      _contactsError = null;
+    });
+
+    try {
+      final numbers = await widget.readContacts();
+      final matches = await _friends.matchContacts(numbers);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _matches = matches;
+        _hasSearchedContacts = true;
+        _searchingContacts = false;
+        // Everybody who matched starts ticked. They are people the user has in
+        // their phone; the screen is a chance to take some off, not a form to
+        // fill in.
+        _draft.friendIds
+          ..clear()
+          ..addAll(matches.map((person) => person.id));
+      });
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _searchingContacts = false;
+        _contactsError = 'Could not check your contacts. You can add friends '
+            'later from the You tab.';
+      });
+    }
+  }
+
+  void _toggleFriend(String userId) {
+    setState(() {
+      if (!_draft.friendIds.remove(userId)) {
+        _draft.friendIds.add(userId);
+      }
+    });
+  }
+
+  /// Skip on the friends step sends nothing and reads nothing.
+  ///
+  /// Not "sends an empty list" — the contacts reader is never called, so the
+  /// permission sheet never appears, and no hash of any number is computed.
+  /// Somebody who skips this step has told the app to stay out of their
+  /// address book, and the way to honour that is to not go in.
+  void _skipFriends() {
+    setState(_draft.friendIds.clear);
     _goToStep(_step + 1);
   }
 
@@ -218,6 +321,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
       if (!mounted) {
         return;
       }
+      // After the profile exists, never before: a friend request needs two
+      // accounts. Awaited, but its failures are swallowed inside
+      // `sendRequests` — a request that did not send is worth less than a
+      // setup that did.
+      await _sendFriendRequests();
+      if (!mounted) {
+        return;
+      }
       // Closes the router gate; the redirect then moves us to the dashboard.
       widget.authController.applyUser(user);
       // ignore: avoid_catches_without_on_clauses
@@ -229,6 +340,29 @@ class _OnboardingPageState extends State<OnboardingPage> {
       _showMessage('Could not save your setup. Please try again.');
     }
   }
+
+  /// Sends the requests, and swallows whatever goes wrong doing it.
+  ///
+  /// The real repository already tolerates one request failing among many, but
+  /// the call as a whole can still fail — no network, a refresh that throws —
+  /// and letting that reach `_finish` would put "Could not save your setup" on
+  /// screen over a profile that saved perfectly. A friend request can be made
+  /// again from the You tab; a completed wizard cannot be re-completed.
+  Future<void> _sendFriendRequests() async {
+    if (_draft.friendIds.isEmpty) {
+      return;
+    }
+    try {
+      await _friends.sendRequests(_draft.friendIds);
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
+      // Nothing to say here: the setup succeeded, and the friends are one tap
+      // away on a screen the user is about to be able to reach.
+    }
+  }
+
+  FriendsController get _friends =>
+      widget.friends ?? FriendsController.instance;
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
@@ -296,6 +430,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
             if (_step == _rulesStep)
               _SkipButton(onPressed: _saving ? null : _skipRules)
+            else if (_step == _friendsStep)
+              _SkipButton(onPressed: _saving ? null : _skipFriends)
             else
               const SizedBox(width: kUtilityButtonSize),
           ],
@@ -321,6 +457,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
               OnboardingRulesStep(
                 draft: _draft,
                 onChanged: () => setState(() {}),
+              ),
+              OnboardingFriendsStep(
+                matches: _matches,
+                selectedIds: _draft.friendIds,
+                hasSearched: _hasSearchedContacts,
+                isSearching: _searchingContacts,
+                onFindFriends: _findFriends,
+                onToggle: _toggleFriend,
+                error: _contactsError,
               ),
               OnboardingHabitsStep(
                 draft: _draft,
