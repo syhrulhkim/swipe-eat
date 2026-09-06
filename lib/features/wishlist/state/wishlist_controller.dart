@@ -135,8 +135,17 @@ class WishlistController extends ChangeNotifier {
       if (generation != _generation) {
         return;
       }
+      if (!_loaded) {
+        // The add bar is live in the error state, so a place can be typed
+        // before the list has ever arrived. One row is not the list: publishing
+        // it as one would hide everything already on the server behind it, and
+        // mark the controller loaded so nothing went back for the rest. Fetch
+        // instead — the row is written, and the fetch returns it with the
+        // others.
+        await refresh();
+        return;
+      }
       _items = sortWishlist([item, ..._items]);
-      _loaded = true;
       _error = null;
       notifyListeners();
     } on Object catch (error) {

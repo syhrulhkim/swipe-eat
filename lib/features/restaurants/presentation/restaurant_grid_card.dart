@@ -67,6 +67,12 @@ class RestaurantGridCard extends StatelessWidget {
       button: true,
       child: GestureDetector(
         onTap: onTap,
+        // Opaque, not the default defer-to-child: the bite clips the top-right
+        // corner out of the tile's hit test, and the wishlist bookmark is
+        // painted right there. Left deferring, a tap on the bookmark — the
+        // most obviously tappable-looking mark on the tile — would land on the
+        // clipped-away corner and open nothing.
+        behavior: HitTestBehavior.opaque,
         // Two stacks, one inside the other. The inner one is clipped by the
         // bite; the outer one is not, which is where the wishlist bookmark
         // has to live — see [isWishlisted].

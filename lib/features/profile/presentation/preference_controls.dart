@@ -219,7 +219,10 @@ class PrefSegmented<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(kSegmentTrackPadding),
+      // Horizontal only: the vertical padding lives inside each button, so
+      // the finger gets the design's 4 px of track as target rather than as
+      // dead space. Same pixels drawn, a 44 pt hit box instead of a 36 (§7f).
+      padding: const EdgeInsets.symmetric(horizontal: kSegmentTrackPadding),
       decoration: BoxDecoration(
         color: kSurfacePanel,
         borderRadius: BorderRadius.circular(kRadiusPill),
@@ -268,25 +271,31 @@ class _SegmentButton extends StatelessWidget {
           HapticFeedback.selectionClick();
           onTap();
         },
-        child: AnimatedContainer(
-          duration: kMotionDuration,
-          curve: kMotionEase,
-          height: kSegmentHeight,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? kAccentEmber : Colors.transparent,
-            borderRadius: BorderRadius.circular(kRadiusPill),
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              maxLines: 1,
-              style: TextStyle(
-                fontFamily: kTextFontFamily,
-                fontSize: kFontSizeSmall,
-                fontWeight: FontWeight.w600,
-                color: selected ? kOnAccent : kCreamSecondary,
+        // Drawn at 36, tapped at 44 — the filter chips' rule (§7f). The
+        // padding is the track's own, moved inside the target: without it
+        // these four are the smallest touchable things in the app.
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: kSegmentTrackPadding),
+          child: AnimatedContainer(
+            duration: kMotionDuration,
+            curve: kMotionEase,
+            height: kSegmentHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? kAccentEmber : Colors.transparent,
+              borderRadius: BorderRadius.circular(kRadiusPill),
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  fontFamily: kTextFontFamily,
+                  fontSize: kFontSizeSmall,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? kOnAccent : kCreamSecondary,
+                ),
               ),
             ),
           ),
@@ -348,13 +357,23 @@ class PrefRowHeader extends StatelessWidget {
             ),
           ),
         if (outputText != null)
-          Text(
-            outputText,
-            style: const TextStyle(
-              fontFamily: kDisplayFontFamily,
-              fontSize: kFontSizeRangeOutput,
-              fontWeight: FontWeight.w700,
-              color: kTextOnPhoto,
+          // Flexible and fitted, like the stat tiles' numbers: "RM 10–40" beside
+          // "Budget per person" does not fit a 320 px screen at double text
+          // size, and a read-out that overflows is one you cannot read at all.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                outputText,
+                maxLines: 1,
+                style: const TextStyle(
+                  fontFamily: kDisplayFontFamily,
+                  fontSize: kFontSizeRangeOutput,
+                  fontWeight: FontWeight.w700,
+                  color: kTextOnPhoto,
+                ),
+              ),
             ),
           ),
       ],
@@ -399,13 +418,23 @@ class PrefBudgetRow extends StatelessWidget {
     required this.min,
     required this.max,
     required this.onChanged,
+    this.onChangeEnd,
   });
 
   final int? min;
   final int? max;
 
   /// Reports the pair. A null upper end means the cap was released.
+  ///
+  /// Fires on every division the thumb crosses, so a caller that writes here
+  /// writes a dozen times per drag. Callers that persist should keep the pair
+  /// locally from this and save from [onChangeEnd].
   final void Function(int min, int? max) onChanged;
+
+  /// The same pair, once, when the finger lifts. Null for callers that keep
+  /// the answer in memory until a screen of their own is finished — the
+  /// first-run step and the You tab's sheet both do.
+  final void Function(int min, int? max)? onChangeEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -438,15 +467,10 @@ class PrefBudgetRow extends StatelessWidget {
               min: kBudgetFloor.toDouble(),
               max: kBudgetCeiling.toDouble(),
               divisions: (kBudgetCeiling - kBudgetFloor) ~/ kBudgetStep,
-              onChanged: (values) {
-                final newMin = values.start.round();
-                final newMax = values.end.round();
-                onChanged(
-                  newMin,
-                  // The top stop releases the ceiling rather than setting one.
-                  newMax >= kBudgetCeiling ? null : newMax,
-                );
-              },
+              onChanged: (values) => _report(values, onChanged),
+              onChangeEnd: onChangeEnd == null
+                  ? null
+                  : (values) => _report(values, onChangeEnd!),
             ),
           ),
           const Row(
@@ -460,6 +484,17 @@ class PrefBudgetRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Turns a pair of thumb positions into the pair the profile stores.
+void _report(RangeValues values, void Function(int min, int? max) sink) {
+  final newMin = values.start.round();
+  final newMax = values.end.round();
+  sink(
+    newMin,
+    // The top stop releases the ceiling rather than setting one.
+    newMax >= kBudgetCeiling ? null : newMax,
+  );
 }
 
 class _RangeEnd extends StatelessWidget {

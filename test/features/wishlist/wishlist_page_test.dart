@@ -22,6 +22,9 @@ const Size _tabletViewport = Size(1024, 1366);
 /// Accessibility scale the layout has to survive.
 const TextScaler _largeTextScale = TextScaler.linear(1.6);
 
+/// The largest scale the store's accessibility settings can hand the page.
+const TextScaler _hugeTextScale = TextScaler.linear(2.0);
+
 /// The list the design's own screenshot shows: six to go, three eaten.
 List<WishlistItem> _designList() {
   return [
@@ -148,6 +151,29 @@ void main() {
       expect(find.text('24 Aug'), findsOneWidget);
     });
 
+    testWidgets('an eaten row keeps its date over any plan', (tester) async {
+      // Chronological precedence: a place already eaten is done, so that wins
+      // over a date now in the past.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: WishlistRow(
+              item: testWishlistItem(1,
+                  title: 'Already Been', eatenAt: DateTime(2026, 8, 24)),
+              plannedLabel: 'Fri 4',
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Eaten'), findsOneWidget);
+      expect(find.text('24 Aug'), findsOneWidget);
+      expect(find.text('Planned'), findsNothing);
+      expect(find.text('Fri 4'), findsNothing);
+    });
+
     testWidgets('a planned label wins over the row\'s source', (tester) async {
       // The plans phase will pass this; the row already knows what to do.
       await tester.pumpWidget(
@@ -216,6 +242,58 @@ void main() {
       expect(
         tester.widget<AnimatedFractionallySizedBox>(strike()).widthFactor,
         1,
+      );
+    });
+
+    testWidgets('the photo greys and fades once the place is eaten',
+        (tester) async {
+      await _pumpPage(tester, rows: [
+        testWishlistItem(1, title: 'Alpha', coverUrl: 'https://x/1.jpg'),
+      ]);
+
+      Finder inRow(Type type) => find.descendant(
+            of: find.byType(WishlistRow),
+            matching: find.byType(type),
+          );
+      // The row's other AnimatedOpacity belongs to the tick, so the thumb's
+      // is reached through the clip only it draws.
+      Finder thumbFade() => find.ancestor(
+            of: inRow(ClipRRect),
+            matching: find.byType(AnimatedOpacity),
+          );
+
+      // Still to go: full colour, full opacity.
+      expect(inRow(ColorFiltered), findsNothing);
+      expect(tester.widget<AnimatedOpacity>(thumbFade()).opacity, 1);
+
+      await tester.tap(find.text('Alpha'));
+      await tester.pumpAndSettle();
+
+      final filter = tester.widget<ColorFiltered>(inRow(ColorFiltered));
+      expect(
+        filter.colorFilter,
+        const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+      );
+      expect(tester.widget<AnimatedOpacity>(thumbFade()).opacity, 0.5);
+    });
+
+    testWidgets('a typed row with no photo still greys when eaten',
+        (tester) async {
+      // No Image to filter, but the panel that stands in for one has to read
+      // as done just the same.
+      await _pumpPage(tester, rows: [
+        testWishlistItem(1, title: 'Typed', source: WishlistSource.manual),
+      ]);
+
+      await tester.tap(find.text('Typed'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(WishlistRow),
+          matching: find.byType(ColorFiltered),
+        ),
+        findsOneWidget,
       );
     });
 
@@ -359,6 +437,31 @@ void main() {
     });
   });
 
+  group('WishlistPage typing before the list arrives', () {
+    testWidgets('a place typed over a failed load does not become the list',
+        (tester) async {
+      // The add bar is live in the error state, so this is a real path: the
+      // fetch failed, the user typed somewhere anyway. The typed row must not
+      // stand in for the places already saved.
+      final repository = FakeWishlistRepository(rows: [
+        testWishlistItem(1, title: 'Already Saved'),
+      ])
+        ..failList = true;
+      await _pumpPage(tester, repository: repository);
+
+      expect(find.text('Something went wrong'), findsOneWidget);
+
+      repository.failList = false;
+      await tester.enterText(find.byType(TextField), 'Line Clear');
+      await tester.tap(find.bySemanticsLabel('Add'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Line Clear'), findsOneWidget);
+      expect(find.text('Already Saved'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget, reason: 'two still to go');
+    });
+  });
+
   group('WishlistPage sharing', () {
     testWidgets('hands the to-go places to the share sheet', (tester) async {
       String? shared;
@@ -428,6 +531,52 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('a row\'s own tap action reaches the controller',
+        (tester) async {
+      // D83: the row excludes its children's semantics and re-declares onTap,
+      // so the claim is proved by driving the action, not by reading the flag.
+      final handle = tester.ensureSemantics();
+      final repository = FakeWishlistRepository(rows: [
+        testWishlistItem(1, title: 'Still To Go'),
+      ]);
+      await _pumpPage(tester, repository: repository);
+
+      tester.semantics.tap(find.semantics.byLabel('Still To Go'));
+      await tester.pumpAndSettle();
+
+      expect(repository.calls, contains('markEaten:1:true'));
+      handle.dispose();
+    });
+
+    testWidgets('the Add button\'s own tap action files the place',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      final repository = FakeWishlistRepository();
+      await _pumpPage(tester, repository: repository);
+
+      await tester.enterText(find.byType(TextField), 'Line Clear');
+      tester.semantics.tap(find.semantics.byLabel('Add'));
+      await tester.pumpAndSettle();
+
+      expect(repository.calls, contains('addManual:Line Clear'));
+      handle.dispose();
+    });
+
+    testWidgets('the Add button is hit at 44 pt, not just measured at it',
+        (tester) async {
+      // Drawn 36 px inside a 44 px box. A finger landing in the outer ring has
+      // to reach the button, or the target is 44 for a screen reader only.
+      final repository = FakeWishlistRepository();
+      await _pumpPage(tester, repository: repository);
+
+      await tester.enterText(find.byType(TextField), 'Line Clear');
+      final rect = tester.getRect(find.bySemanticsLabel('Add'));
+      await tester.tapAt(Offset(rect.center.dx, rect.top + 2));
+      await tester.pumpAndSettle();
+
+      expect(repository.calls, contains('addManual:Line Clear'));
+    });
+
     testWidgets('the topbar buttons are labelled and 44 pt', (tester) async {
       await _pumpPage(tester, rows: _designList());
 
@@ -449,6 +598,46 @@ void main() {
         tester.getSize(find.byType(WishlistRow)).height,
         greaterThanOrEqualTo(kMinTapTarget),
       );
+    });
+  });
+
+  group('WishlistPage navigation', () {
+    testWidgets('the back button leaves the page', (tester) async {
+      // Pushed from the Bites tab, so the page owns its own way out.
+      useViewport(tester, _phoneViewport);
+      final controller = WishlistController(
+        repository: FakeWishlistRepository(rows: [testWishlistItem(1)]),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => WishlistPage(controller: controller),
+                    ),
+                  ),
+                  child: const Text('Open wishlist'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open wishlist'));
+      await tester.pumpAndSettle();
+      expect(find.text('Places to\ntry'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Places to\ntry'), findsNothing);
+      expect(find.text('Open wishlist'), findsOneWidget);
     });
   });
 
@@ -494,6 +683,49 @@ void main() {
       final scaledHeight = tester.getSize(find.text('to go')).height;
       await _pumpPage(tester, rows: busyList());
       expect(tester.getSize(find.text('to go')).height, lessThan(scaledHeight));
+    });
+
+    testWidgets('keeps the design\'s header on one line when it fits',
+        (tester) async {
+      // Title left, both counts right — the wrapping that rescues the narrow
+      // case must not fire wherever there is room for the design's own
+      // composition.
+      await _pumpPage(tester, rows: busyList(), viewport: _tabletViewport);
+
+      expect(_titleTop(tester, 'to go'), _titleTop(tester, 'eaten'));
+      expect(
+        tester.getRect(find.text('to go')).left,
+        greaterThan(tester.getRect(find.text('Places to\ntry')).right),
+      );
+    });
+
+    testWidgets('drops the second count onto its own line when it must',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        rows: busyList(),
+        viewport: _narrowViewport,
+        textScaler: _hugeTextScale,
+      );
+
+      expect(
+        _titleTop(tester, 'eaten'),
+        greaterThan(_titleTop(tester, 'to go')),
+      );
+      // And the list is still on screen rather than squeezed out of it.
+      expect(tester.getSize(find.byType(ListView)).height, greaterThan(0));
+    });
+
+    testWidgets('does not overflow at 320 px and twice the text size',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        rows: busyList(),
+        viewport: _narrowViewport,
+        textScaler: _hugeTextScale,
+      );
+
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('keeps every row inside a 320 px viewport', (tester) async {

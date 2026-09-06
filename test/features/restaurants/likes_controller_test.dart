@@ -507,6 +507,37 @@ void main() {
       expect(controller.laterCount, 2);
     });
 
+    test('crossing a place off over on the wishlist clears its bookmark',
+        () async {
+      // Why the Bites tab refreshes when the Wishlist page pops: the user
+      // eats somewhere, ticks it there, and the tile's bookmark has to go.
+      wishlist.seed([testWishlistItem(2, restaurantId: 2)]);
+      restaurants.likedRows = [testRestaurant(2)];
+      await controller.refresh();
+      expect(controller.isSavedForLater(2), isTrue);
+
+      // The Wishlist screen's own write, through its own repository.
+      await wishlist.markEaten(2, true);
+      await controller.refresh();
+
+      expect(controller.isSavedForLater(2), isFalse);
+      expect(controller.laterCount, 0);
+      // The like is untouched: eaten is not unliked.
+      expect(controller.isLiked(2), isTrue);
+    });
+
+    test('a place removed from the wishlist stays liked', () async {
+      wishlist.seed([testWishlistItem(2, restaurantId: 2)]);
+      restaurants.likedRows = [testRestaurant(2)];
+      await controller.refresh();
+
+      await wishlist.remove(2);
+      await controller.refresh();
+
+      expect(controller.isSavedForLater(2), isFalse);
+      expect(controller.isLiked(2), isTrue);
+    });
+
     test('a failed wishlist read does not take the whole refresh down',
         () async {
       restaurants.failLater = true;

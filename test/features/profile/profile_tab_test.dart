@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
@@ -17,8 +18,11 @@ const Size _phoneViewport = Size(390, 844);
 /// The narrowest phone the design has to survive.
 const Size _narrowViewport = Size(320, 640);
 
+const TextScaler _hugeTextScale = TextScaler.linear(2);
+
 AppUser _user({
   String name = 'Hana Abdullah',
+  String? avatarUrl,
   String? lastPlaceName = 'Bangsar',
   DateTime? createdAt,
   int? searchRadiusKm = 3,
@@ -32,6 +36,7 @@ AppUser _user({
     id: '39c39a30-c8fb-4e08-8e13-c90212f68e59',
     name: name,
     email: 'demo@swipeeat.test',
+    avatarUrl: avatarUrl,
     onboardedAt: DateTime(2026, 3, 4),
     createdAt: createdAt ?? DateTime(2026, 3, 4),
     lastPlaceName: lastPlaceName,
@@ -57,6 +62,7 @@ void main() {
     int likedCount = 142,
     ProfileStats stats = const ProfileStats(),
     int notificationCount = 0,
+    TextScaler textScaler = TextScaler.noScaling,
   }) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     authRepository = FakeAuthRepository()
@@ -89,19 +95,35 @@ void main() {
     addTearDown(likes.dispose);
 
     useViewport(tester, viewport);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ProfileTab(
-            authController: auth,
-            likes: likes,
-            repository: profile,
-            stats: stats,
-            notificationCount: notificationCount,
+    // Routed rather than bare: the Settings button pushes '/settings', and a
+    // bare MaterialApp would throw rather than navigate.
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: Scaffold(
+              body: ProfileTab(
+                authController: auth,
+                likes: likes,
+                repository: profile,
+                stats: stats,
+                notificationCount: notificationCount,
+              ),
+            ),
           ),
         ),
-      ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) =>
+              const Scaffold(body: Text('settings route')),
+        ),
+      ],
     );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pumpAndSettle();
   }
 
@@ -129,6 +151,76 @@ void main() {
 
       await pumpTab(tester, notificationCount: 1);
       expect(find.text('1'), findsOneWidget);
+    });
+
+    testWidgets('the bell says how many are waiting, and how many is none',
+        (tester) async {
+      // The dot is a colour; a screen reader gets the count in words or it
+      // gets nothing at all.
+      final handle = tester.ensureSemantics();
+
+      await pumpTab(tester);
+      expect(find.bySemanticsLabel('Notifications'), findsOneWidget,
+          reason: 'the bell must be its own node, not part of the title');
+      expect(find.bySemanticsLabel('You'), findsOneWidget);
+
+      await pumpTab(tester, notificationCount: 3);
+      expect(find.bySemanticsLabel('Notifications, 3 waiting'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+
+      handle.dispose();
+    });
+
+    testWidgets('falls back to initials when there is no photo',
+        (tester) async {
+      // A generic person glyph tells you less about whose account this is
+      // than two letters do.
+      await pumpTab(tester);
+
+      expect(find.text('HA'), findsOneWidget);
+    });
+
+    testWidgets('a one-word name gives one initial', (tester) async {
+      await pumpTab(tester, user: _user(name: 'Aisyah'));
+
+      expect(find.text('A'), findsOneWidget);
+    });
+
+    testWidgets('a signed-out tab says so rather than inventing a name',
+        (tester) async {
+      await pumpTab(tester);
+      await auth.logout();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Guest'), findsOneWidget);
+      expect(find.text('Not signed in'), findsOneWidget);
+      expect(find.text('Your taste'), findsNothing,
+          reason: 'there are no rules to edit without an account');
+    });
+
+    testWidgets('a profile with neither place nor age reads "New here"',
+        (tester) async {
+      // A cache written before `created_at` was read has no month to name and
+      // no fix to place; a bare separator would read as a missing word.
+      await pumpTab(
+        tester,
+        user: const AppUser(
+          id: '39c39a30-c8fb-4e08-8e13-c90212f68e59',
+          name: 'Hana Abdullah',
+          email: 'demo@swipeeat.test',
+        ),
+      );
+
+      expect(find.text('New here'), findsOneWidget);
+    });
+
+    testWidgets('names the month the account was made', (tester) async {
+      await pumpTab(
+        tester,
+        user: _user(lastPlaceName: null, createdAt: DateTime(2025, 12, 31)),
+      );
+
+      expect(find.text('eating out since Dec 2025'), findsOneWidget);
     });
   });
 
@@ -173,6 +265,22 @@ void main() {
 
       await pumpTab(tester, user: _user(budgetMin: null, budgetMax: null));
       expect(find.text('Any'), findsOneWidget);
+    });
+
+    testWidgets('an unset radius reads "Any distance"', (tester) async {
+      await pumpTab(tester, user: _user(searchRadiusKm: null));
+
+      expect(find.text('Any distance'), findsOneWidget);
+    });
+
+    testWidgets('draws five pips whatever the answer', (tester) async {
+      // Five for four levels, exactly as the prototype draws it: "Bring it"
+      // still leaves one dark, so the scale never reads as maxed out.
+      await pumpTab(tester, user: _user(spiceLevel: 4));
+      expect(_pips(tester), 5);
+
+      await pumpTab(tester, user: _user(spiceLevel: null));
+      expect(_pips(tester), 5);
     });
 
     testWidgets('lights one pip per spice level, out of five', (tester) async {
@@ -298,6 +406,132 @@ void main() {
       expect(profile.radiusCalls, [null]);
       expect(find.text('Any distance'), findsOneWidget);
     });
+
+    testWidgets('every row opens its own control', (tester) async {
+      // Four rows, four sheets. A chevron that opens the wrong question is a
+      // bug nothing else here would catch.
+      await pumpTab(tester);
+
+      for (final (row, marker) in const [
+        ('Halal only', 'Hides places without halal certification'),
+        ('Spice', 'How hot is too hot?'),
+        ('Budget per person', 'RM 100+'),
+        ('Default radius', '2 km'),
+      ]) {
+        await tester.tap(find.text(row));
+        await tester.pumpAndSettle();
+
+        expect(find.text(marker), findsWidgets, reason: row);
+
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+      }
+    });
+
+    testWidgets('the spice sheet sends the level and nothing else',
+        (tester) async {
+      await pumpTab(tester, user: _user(spiceLevel: 1));
+
+      await tester.tap(find.text('Spice'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bring it'));
+      await tester.pumpAndSettle();
+
+      final call = profile.preferenceCalls.single;
+      expect(call.spiceLevel, 4);
+      expect(call.halalOnly, isNull);
+      expect(call.vegetarian, isNull);
+      expect(call.budgetMin, isNull);
+      expect(call.clearBudget, isFalse,
+          reason: 'a sheet that edits one thing sends one thing');
+      expect(auth.user?.spiceLevel, 4);
+    });
+
+    testWidgets('the budget sheet sends both ends and nothing else',
+        (tester) async {
+      await pumpTab(tester);
+
+      await tester.tap(find.text('Budget per person'));
+      await tester.pumpAndSettle();
+      tester
+          .widget<RangeSlider>(find.byType(RangeSlider))
+          .onChanged!(const RangeValues(15, 60));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      final call = profile.preferenceCalls.single;
+      expect(call.budgetMin, 15);
+      expect(call.budgetMax, 60);
+      expect(call.halalOnly, isNull);
+      expect(call.spiceLevel, isNull);
+      expect(find.text('RM 15\u201360'), findsOneWidget);
+    });
+
+    testWidgets('a dragged budget writes once, not once per division',
+        (tester) async {
+      // The range reports on every frame of a drag; the sheet keeps the pair
+      // locally and writes when it closes, or a single drag would be a dozen
+      // round trips.
+      await pumpTab(tester);
+
+      await tester.tap(find.text('Budget per person'));
+      await tester.pumpAndSettle();
+      for (final end in const [20.0, 35.0, 60.0]) {
+        tester
+            .widget<RangeSlider>(find.byType(RangeSlider))
+            .onChanged!(RangeValues(15, end));
+        await tester.pump();
+      }
+      expect(profile.preferenceCalls, isEmpty,
+          reason: 'nothing is written while the finger is still down');
+
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      expect(profile.preferenceCalls, hasLength(1));
+      expect(profile.preferenceCalls.single.budgetMax, 60);
+    });
+
+    testWidgets('a sheet dismissed without an answer writes nothing',
+        (tester) async {
+      await pumpTab(tester);
+
+      for (final row in const ['Halal only', 'Spice', 'Default radius']) {
+        await tester.tap(find.text(row));
+        await tester.pumpAndSettle();
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+      }
+
+      expect(profile.preferenceCalls, isEmpty);
+      expect(profile.radiusCalls, isEmpty);
+    });
+
+    testWidgets('a failed radius write reverts and says so', (tester) async {
+      await pumpTab(tester);
+      profile.fail = true;
+
+      await tester.tap(find.text('Default radius'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Any distance'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Any distance'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Could not save that preference.'), findsOneWidget);
+      expect(auth.user?.searchRadiusKm, 3);
+      expect(find.text('3 km'), findsOneWidget);
+    });
+
+    testWidgets('Settings opens the settings page', (tester) async {
+      await pumpTab(tester);
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('settings route'), findsOneWidget);
+    });
   });
 
   group('ProfileTab layout', () {
@@ -305,6 +539,42 @@ void main() {
       await pumpTab(tester, viewport: _narrowViewport);
 
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('does not overflow at 320 px at double text size',
+        (tester) async {
+      // The stat labels wrap and the numbers are fitted; the taste rows have
+      // a value and a chevron beside a label that can now be twice as wide.
+      await pumpTab(
+        tester,
+        viewport: _narrowViewport,
+        textScaler: _hugeTextScale,
+        stats: const ProfileStats(plansKept: 27, streakWeeks: 6),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('You'), findsOneWidget);
+    });
+
+    testWidgets('the budget sheet fits a narrow screen at double text size',
+        (tester) async {
+      await pumpTab(
+        tester,
+        viewport: _narrowViewport,
+        textScaler: _hugeTextScale,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Budget per person'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Budget per person'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(RangeSlider), findsOneWidget);
     });
 
     testWidgets('every preference row clears a 44 pt target', (tester) async {
@@ -369,18 +639,23 @@ void main() {
   });
 }
 
+/// Counts every spice pip on screen, lit or not.
+int _pips(WidgetTester tester) => _countPips(tester, litOnly: false);
+
 /// Counts the ember-filled spice pips on screen.
-int _litPips(WidgetTester tester) {
-  var lit = 0;
+int _litPips(WidgetTester tester) => _countPips(tester, litOnly: true);
+
+int _countPips(WidgetTester tester, {required bool litOnly}) {
+  var count = 0;
   for (final container
       in tester.widgetList<Container>(find.byType(Container))) {
     final decoration = container.decoration;
     if (decoration is BoxDecoration &&
         decoration.shape == BoxShape.circle &&
-        decoration.color == kAccentEmber &&
-        container.constraints?.maxWidth == kSpicePipSize) {
-      lit++;
+        container.constraints?.maxWidth == kSpicePipSize &&
+        (!litOnly || decoration.color == kAccentEmber)) {
+      count++;
     }
   }
-  return lit;
+  return count;
 }

@@ -4,8 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
 import 'package:swipe_eat/core/ui/app_buttons.dart';
+import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
+import 'package:swipe_eat/features/onboarding/models/onboarding_draft.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_steps.dart';
 
@@ -59,6 +61,7 @@ void main() {
     Future<Position> Function()? resolvePosition,
     Future<String?> Function(Position)? resolvePlace,
     Size viewport = const Size(390, 844),
+    TextScaler textScaler = TextScaler.noScaling,
   }) async {
     // A phone-sized viewport, not the 800x600 default: the wizard's steps are
     // lazily built lists, and on a short surface the buttons at the bottom of
@@ -66,11 +69,16 @@ void main() {
     useViewport(tester, viewport);
     await tester.pumpWidget(
       MaterialApp(
-        home: OnboardingPage(
-          authController: auth,
-          repository: onboarding,
-          resolvePosition: resolvePosition ?? () async => _position(),
-          resolvePlace: resolvePlace ?? (_) async => 'Peserai, Batu Pahat',
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: OnboardingPage(
+              authController: auth,
+              repository: onboarding,
+              resolvePosition: resolvePosition ?? () async => _position(),
+              resolvePlace: resolvePlace ?? (_) async => 'Peserai, Batu Pahat',
+            ),
+          ),
         ),
       ),
     );
@@ -86,6 +94,15 @@ void main() {
       tester.widget<AppPrimaryButton>(finder).onPressed != null;
 
   Future<void> completeNameStep(WidgetTester tester) async {
+    // The step is a lazily built list: on a short screen at a large text size
+    // the field starts below the fold, so it has to be scrolled to before it
+    // exists at all.
+    await tester.scrollUntilVisible(
+      find.byType(TextField),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Aisyah');
     await tester.pump();
     await tester.tap(primaryButton('Continue'));
@@ -309,10 +326,15 @@ void main() {
   });
 
   group('the rules step', () {
-    Future<void> reachRules(WidgetTester tester, {Size? viewport}) async {
+    Future<void> reachRules(
+      WidgetTester tester, {
+      Size? viewport,
+      TextScaler textScaler = TextScaler.noScaling,
+    }) async {
       await pumpWizard(
         tester,
         viewport: viewport ?? const Size(390, 844),
+        textScaler: textScaler,
       );
       await completeNameStep(tester);
       await completeTasteStep(tester);
@@ -431,6 +453,207 @@ void main() {
 
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('is step 3 of 6', (tester) async {
+      // The wizard is six steps, and the bar is the only thing that says how
+      // many are left. A screen reader gets the same count in words.
+      final handle = tester.ensureSemantics();
+      await reachRules(tester);
+
+      expect(find.bySemanticsLabel('Step 3 of 6'), findsOneWidget);
+
+      handle.dispose();
+    });
+
+    testWidgets('draws two steps done, this one on, and three ahead',
+        (tester) async {
+      // The bar has three states, not two (§7e): a bar that only fills says
+      // "this much is done"; this one says "you are here, and there are three
+      // more", which is the question a first run actually raises.
+      await reachRules(tester);
+
+      final colours = _stepBarColours(tester);
+
+      expect(colours, hasLength(6));
+      expect(colours.sublist(0, 2), everyElement(kCreamMuted),
+          reason: 'name and taste are behind us');
+      expect(colours[2], kAccentEmber, reason: 'the rules step is current');
+      expect(colours.sublist(3), everyElement(kHairline),
+          reason: 'habits, location and the primer are ahead');
+    });
+
+    testWidgets('the spice segment starts with nothing chosen',
+        (tester) async {
+      // "Not answered" has to look different from "Mild": the step is
+      // skippable, so a segment that defaulted to the first option would put
+      // an answer on the profile that nobody gave.
+      final handle = tester.ensureSemantics();
+      await reachRules(tester);
+
+      for (final label in const ['Mild', 'Medium', 'Pedas', 'Bring it']) {
+        expect(
+          tester.getSemantics(find.bySemanticsLabel(label)),
+          isSemantics(
+            isButton: true,
+            hasSelectedState: true,
+            isSelected: false,
+            hasTapAction: true,
+          ),
+          reason: label,
+        );
+      }
+
+      handle.dispose();
+    });
+
+    for (final (label, level) in const [
+      ('Mild', 1),
+      ('Medium', 2),
+      ('Pedas', 3),
+      ('Bring it', 4),
+    ]) {
+      testWidgets('"$label" reaches the RPC as $level', (tester) async {
+        await reachRules(tester);
+
+        await tester.tap(find.text(label));
+        await tester.pump();
+        await finishFromRules(tester);
+
+        expect(onboarding.sentParams!['p_spice_level'], level);
+      });
+    }
+
+    testWidgets('the top stop sends a floor with no ceiling', (tester) async {
+      // The one path the draft tests cannot reach: the slider's own callback
+      // turns "RM 100" into "no ceiling". A stored 100 would hide every place
+      // priced above it rather than none of them.
+      await reachRules(tester);
+
+      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+            const RangeValues(10, 100),
+          );
+      await tester.pumpAndSettle();
+      expect(find.text('RM 10+'), findsOneWidget);
+
+      await finishFromRules(tester);
+
+      expect(onboarding.sentParams!['p_budget_min'], 10);
+      expect(onboarding.sentParams!['p_budget_max'], isNull);
+      expect(onboarding.sentParams!['p_clear_budget'], isFalse,
+          reason: 'a floor with no ceiling is an answer, not a blank');
+    });
+
+    testWidgets('a chosen range reaches the RPC as itself', (tester) async {
+      await reachRules(tester);
+
+      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+            const RangeValues(15, 60),
+          );
+      await tester.pumpAndSettle();
+      expect(find.text('RM 15–60'), findsOneWidget);
+
+      await finishFromRules(tester);
+
+      expect(onboarding.sentParams!['p_budget_min'], 15);
+      expect(onboarding.sentParams!['p_budget_max'], 60);
+    });
+
+    testWidgets('Skip sends nulls and falses, not the defaults on screen',
+        (tester) async {
+      await reachRules(tester);
+
+      await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+      await tester.tap(primaryButton('Continue')); // location
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      expect(onboarding.sentParams!['p_halal_only'], isFalse);
+      expect(onboarding.sentParams!['p_vegetarian'], isFalse);
+      expect(onboarding.sentParams!['p_spice_level'], isNull);
+      expect(onboarding.sentParams!['p_budget_min'], isNull);
+      expect(onboarding.sentParams!['p_budget_max'], isNull);
+      expect(onboarding.sentParams!['p_clear_budget'], isTrue);
+    });
+
+    testWidgets('Back to taste and forward again keeps the answers',
+        (tester) async {
+      // The steps are a PageView, so the rules step is not rebuilt from
+      // scratch on the way back — but the draft is the only thing that
+      // remembers, and an answer lost between two taps is invisible until
+      // the deck comes back wrong.
+      await reachRules(tester);
+
+      await tester.tap(find.text('Halal only'));
+      await tester.pump();
+      await tester.tap(find.text('Pedas'));
+      await tester.pump();
+      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+            const RangeValues(15, 60),
+          );
+      await tester.pumpAndSettle();
+
+      await tapBack(tester);
+      expect(find.text('What do you like to eat?'), findsOneWidget);
+
+      await tester.tap(primaryButton('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Any rules?'), findsOneWidget);
+      expect(find.text('RM 15–60'), findsOneWidget);
+
+      await finishFromRules(tester);
+
+      expect(onboarding.sentParams!['p_halal_only'], isTrue);
+      expect(onboarding.sentParams!['p_spice_level'], 3);
+      expect(onboarding.sentParams!['p_budget_min'], 15);
+      expect(onboarding.sentParams!['p_budget_max'], 60);
+    });
+
+    testWidgets('survives 320 px at double text size', (tester) async {
+      // Pumped on its own, the way the gesture primer is: walking the wizard
+      // at this scale is a test of the two steps before it, and the layout
+      // under test is this step's.
+      useViewport(tester, const Size(320, 640));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: const TextScaler.linear(2)),
+              child: Scaffold(
+                body: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: OnboardingRulesStep(
+                    draft: OnboardingDraft(name: 'Aisyah'),
+                    onChanged: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Any rules?'), findsOneWidget);
+      expect(find.text('Halal only'), findsOneWidget);
+
+      // The step is a list, so the budget card starts below the fold at this
+      // scale; scrolling to it is what lays it out.
+      await tester.scrollUntilVisible(
+        find.byType(RangeSlider),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('RM 10\u201340'), findsOneWidget,
+          reason: 'the read-out has to stay readable, not just fit');
+    });
   });
 
   group('the gesture primer', () {
@@ -498,4 +721,18 @@ void main() {
       expect(find.textContaining('Must try'), findsNothing);
     });
   });
+}
+
+/// The colour of each `.steps` segment, left to right.
+///
+/// Picked out by height: the step bar's segments are the only
+/// [kStepBarHeight]-tall boxes on the screen, which keeps the segment pills
+/// (36) and the switch tracks (30) out of the way.
+List<Color?> _stepBarColours(WidgetTester tester) {
+  return [
+    for (final container
+        in tester.widgetList<AnimatedContainer>(find.byType(AnimatedContainer)))
+      if (container.constraints?.maxHeight == kStepBarHeight)
+        (container.decoration as BoxDecoration?)?.color,
+  ];
 }

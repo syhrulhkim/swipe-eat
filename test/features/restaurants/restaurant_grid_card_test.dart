@@ -123,6 +123,57 @@ void main() {
     });
   });
 
+  group('RestaurantGridCard bite', () {
+    testWidgets('the notch is taken out of a saved tile only', (tester) async {
+      Finder notch() => find.descendant(
+            of: find.byType(RestaurantGridCard),
+            matching: find.byType(BiteNotch),
+          );
+
+      await _pumpTile(tester);
+      expect(tester.widget<BiteNotch>(notch()).bitten, isFalse);
+
+      await _pumpTile(tester, isSaved: true);
+      expect(tester.widget<BiteNotch>(notch()).bitten, isTrue);
+    });
+
+    testWidgets('the tile is one tap target, however it is marked',
+        (tester) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: _tileWidth,
+                height: _tileHeight,
+                child: RestaurantGridCard(
+                  restaurant: _restaurant(neighbourhood: 'Kampung Baru'),
+                  distanceText: '1.2 km',
+                  onTap: () => taps++,
+                  isSaved: true,
+                  isWishlisted: true,
+                  plannedLabel: 'Fri 4',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // The badge and the pill are marks, not controls: a tap on either has to
+      // reach the tile underneath.
+      await tester.tap(find.text('Warung Kak Ros'));
+      expect(taps, 1, reason: 'the name');
+
+      await tester.tap(find.text('Fri 4'), warnIfMissed: false);
+      expect(taps, 2, reason: 'the planned pill');
+
+      await tester.tap(_wishBadge, warnIfMissed: false);
+      expect(taps, 3, reason: 'the wishlist badge');
+    });
+  });
+
   group('RestaurantGridCard wishlist badge', () {
     testWidgets('appears only for a wishlisted place', (tester) async {
       await _pumpTile(tester, isSaved: true);

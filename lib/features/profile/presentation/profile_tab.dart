@@ -358,45 +358,55 @@ class _NotificationsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        AppIconButton(
-          icon: Icons.notifications_none_rounded,
-          size: kUtilityButtonSize,
-          background: kGlass,
-          semanticLabel:
-              count > 0 ? 'Notifications, $count waiting' : 'Notifications',
-          onTap: () {},
-        ),
-        if (count > 0)
-          Positioned(
-            top: -2,
-            right: -2,
-            child: IgnorePointer(
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 18),
-                height: 18,
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: kAccentCream,
-                  borderRadius: BorderRadius.circular(kRadiusPill),
-                ),
-                child: Text(
-                  '$count',
-                  style: const TextStyle(
-                    fontFamily: kTextFontFamily,
-                    fontSize: kFontSizeMicro,
-                    fontWeight: FontWeight.w700,
-                    color: kOnAccent,
-                    height: 1.2,
+    // A container of its own, or the bell's label lands on the same semantics
+    // node as the title beside it and the screen is announced as
+    // "You Notifications, button" — one control where there are two things.
+    return Semantics(
+      container: true,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AppIconButton(
+            icon: Icons.notifications_none_rounded,
+            size: kUtilityButtonSize,
+            background: kGlass,
+            semanticLabel:
+                count > 0 ? 'Notifications, $count waiting' : 'Notifications',
+            onTap: () {},
+          ),
+          if (count > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              // The dot repeats what the label already says; announcing the
+              // digit again would read as a second control.
+              child: ExcludeSemantics(
+                child: IgnorePointer(
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 18),
+                    height: 18,
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: kAccentCream,
+                      borderRadius: BorderRadius.circular(kRadiusPill),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        fontFamily: kTextFontFamily,
+                        fontSize: kFontSizeMicro,
+                        fontWeight: FontWeight.w700,
+                        color: kOnAccent,
+                        height: 1.2,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

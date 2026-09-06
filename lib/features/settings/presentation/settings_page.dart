@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -34,6 +36,15 @@ class _SettingsPageState extends State<SettingsPage> {
   /// written on release, and a failed write snaps back to this value's
   /// previous state.
   late int? _radiusKm = widget.authController.user?.searchRadiusKm;
+
+  /// The budget range while the finger is on it, for the same reason as
+  /// [_radiusKm]: a range reports on every division it crosses, so writing
+  /// from `onChanged` would fire a dozen RPCs per drag and leave the session
+  /// holding whichever reply happened to land last. Null means "showing what
+  /// the profile says".
+  int? _dragBudgetMin;
+  int? _dragBudgetMax;
+  bool _draggingBudget = false;
   bool _saving = false;
   bool _deleting = false;
 
@@ -272,13 +283,27 @@ class _SettingsPageState extends State<SettingsPage> {
             user.copyWith(spiceLevel: value.level),
             () => _repository.updatePreferences(spiceLevel: value.level),
           ),
-          onBudget: (min, max, user) => _savePreference(
-            user.copyWith(budgetMin: min, budgetMax: max),
-            () => _repository.updatePreferences(
-              budgetMin: min,
-              budgetMax: max,
-            ),
-          ),
+          budgetMin: _draggingBudget ? _dragBudgetMin : null,
+          budgetMax: _draggingBudget ? _dragBudgetMax : null,
+          onBudgetChanged: (min, max) => setState(() {
+            _draggingBudget = true;
+            _dragBudgetMin = min;
+            _dragBudgetMax = max;
+          }),
+          onBudget: (min, max, user) {
+            setState(() {
+              _draggingBudget = false;
+              _dragBudgetMin = null;
+              _dragBudgetMax = null;
+            });
+            unawaited(_savePreference(
+              user.copyWith(budgetMin: min, budgetMax: max),
+              () => _repository.updatePreferences(
+                budgetMin: min,
+                budgetMax: max,
+              ),
+            ));
+          },
         ),
         const SizedBox(height: 20),
         Text(
@@ -379,6 +404,9 @@ class _RulesSection extends StatelessWidget {
     required this.onVegetarian,
     required this.onSpice,
     required this.onBudget,
+    required this.onBudgetChanged,
+    this.budgetMin,
+    this.budgetMax,
   });
 
   final AppUser? user;
@@ -386,6 +414,12 @@ class _RulesSection extends StatelessWidget {
   final void Function(bool value, AppUser user) onVegetarian;
   final void Function(SpiceLevel value, AppUser user) onSpice;
   final void Function(int min, int? max, AppUser user) onBudget;
+
+  /// Where the thumbs are mid-drag, before anything has been written. Null
+  /// falls back to the stored answer.
+  final void Function(int min, int? max) onBudgetChanged;
+  final int? budgetMin;
+  final int? budgetMax;
 
   @override
   Widget build(BuildContext context) {
@@ -417,9 +451,20 @@ class _RulesSection extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         PrefBudgetRow(
-          min: account.budgetMin,
-          max: account.budgetMax,
-          onChanged: (min, max) => onBudget(min, max, account),
+          min: budgetMin ?? account.budgetMin,
+          // An unanswered budget opens where the first run opens it —
+          // "RM 10–40" — not on a floor of RM 10 with no ceiling, which is a
+          // real answer nobody here gave.
+          // Mid-drag the pair is authoritative on its own: a released cap is a
+          // null the finger just chose, so it must not fall back to the stored
+          // ceiling and yank the thumb back down.
+          max: budgetMin != null
+              ? budgetMax
+              : account.hasBudget
+                  ? account.budgetMax
+                  : kBudgetDefaultMax,
+          onChanged: onBudgetChanged,
+          onChangeEnd: (min, max) => onBudget(min, max, account),
         ),
       ],
     );

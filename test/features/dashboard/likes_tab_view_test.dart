@@ -21,6 +21,9 @@ const Size _tabletViewport = Size(1024, 1366);
 /// Accessibility scale the layout has to survive.
 const TextScaler _largeTextScale = TextScaler.linear(1.6);
 
+/// The largest scale the store's accessibility settings can hand the tab.
+const TextScaler _hugeTextScale = TextScaler.linear(2.0);
+
 /// A restaurant photo URL. Every image request is answered by the fake HTTP
 /// client with a real (transparent) PNG, so these never hit the network.
 String _photo(int id) => 'https://example.com/photo-$id.jpg';
@@ -375,6 +378,68 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('only one plan chip is pressed at a time', (tester) async {
+      // The three plan chips are one question asked three ways, so two of them
+      // lit at once would be a contradiction on screen.
+      final handle = tester.ensureSemantics();
+      await _pumpLikesTab(
+        tester,
+        liked: [_restaurant(id: 1, name: 'Booked Stall')],
+        plannedIds: const {1},
+      );
+
+      // The chip row is wider than the phone, so each one is scrolled into
+      // view before its state is read — an off-screen node reports itself
+      // hidden, which is true but not what this is asking.
+      Future<void> expectPressed(String label, {required bool lit}) async {
+        await tester.ensureVisible(find.text(label));
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.getSemantics(find.bySemanticsLabel(label)),
+          matchesSemantics(
+            label: label,
+            isButton: true,
+            hasSelectedState: true,
+            isSelected: lit,
+            hasTapAction: true,
+          ),
+          reason: label,
+        );
+      }
+
+      await _tapChip(tester, 'Planned');
+      await expectPressed('Planned', lit: true);
+      await expectPressed('All', lit: false);
+      await expectPressed('Not planned yet', lit: false);
+
+      await _tapChip(tester, 'Not planned yet');
+      await expectPressed('Not planned yet', lit: true);
+      await expectPressed('Planned', lit: false);
+      await expectPressed('All', lit: false);
+      handle.dispose();
+    });
+
+    testWidgets('Halal narrows a plan chip rather than replacing it',
+        (tester) async {
+      // Halal is the one chip that composes: it is a second question, not a
+      // fourth answer to the first.
+      await _pumpLikesTab(
+        tester,
+        liked: [
+          _restaurant(id: 1, name: 'Booked Halal', isHalal: true),
+          _restaurant(id: 2, name: 'Booked Other'),
+          _restaurant(id: 3, name: 'Loose Halal', isHalal: true),
+        ],
+        plannedIds: const {1, 2},
+      );
+
+      await _tapChip(tester, 'Planned');
+      await _tapChip(tester, 'Halal');
+
+      expect(_tileNames(tester), ['Booked Halal']);
+    });
+
     testWidgets('Wishlist → navigates and never stays pressed',
         (tester) async {
       var opened = 0;
@@ -401,6 +466,27 @@ void main() {
           hasTapAction: true,
         ),
       );
+      handle.dispose();
+    });
+
+    testWidgets('a chip\'s own tap action filters the grid', (tester) async {
+      // D83: AppFilterChip excludes its Text and re-declares onTap, so the
+      // claim is proved by driving the action rather than reading the flag.
+      final handle = tester.ensureSemantics();
+      await _pumpLikesTab(
+        tester,
+        liked: [
+          _restaurant(id: 1, name: 'Halal Stall', isHalal: true),
+          _restaurant(id: 2, name: 'Other Stall'),
+        ],
+      );
+
+      await tester.ensureVisible(find.text('Halal'));
+      await tester.pumpAndSettle();
+      tester.semantics.tap(find.semantics.byLabel('Halal'));
+      await tester.pumpAndSettle();
+
+      expect(_tileNames(tester), ['Halal Stall']);
       handle.dispose();
     });
 
@@ -497,6 +583,17 @@ void main() {
       final scaledHeight = tester.getSize(find.text('Halal')).height;
       await pumpBusyGrid(tester, viewport: _phoneViewport);
       expect(tester.getSize(find.text('Halal')).height, lessThan(scaledHeight));
+    });
+
+    testWidgets('does not overflow at 320 px and twice the text size',
+        (tester) async {
+      await pumpBusyGrid(
+        tester,
+        viewport: _narrowViewport,
+        textScaler: _hugeTextScale,
+      );
+
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('the chip row scrolls rather than overflowing at 320 px',

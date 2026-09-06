@@ -259,21 +259,46 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    // A Wrap rather than a Row, for the reason the footer is one: at twice
+    // the text size the two counts alone are wider than a 320 px phone, and a
+    // Row would either stripe the edge or squeeze the title down to a column
+    // of single letters. This drops the counts onto their own line instead,
+    // and lays them out exactly as the design does whenever they fit.
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      // The design's gap between the title and the counts, kept as a minimum
+      // for the width where the two only just fit side by side.
+      spacing: 12,
+      runSpacing: 8,
       children: [
         // Two lines, as the design's `<br>`. Hard-wrapped rather than left to
         // the width, because where it breaks is part of the composition.
-        Expanded(
+        //
+        // Scaled down rather than reflowed when the text size outgrows the
+        // phone: letting it reflow would break "Places to" across a third
+        // line, which is both the wrong composition and 60-odd pixels the
+        // list needs. Everything else on the screen still scales in full.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
           child: Text(
             'Places to\ntry',
             style: appTitleStyle(context).copyWith(height: 1.0),
           ),
         ),
-        const SizedBox(width: 12),
-        _Count(value: toGo, label: 'to go'),
-        const SizedBox(width: 16),
-        _Count(value: eaten, label: 'eaten'),
+        // The pair wraps for the same reason, one level down: at twice the
+        // text size "3 to go 12 eaten" is itself wider than the phone, so the
+        // second count drops under the first rather than off the edge.
+        Wrap(
+          spacing: 16,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          children: [
+            _Count(value: toGo, label: 'to go'),
+            _Count(value: eaten, label: 'eaten'),
+          ],
+        ),
       ],
     );
   }
@@ -375,20 +400,34 @@ class _AddBar extends StatelessWidget {
               // target.
               width: kMinTapTarget,
               height: kMinTapTarget,
-              child: Center(
-                child: Material(
-                  color: kAccentEmber,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      onSubmit();
-                    },
-                    child: const SizedBox(
+              // The InkWell takes the whole 44, and the ember disc is painted
+              // inside it. The other way round — a 36 px InkWell centred in a
+              // 44 px box — leaves the outer ring hit-testing to nothing, so
+              // the target would be 44 only for a screen reader.
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onSubmit();
+                  },
+                  child: const Center(
+                    child: SizedBox(
                       width: kRoundActionSize,
                       height: kRoundActionSize,
-                      child: Icon(Icons.add_rounded, size: 18, color: kOnAccent),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: kAccentEmber,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.add_rounded,
+                          size: 18,
+                          color: kOnAccent,
+                        ),
+                      ),
                     ),
                   ),
                 ),
