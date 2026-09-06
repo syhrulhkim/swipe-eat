@@ -66,7 +66,11 @@ class NearbyResultsBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          _SwipeAllButton(count: resultCount, onTap: onSwipeAll),
+          // Flexible with its natural width as the ceiling: at large text the
+          // button's label shrinks to fit rather than pushing past the edge.
+          Flexible(
+            child: _SwipeAllButton(count: resultCount, onTap: onSwipeAll),
+          ),
         ],
       ),
     );
@@ -160,15 +164,18 @@ class _SwipeAllButton extends StatelessWidget {
                 height: kNearbyResultButtonHeight,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 alignment: Alignment.center,
-                child: Text(
-                  'Swipe all $count',
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontFamily: kTextFontFamily,
-                    fontSize: kFontSizeBody,
-                    fontWeight: FontWeight.w600,
-                    color: kOnAccent,
-                    height: 1.2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Swipe all $count',
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontFamily: kTextFontFamily,
+                      fontSize: kFontSizeBody,
+                      fontWeight: FontWeight.w600,
+                      color: kOnAccent,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ),

@@ -113,10 +113,14 @@ class _StepButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(kRadiusPill),
     );
 
+    // One node with the tap on it (D83): the InkWell's own node is excluded,
+    // so the label and the action must both live here.
     return Semantics(
       label: semanticLabel,
       button: true,
       enabled: enabled,
+      excludeSemantics: true,
+      onTap: enabled ? onTap : null,
       child: Opacity(
         opacity: enabled ? 1 : 0.4,
         child: ClipRRect(
