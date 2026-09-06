@@ -332,7 +332,7 @@ means "don't change this".
 |---|---|---|
 | `create_plan(p_restaurant_id, p_plan_date, p_plan_time, p_time_label, p_with_friends)` | `plans` | Upserts on `(owner_id, restaurant_id, plan_date)` (D107). A cancelled plan comes back `planned`. |
 | `mark_plan_kept(p_today date default current_date)` | `integer` | Flips the caller's past `planned` rows to `kept` (D108). Returns the count. Called by the client on every load. |
-| `plan_stats(p_today date default current_date)` | `table(plans_kept int, streak_weeks int)` | The You tab's two figures. The streak counts consecutive ISO weeks back from the week before `p_today`. |
+| `plan_stats(p_today date default current_date)` | `table(plans_kept int, streak_weeks int)` | The You tab's two figures. The streak counts consecutive ISO weeks back from the most recent past week holding a plan; that week must be the current one or the one before, else the streak is 0. |
 | `is_plan_member(p_plan_id bigint)` | `boolean` | RLS helper, `security definer` (D109). Checks `auth.uid()` inside itself, so it can only answer about the caller. |
 
 `p_today` is passed by the client rather than defaulted, so "today" is the

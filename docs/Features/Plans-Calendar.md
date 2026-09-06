@@ -141,7 +141,10 @@ warning on `get_ngap_count`.
 phone's day and not the database server's.
 
 `plan_stats` counts the streak as consecutive ISO weeks, most recent first,
-anchored on the week before today — a week with no plan ends the run.
+anchored on the most recent past week that has a plan — which may be this week
+or the one before it, so the run does not reset at midnight on Sunday. A week
+with no plan ends the run, and a run whose last week is older than that counts
+zero.
 
 ## 4. Client shape
 
@@ -229,8 +232,8 @@ dashboard only decides where to hang it.
 - **Topbar**: "Calendar", a search button, and a "New plan" button that asks
   the dashboard for tab 0 (`DashboardTabRequest`). Search is a real inline
   filter over plan names, not a placeholder.
-- **Month card**: the grid, with a "This month ▾" chip that opens a bottom
-  sheet of the next six months. A planned day wears the ring and its cover;
+- **Month card**: the grid, with a "This month" chip — the label only, no
+  caret glyph — that opens a bottom sheet of the next six months. A planned day wears the ring and its cover;
   more than one plan on a day adds pips underneath.
 - **Sections**: "Today · 2 plans", "Fri 4 · 1 plan", … each row a `.plan` card
   — 48 px logo (cover, or two initials from the name), name, and a detail line

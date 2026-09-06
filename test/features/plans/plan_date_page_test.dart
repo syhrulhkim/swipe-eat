@@ -212,10 +212,13 @@ void main() {
         (tester) async {
       await _pumpPage(tester);
 
-      // A finger landing near the cell's edge, in the gutter beside the 36 pt
-      // disc, must still choose the day.
-      final cell = tester.getRect(find.text('4'));
-      await tester.tapAt(Offset(cell.left - 6, cell.center.dy));
+      // The rect of the *cell*, not of the number: `find.text('4')` is about
+      // eight points wide and sits inside the disc, so tapping just outside it
+      // would still land on the disc and prove nothing.
+      final cell = tester.getRect(find.bySemanticsLabel('Fri 4 Sep'));
+      // A finger landing in the gutter beside the 36 pt disc must still choose
+      // the day.
+      await tester.tapAt(Offset(cell.left + 1, cell.center.dy));
       await tester.pumpAndSettle();
 
       expect(find.text('Fri 4 Sep · 20:00'), findsOneWidget);

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:swipe_eat/features/plans/data/plans_repository.dart';
 import 'package:swipe_eat/features/plans/domain/plan_labels.dart';
 import 'package:swipe_eat/features/plans/models/plan.dart';
@@ -6,6 +9,37 @@ import 'package:swipe_eat/features/plans/state/plans_controller.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
 
 import 'fake_plans_repository.dart';
+
+/// Drives the controller's auth subscription without a Supabase singleton,
+/// the same seam [LikesController]'s own tests use.
+class _FakeAuthEvents extends LikesAuthEvents {
+  _FakeAuthEvents({this.userId});
+
+  String? userId;
+  // Lives for the length of one test and dies with it.
+  // ignore: close_sinks
+  final StreamController<AuthState> events = StreamController.broadcast();
+
+  @override
+  Stream<AuthState>? get changes => events.stream;
+
+  @override
+  String? get currentUserId => userId;
+}
+
+AuthState _signedIn(String userId) {
+  final user = User(
+    id: userId,
+    appMetadata: const {},
+    userMetadata: const {},
+    aud: 'authenticated',
+    createdAt: '2026-08-24T00:00:00Z',
+  );
+  return AuthState(
+    AuthChangeEvent.signedIn,
+    Session(accessToken: 'token', tokenType: 'bearer', user: user),
+  );
+}
 
 /// A Wednesday, which is what the prototype's calendar is drawn on. Every
 /// label in these tests is a statement about this instant.
@@ -25,6 +59,88 @@ PlansController buildController(
 }
 
 void main() {
+  group('PlansController auth following', () {
+    PlansController following(
+      FakePlansRepository repository,
+      _FakeAuthEvents auth, {
+      LikesController? likes,
+    }) {
+      return PlansController(
+        repository: repository,
+        clock: () => kNow,
+        authEvents: auth,
+        likes: likes,
+      );
+    }
+
+    test('the replayed signedIn for the current account is not a change',
+        () async {
+      // Supabase replays its latest event to every new listener, so a
+      // fresh-login launch sees signedIn for the account already loaded.
+      // Treating that as a switch would empty the calendar it just filled.
+      final repository = FakePlansRepository(
+        rows: [testPlan(1, date: DateTime(2026, 9, 4))],
+      );
+      final auth = _FakeAuthEvents(userId: 'user-a');
+      final controller = following(repository, auth);
+      addTearDown(() {
+        controller.dispose();
+        auth.events.close();
+      });
+      await controller.ensureLoaded();
+
+      auth.events.add(_signedIn('user-a'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.isLoaded, isTrue);
+      expect(controller.upcoming, hasLength(1));
+    });
+
+    test('an actual account change dumps the calendar', () async {
+      final repository = FakePlansRepository(
+        rows: [testPlan(1, restaurantId: 306, date: DateTime(2026, 9, 4))],
+      );
+      final auth = _FakeAuthEvents(userId: 'user-a');
+      final likes = LikesController(followAuthChanges: false);
+      final controller = following(repository, auth, likes: likes);
+      addTearDown(() {
+        controller.dispose();
+        likes.dispose();
+        auth.events.close();
+      });
+      await controller.ensureLoaded();
+      expect(likes.plannedRestaurantIds, {306});
+
+      auth.events.add(_signedIn('user-b'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.isLoaded, isFalse);
+      expect(controller.plans, isEmpty);
+      expect(likes.plannedRestaurantIds, isEmpty,
+          reason: "user A's plans must not mark tiles in user B's session");
+    });
+
+    test('signing out clears the calendar', () async {
+      final repository = FakePlansRepository(
+        rows: [testPlan(1, date: DateTime(2026, 9, 4))],
+      );
+      final auth = _FakeAuthEvents(userId: 'user-a');
+      final controller = following(repository, auth);
+      addTearDown(() {
+        controller.dispose();
+        auth.events.close();
+      });
+      await controller.ensureLoaded();
+
+      auth.events.add(const AuthState(AuthChangeEvent.signedOut, null));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.isLoaded, isFalse);
+      expect(controller.plans, isEmpty);
+      expect(controller.stats.plansKept, 0);
+    });
+  });
+
   group('PlansController loading', () {
     test('flips past plans before it lists, and asks from the first of the '
         'month', () async {
