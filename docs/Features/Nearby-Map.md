@@ -201,16 +201,33 @@ the `swiped` subquery can only ever see the caller's own rows.
 
 ## 5. Tiles
 
-`flutter_map` + `latlong2`, with the `TileProvider` **constructor-injected**
-(D101, D60). The default is OpenStreetMap's public tile server with
-`userAgentPackageName` set to the real application id, and the page carries the
-required "© OpenStreetMap" attribution.
+The `TileProvider` is constructor-injected (D101, D60), so a widget test never
+opens a socket. The template and its credit come from `AppConfig`:
 
-**OSM's public tiles are development only.** Their usage policy forbids a
-released app pointing at them. Shipping means swapping the URL template for a
-paid or self-hosted source; nothing else in the tab changes, and the injection
-point is already there. Tests pass a `FakeTileProvider` that returns a
-transparent image, so the suite never touches the network.
+| Define | Default | Meaning |
+|---|---|---|
+| `MAP_TILE_URL_TEMPLATE` | OSM's public server | Where the raster tiles come from |
+| `MAP_TILE_ATTRIBUTION` | `© OpenStreetMap` | The credit drawn bottom-left |
+
+The default is **development only**. OpenStreetMap's tile usage policy forbids
+a released app from pointing at their public server: no heavy use, no bulk
+downloading, and they may cut a client off without notice, which turns the map
+blank in the field. Shipping means an account with a tile host (MapTiler,
+Stadia, Mapbox, Thunderforest, or a self-hosted renderer) and both defines:
+
+```
+--dart-define=MAP_TILE_URL_TEMPLATE=https://…/{z}/{x}/{y}.png?key=…
+--dart-define=MAP_TILE_ATTRIBUTION='© MapTiler © OpenStreetMap'
+```
+
+The credit travels with the template because every host requires its own, and a
+template swapped without its attribution is a licence breach.
+`AppConfig.usesDevelopmentTiles` reports whether a build is still on the
+default, so "not shippable" is a value the app can read rather than a fact
+somebody has to remember (D120).
+
+The `User-Agent` is `kTileUserAgentPackageName`, matching the Android
+application id, so a blocked client is identifiable rather than anonymous.
 
 ## 6. "Swipe all *n*"
 

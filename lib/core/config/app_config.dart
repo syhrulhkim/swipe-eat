@@ -45,6 +45,35 @@ class AppConfig {
   static const bool guestBrowsingEnabled =
       bool.fromEnvironment('GUEST_BROWSING_ENABLED');
 
+  /// The map's raster tile template, and the credit drawn over it.
+  ///
+  /// The default is OpenStreetMap's public server, which their tile usage
+  /// policy allows for development and **forbids for a released app**: they
+  /// may cut a heavy client off without notice, and a store build that points
+  /// here can go blank overnight. Shipping means an account with a tile host
+  /// (MapTiler, Stadia, Mapbox, Thunderforest, or a self-hosted renderer) and
+  /// two defines, so the swap is a build flag rather than a code change:
+  ///
+  ///   --dart-define=MAP_TILE_URL_TEMPLATE=https://…/{z}/{x}/{y}.png?key=…
+  ///   --dart-define=MAP_TILE_ATTRIBUTION='© MapTiler © OpenStreetMap'
+  ///
+  /// The credit travels with the template because every host requires its own,
+  /// and a template swapped without its attribution is a licence breach.
+  static const String mapTileUrlTemplate = String.fromEnvironment(
+    'MAP_TILE_URL_TEMPLATE',
+    defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
+
+  static const String mapTileAttribution = String.fromEnvironment(
+    'MAP_TILE_ATTRIBUTION',
+    defaultValue: '© OpenStreetMap',
+  );
+
+  /// True when the build is still pointing at OSM's public server, which is
+  /// the one thing standing between this app and a store release.
+  static bool get usesDevelopmentTiles =>
+      mapTileUrlTemplate.contains('tile.openstreetmap.org');
+
   /// Sentry's ingest URL for this project. Not defaulted: a build made without
   /// it — every local run and every test — reports nothing at all rather than
   /// filling a project with noise from developer machines.
