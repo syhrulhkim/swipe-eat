@@ -11,6 +11,7 @@ import '../features/onboarding/presentation/onboarding_page.dart';
 import '../features/restaurants/models/restaurant_detail_data.dart';
 import '../features/restaurants/presentation/restaurant_detail_route.dart';
 import '../features/settings/presentation/settings_page.dart';
+import '../features/wishlist/presentation/wishlist_page.dart';
 
 GoRouter createRouter(AuthController authController) {
   return GoRouter(
@@ -106,6 +107,12 @@ GoRouter createRouter(AuthController authController) {
         path: '/settings',
         builder: (context, state) =>
             SettingsPage(authController: authController),
+      ),
+      // Pushed from the Bites tab's "Wishlist →" chip, so it keeps the
+      // platform transition and the iOS swipe-back gesture.
+      GoRoute(
+        path: '/wishlist',
+        builder: (context, state) => const WishlistPage(),
       ),
       GoRoute(
         path: '/restaurant/:id',

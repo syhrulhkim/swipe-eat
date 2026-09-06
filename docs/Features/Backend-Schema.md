@@ -5,12 +5,13 @@ Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](..
 
 # Backend Schema (as built)
 
-> **Client drift, 2026-09-04.** The client no longer uses `undo_swipe`,
-> `get_swipe_stats`, `get_super_liked_ids`, `set_passport` or
-> `profiles.passport_*`, and reads `swipes.super_like` as **"save for later"**
-> (D84, D85). Nothing has been dropped: dropping destroys data and is
-> irreversible, so it wants its own decision rather than riding along with a
-> client change. This document still describes the database as it is.
+> **Client drift, 2026-09-05.** The client no longer uses `undo_swipe`,
+> `get_swipe_stats`, `get_super_liked_ids`, `get_visited_restaurants`,
+> `get_reviewed_restaurants`, `set_passport`, `profiles.passport_*` or
+> `swipes.super_like` — "save for later" moved to `wishlist_items` (D84, D94,
+> D96). Nothing has been dropped: dropping destroys data and is irreversible,
+> so it wants its own decision rather than riding along with a client change.
+> This document still describes the database as it is.
 
 The **as-built** state of the Supabase project `vpcldlhqpvunnuexecgn`, read from
 the live database on 2026-09-03. Where this disagrees with
@@ -49,7 +50,8 @@ skill:
 | `profiles` | 1 | 1:1 with `auth.users`. Preferences, location, filters, Passport |
 | `profile_cuisines` | — | The onboarding taste signal |
 | `profile_dietary_tags` | — | Dietary needs from onboarding |
-| `swipes` | 33 | Every deck decision. Also the Liked and Visited lists |
+| `swipes` | 33 | Every deck decision. Also the Liked list and the visit stamp |
+| `wishlist_items` | 3 | Places to try. The store behind Later (D94) |
 | `quiz_questions` | 1 | **Orphaned** — see [Quiz.md](Quiz.md) |
 | `quiz_options` | — | **Orphaned** |
 | `quiz_responses` | — | **Orphaned** |
@@ -87,21 +89,50 @@ list, the Liked tab, the Visited tab, the daily limit and the streak.
 | `user_id` | `uuid` not null | → `profiles (id)` on delete cascade |
 | `restaurant_id` | `bigint` not null | → `restaurants (id)` on delete cascade |
 | `liked` | `boolean` not null | Stays a boolean on purpose — see D5 |
-| `super_like` | `boolean` not null `false` | The second flag rather than an enum |
+| `super_like` | `boolean` not null `false` | **No longer written or read.** Kept for data safety; `wishlist_items` replaced it (D94) |
 | `visited_at` | `timestamptz` | Stamped by `mark_visited` |
 | `source` | `text` not null `'deck'` | Where the swipe came from |
 | `swiped_at_latitude` / `_longitude` | `double precision` | Where the user was |
 | `created_at` / `updated_at` | `timestamptz` not null | `updated_at` maintained by `touch_updated_at` |
 
 `unique (user_id, restaurant_id)` — a re-swipe is an upsert. Partial indexes on
-`(user_id) where liked` and `(user_id) where super_like` serve the Liked grid
-and its star badges.
+`(user_id) where liked` and `(user_id) where super_like` serve the Liked grid;
+the second is now unused, alongside the column it indexes.
 
 **`liked = false` and "no row" are different states.** `get_deck` excludes every
 restaurant that has *any* swipe row, so writing `liked = false` retires a card
 permanently (correct for unlike: the user saw it and said no) while deleting the
 row makes it dealable again (correct for rewind: the swipe never happened).
 That is why `undo_swipe` deletes — see D6.
+
+### `wishlist_items`
+
+Added 2026-09-05 (`20260905110000_wishlist_items.sql`). The checklist of places
+to try — see [Wishlist.md](Wishlist.md) for why it is a table and not the
+`super_like` flag it replaces.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` identity | |
+| `user_id` | `uuid` not null | → `profiles (id)` on delete cascade |
+| `restaurant_id` | `bigint` | → `restaurants (id)` on delete cascade. Null only for a `manual` row |
+| `title` | `text` not null | Stored, not only joined: a manual row has nothing to join to |
+| `source` | `text` not null | `'swiped'` \| `'friend'` \| `'manual'` |
+| `from_user_id` | `uuid` | → `profiles (id)` on delete **set null**. No write path yet |
+| `eaten_at` | `timestamptz` | Null while the place is still to go |
+| `created_at` | `timestamptz` not null | The list's order within each half |
+
+`check (restaurant_id is not null or source = 'manual')` — the one shape the
+table refuses.
+
+`unique (user_id, restaurant_id) where restaurant_id is not null` — one row per
+place per user, and any number of manual entries. Partial, so PostgREST cannot
+name it as an upsert conflict target; the client inserts and swallows `23505`
+instead. Plus `(user_id, eaten_at)` for the list's order and a plain index on
+each foreign key.
+
+Backfilled from `swipes where super_like` with the swipe's own `updated_at` as
+`created_at`: **3 rows, 1 user**.
 
 ### `profiles`
 
@@ -201,7 +232,7 @@ Three deliberate asymmetries (D105):
 
 | Function | Signature | Notes |
 |---|---|---|
-| `record_swipe` | `(p_restaurant_id, p_liked, p_source, p_latitude, p_longitude, p_super_like) → void` | Upsert on `(user_id, restaurant_id)` |
+| `record_swipe` | `(p_restaurant_id, p_liked, p_source, p_latitude, p_longitude, p_super_like) → void` | Upsert on `(user_id, restaurant_id)`. The client stopped sending `p_super_like` (D95); the parameter keeps its default |
 | `undo_swipe` | `(p_restaurant_id bigint) → void` | **Deletes** the row. Raises `42501` with no authenticated user |
 | `mark_visited` | `(p_restaurant_id bigint, p_visited boolean) → void` | Stamps or clears `visited_at` |
 | `get_swipe_stats` | `() → table(swipes_today int, streak_days int)` | The daily-limit and streak chip |
@@ -211,17 +242,19 @@ Three deliberate asymmetries (D105):
 | Function | Signature |
 |---|---|
 | `get_liked_restaurants` | `(p_limit int, p_offset int) → setof restaurants` — `order by super_like desc, updated_at desc` |
-| `get_visited_restaurants` | `(p_limit, p_offset) → setof restaurants` |
-| `get_reviewed_restaurants` | `(p_limit, p_offset) → setof restaurants` |
-| `get_super_liked_ids` | `() → setof bigint` |
+| `get_visited_restaurants` | `(p_limit, p_offset) → setof restaurants` — **no caller** since D96 |
+| `get_reviewed_restaurants` | `(p_limit, p_offset) → setof restaurants` — **no caller** since D96 |
+| `get_super_liked_ids` | `() → setof bigint` — **no caller** since D94 |
 | `search_restaurants` | `(p_query text, p_limit int, p_latitude, p_longitude, p_radius_km int, p_cuisine_id bigint) → setof restaurants` — caps at 100 |
 | `get_cuisine_counts` | `() → table(cuisine_id, slug, label, emoji, restaurant_count, cover_url)` — ordered by count desc |
 | `get_nearby` | `(p_latitude, p_longitude, p_radius_km double precision default 3, p_limit int default 60) → table(<restaurant columns>, restaurant_images jsonb, dishes jsonb, reviews jsonb, distance_km, open_now)` — ordered by distance, hard cap 200 |
 
-`get_super_liked_ids` is a second call rather than a flag on
+Badges for saved places come from a second call rather than a flag on
 `get_liked_restaurants` because that function returns `setof public.restaurants`,
 which is what lets PostgREST embed images and reviews. Widening the return type
 to carry a flag would cost the embed; a cheap second call is the smaller price.
+That reasoning is unchanged — the second call is now a plain `wishlist_items`
+select rather than `get_super_liked_ids` (D94).
 
 `get_nearby` (2026-09-05, [Nearby-Map.md](Nearby-Map.md)) pays that price in the
 other direction, deliberately. `distance_km` and `open_now` are the whole point
@@ -282,7 +315,7 @@ Only 4 functions are `security definer`; every one pins `set search_path = ''`.
 
 ## 4. RLS
 
-16 policies. The split is uniform: **catalogue is world-readable, per-user data
+20 policies. The split is uniform: **catalogue is world-readable, per-user data
 is owner-only, and nothing in the catalogue is writable by a client at all.**
 
 Catalogue reads — `select` to `anon, authenticated`:
@@ -293,9 +326,10 @@ Catalogue reads — `select` to `anon, authenticated`:
 Owner-only — to `authenticated`, `using` **and** `with check` on
 `(select auth.uid())`:
 `swipes` (all), `quiz_responses` (all), `profile_cuisines` (all),
-`profile_dietary_tags` (all), `profiles` (`select` + `update` only — insert is
-the trigger's job, and there is no delete policy because account deletion goes
-through the cascade).
+`profile_dietary_tags` (all), `wishlist_items` (one policy per verb rather than
+one `all`, because each verb was spelled out when the table was added),
+`profiles` (`select` + `update` only — insert is the trigger's job, and there
+is no delete policy because account deletion goes through the cascade).
 
 Catalogue writes happen only via migrations, the scraping scripts (which use
 the publishable key for reads and SQL for writes) and `service_role`. There is

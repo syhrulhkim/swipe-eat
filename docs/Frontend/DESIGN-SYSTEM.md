@@ -376,6 +376,71 @@ line in a third of a 320 px screen, and an ellipsis there would hide which
 number it is. The number is in a `FittedBox`, so a four-digit count shrinks
 instead of overflowing.
 
+## 7f. The filter chip row
+
+`AppFilterChip` and the `.chiprow` it lives in — the Bites tab's filters, and
+the pattern any later filter row should copy.
+
+| Piece | Value |
+|---|---|
+| Height (drawn) | `kChipHeight` = 36 |
+| Height (tapped) | `kMinTapTarget` = 44 |
+| Shape | `kRadiusPill`, 16 px of horizontal padding |
+| Unchosen | transparent, `kHairline` outline, `kTextOnPhoto` label at `kFontSizeSmall` w500 |
+| Chosen | `kAccentEmber` fill and border, `kOnAccent` label |
+| Transition | `kMotionDuration` / `kMotionEase` |
+
+Two rules the shape carries:
+
+- **Drawn at 36, tapped at 44.** The chip keeps the design's size and the
+  finger still gets its target — a `SizedBox(height: kMinTapTarget)` with the
+  pill centred inside it. Copy this rather than growing the chip.
+- **Ember means chosen, nothing else.** A chip that navigates instead of
+  filtering ("Wishlist →") passes `selected: false` forever, because it holds
+  no state to show. Lighting it would be the palette lying.
+
+The row itself scrolls horizontally and bleeds to both screen edges, so it
+reads as continuing past them rather than as five things that happened to fit.
+
+Semantics: `label` + `isButton` + `hasSelectedState`, with the tap action
+re-declared beside `excludeSemantics` (D83).
+
+## 7g. Two marks on a tile
+
+`RestaurantGridCard` can carry three signals at once, and they do not share
+corners:
+
+| Mark | Corner | Says |
+|---|---|---|
+| The **bite** (§7a) | top right, clipped | saved |
+| The **wish badge** — `kWishBadgeSize` 28, `kFillWishBadge`, hairline, 14 px bookmark | top right, drawn | still on the wishlist |
+| The **planned pill** — ember, `kFontSizeMicro` w700 on `kOnAccent` | top left | a day is set |
+
+The first two collide by design: the notch is a 30 px circle centred 6 px
+inside the corner, and a 28 px badge inset 8 px falls almost wholly within it.
+The prototype's own mask erases its `.wish` for exactly this reason. The badge
+is therefore painted **outside** the clip — an outer `Stack` around the
+`BiteNotch` — so it reads as the bookmark sitting in the bite rather than
+disappearing into it. `restaurant_grid_card_test.dart` asserts the overlap, so
+the day the geometry changes the test stops being vacuous rather than silently
+passing.
+
+The tile's second line is **"Cuisine · Neighbourhood"**, and drops the
+neighbourhood rather than leaving a dangling separator when the row has none.
+
+## 7h. The strike-through
+
+Crossing a wishlist row off draws an ember 2 px rule across the name, left to
+right, over `kStrikeDuration` (260 ms).
+
+It is a scaling bar, not `TextDecoration.lineThrough`, and it has its own
+duration rather than `kMotionDuration`, for one reason each: a text decoration
+is either there or it is not, and this has to **travel** — slower than the
+interface transitions, because it is a drawing gesture the eye is meant to
+follow, so the crossing-off reads as something the tap did rather than a state
+the row was always in. The photo desaturates and fades to 50 % on the same
+tap, and the row re-sorts to the bottom.
+
 ## 8. Testing
 
 `test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the
@@ -453,6 +518,7 @@ instances and their licences already existed. Lexend was removed in turn.
 | D78 | `ScreenGlow` is the single exception to "nothing decorative is orange", granted only because it is `IgnorePointer` and never touches a control. | locked 2026-09-04 |
 | D79 | The saved-marker is a notch **clipped out of** the surface, not a badge drawn on it. A mark that is part of the silhouette cannot be mistaken for a button; the heart, star and badge it replaces all could. | locked 2026-09-04 |
 | D80 | Only the current tab is labelled. The bar spends its width on the one question the user is asking, and three independent signals — fill, ink, filled-vs-outline glyph — say which tab is current without relying on colour. | locked 2026-09-04 |
+| D96 | The design's chip row replaces the Bites segments. `AppFilterChip` is drawn at 36 and tapped at 44, and only a *selected* chip is ember — a chip that navigates never lights. | locked 2026-09-05 |
 | D81 | The bite is not wired to the swipe card. The deck deals only unswiped places, so the flag would be false everywhere — an always-false switch is dead code, not a reskin. | locked 2026-09-04 |
 | D82 | The super-like star survives the bite. "Must try" and "saved" are different facts; retiring super like is [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md) §4.5's call. A bitten tile moves its badges to the left corner instead. | open, pending §4.5 |
 | D83 | Any `Semantics` using `excludeSemantics` re-declares its own `onTap`, and an accessibility claim is asserted by driving the semantics action, never by reading the widget tree. | locked 2026-09-04 |

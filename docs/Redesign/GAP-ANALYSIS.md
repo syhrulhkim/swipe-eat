@@ -341,7 +341,7 @@ Each phase is independently shippable and each unblocks the next.
 | **3** | Reskin the existing five tabs in place, no new features | Ships a coherent Ngap look with today's features. **Partly delivered 2026-09-04** — see below |
 | **4** | Price band + neighbourhood + dishes, and the new detail screen | The detail screen is where the product argues for itself |
 | ~~**5**~~ | ~~Nearby: the map replaces the cuisine grid~~ | ✅ **Delivered 2026-09-05.** See [Features/Nearby-Map.md](../Features/Nearby-Map.md). The 474 ungeocoded rows and the missing KL catalogue are now visible rather than urgent: they simply do not pin. |
-| **6** | Wishlist + the up-swipe rebind + retire super like | Small, self-contained, completes the three-gesture story |
+| ~~**6**~~ | ~~Wishlist + the up-swipe rebind + retire super like~~ | ✅ **Delivered 2026-09-05.** See [Features/Wishlist.md](../Features/Wishlist.md) |
 | **7** | Plans + Calendar (solo only, no friends) | Delivers "pick a day" — the tagline's third verb — without the social graph |
 | **8** | Friends, invites, time voting, and the RLS work | Largest and riskiest; the only phase that relaxes `profiles` |
 | **9** | KL catalogue scrape, if §0 decided that way | Can run in parallel from phase 1 |
@@ -378,10 +378,36 @@ Not yet, and still Phase 3 and beyond:
   flag would be false at every call site — dead code rather than a reskin. It
   needs the deck to know which places are already saved, which is plumbing, not
   paint (D81).
-- **Bites still has the three Liked/Visited/Reviewed segments.** The design
-  replaces them with planned-state filters, which need `plans`.
-- **Later has nowhere of its own to land.** It writes the existing column; the
-  design's Wishlist screen is Phase 6.
+### Phase 6 progress (2026-09-05)
+
+Delivered. See [Features/Wishlist.md](../Features/Wishlist.md) and the
+"Changed 2026-09-05" note in
+[Features/Likes-Visits.md](../Features/Likes-Visits.md).
+
+- **Later has a place of its own.** `wishlist_items` (D94), with the three
+  existing super likes backfilled. A Later is still a like; it adds a row on
+  top (D95). `swipes.super_like` and `get_super_liked_ids` are untouched and
+  now have no caller.
+- **The Wishlist screen** is built at `/wishlist`, pushed from the Bites tab —
+  counts, the "Add a place…" bar, the ember strike-through, eaten rows sinking
+  to the bottom, "Clear eaten", and plain-text sharing.
+- **Bites carries the design's chip row** (D96): All · Not planned yet ·
+  Planned · Wishlist → · Halal. The Liked/Visited/Reviewed segments, the sort
+  dropdown, the filter sheet and the per-tile buttons are all gone.
+- **Tiles read the design's way** — "Cuisine · Neighbourhood", the wishlist
+  bookmark, and a planned day pill that is wired but empty.
+
+Still Phase 3 and beyond:
+
+- **Nearby is still the cuisine grid, not a map**, and Calendar is still an
+  empty state.
+- **The bite on the swipe card** (D81).
+- **The plan chips have no ids to filter on.** `plannedRestaurantIds` is empty
+  until Phase 7 feeds it, so "Planned" is correctly empty and "Not planned yet"
+  is correctly everything. The same goes for the day pill on a tile and the
+  "Planned" label on a wishlist row.
+- **Friend rows say "From a friend"**, not "From Aiman" — the friend graph is
+  Phase 8.
 
 ## 7. What this is not
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../wishlist/data/wishlist_repository.dart';
 import '../data/restaurant_repository.dart';
 import '../data/swipe_repository.dart';
 import '../models/restaurant.dart';
@@ -45,10 +46,12 @@ class LikesController extends ChangeNotifier {
   LikesController({
     RestaurantRepository? restaurants,
     SwipeRepository? swipes,
+    WishlistRepository? wishlist,
     bool followAuthChanges = true,
     LikesAuthEvents authEvents = const LikesAuthEvents(),
   })  : _restaurants = restaurants,
         _swipes = swipes,
+        _wishlist = wishlist,
         _followAuthChanges = followAuthChanges,
         _authEvents = authEvents;
 
@@ -62,6 +65,7 @@ class LikesController extends ChangeNotifier {
 
   RestaurantRepository? _restaurants;
   SwipeRepository? _swipes;
+  WishlistRepository? _wishlist;
   final bool _followAuthChanges;
   final LikesAuthEvents _authEvents;
 
@@ -69,10 +73,20 @@ class LikesController extends ChangeNotifier {
   RestaurantRepository get _restaurantRepository =>
       _restaurants ??= RestaurantRepository();
   SwipeRepository get _swipeRepository => _swipes ??= SwipeRepository();
+  WishlistRepository get _wishlistRepository =>
+      _wishlist ??= WishlistRepository();
 
   List<Restaurant> _liked = const [];
   Set<int> _likedIds = <int>{};
   Set<int> _laterIds = <int>{};
+
+  /// Restaurants with a plan on the calendar, which is what the Bites tab's
+  /// "Planned" and "Not planned yet" chips filter on.
+  ///
+  /// Empty until the plans phase lands. The chips are wired against it now
+  /// rather than later so the filter is real code the day the ids arrive
+  /// instead of a screen that has to be rebuilt around them.
+  Set<int> _plannedIds = <int>{};
   bool _loaded = false;
   Future<void>? _loading;
   StreamSubscription<AuthState>? _authSubscription;
@@ -92,12 +106,25 @@ class LikesController extends ChangeNotifier {
 
   bool isLiked(int restaurantId) => _likedIds.contains(restaurantId);
 
-  /// Whether the like was the emphatic kind — the Liked grid's star badge.
+  /// Whether the place is still on the wishlist — the Bites tile's bookmark
+  /// badge. Same question it always answered; the answer now comes from
+  /// `wishlist_items` rather than from `swipes.super_like` (D94).
   bool isSavedForLater(int restaurantId) => _laterIds.contains(restaurantId);
 
-  /// How many likes were the emphatic kind. Counted from the id set rather
+  /// How many places are still on the wishlist. Counted from the id set rather
   /// than from [liked], so it is not capped by that list's page size.
   int get laterCount => _laterIds.length;
+
+  /// Restaurants with a date set. Empty until the plans phase feeds it; the
+  /// Bites chips read it either way.
+  Set<int> get plannedRestaurantIds => Set.unmodifiable(_plannedIds);
+
+  /// How the plans phase will hand its ids over. Public now so the chips have
+  /// a real seam to be tested through rather than a hard-coded empty set.
+  void setPlannedRestaurantIds(Set<int> ids) {
+    _plannedIds = Set.of(ids);
+    notifyListeners();
+  }
 
   /// Loads once; concurrent callers share the same request. A failed load
   /// clears itself so the next call retries instead of caching the error.
@@ -132,7 +159,7 @@ class LikesController extends ChangeNotifier {
         .laterIds()
         .then<Set<int>?>((ids) => ids)
         .catchError((Object error) {
-      debugPrint('Super-liked ids fetch failed: $error');
+      debugPrint('Wishlist ids fetch failed: $error');
       return null;
     });
     final rows = await _restaurantRepository.likedRestaurants();
@@ -149,10 +176,16 @@ class LikesController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Optimistic: the heart fills immediately, the write follows. On failure
-  /// the heart empties again and the error is rethrown for the caller's
-  /// toast. The full list re-syncs afterwards so ordering comes from the
-  /// server, not from guesswork here.
+  /// Optimistic: the bite lands immediately, the write follows. On failure it
+  /// is taken back and the error is rethrown for the caller's toast. The full
+  /// list re-syncs afterwards so ordering comes from the server, not from
+  /// guesswork here.
+  ///
+  /// **A Later is a like** (D95): both write the same swipe, and Later adds a
+  /// `wishlist_items` row on top. A plain like no longer *removes* anything —
+  /// the backend used to clear `super_like` on every swipe, so re-liking a
+  /// saved place silently unsaved it. The wishlist follows the like only on
+  /// the way out (see [unlike]), never on a re-like.
   Future<void> like(
     int restaurantId, {
     String source = 'deck',
@@ -162,13 +195,9 @@ class LikesController extends ChangeNotifier {
   }) async {
     final generation = _generation;
     _likedIds.add(restaurantId);
-    // Mirror the backend: every record_swipe overwrites super_like, so a
-    // plain re-like clears an old star just as a super like sets one.
     final wasSavedForLater = _laterIds.contains(restaurantId);
     if (later) {
       _laterIds.add(restaurantId);
-    } else {
-      _laterIds.remove(restaurantId);
     }
     notifyListeners();
 
@@ -176,7 +205,6 @@ class LikesController extends ChangeNotifier {
       await _swipeRepository.record(
         restaurantId: restaurantId,
         liked: true,
-        later: later,
         source: source,
         latitude: latitude,
         longitude: longitude,
@@ -194,6 +222,23 @@ class LikesController extends ChangeNotifier {
       rethrow;
     }
 
+    // The like has landed. The wishlist row is a second, separate write, and
+    // it is allowed to fail on its own: what the caller promised the user is
+    // the swipe, so a refused row takes back the bookmark and nothing else.
+    // Rethrowing here would tell the deck the swipe was lost while the server
+    // is holding it.
+    if (later && !wasSavedForLater) {
+      try {
+        await _wishlistRepository.addRestaurant(restaurantId);
+      } on Object catch (error) {
+        if (generation == _generation) {
+          _laterIds.remove(restaurantId);
+          notifyListeners();
+        }
+        debugPrint('Saving $restaurantId to the wishlist failed: $error');
+      }
+    }
+
     // Best-effort: the id set above is already correct; this only fetches the
     // row data and ordering for the Like tab.
     await refresh().catchError((Object error) {
@@ -209,7 +254,9 @@ class LikesController extends ChangeNotifier {
     if (!_likedIds.remove(restaurantId) && removed == null) {
       return;
     }
-    // The pass this writes overwrites super_like to false server-side.
+    // A place taken back off the likes is not a place you are still planning
+    // to eat, so its wishlist row goes with it. Nothing server-side does this
+    // for us any more — the pass no longer touches `super_like` (D95).
     final wasSavedForLater = _laterIds.remove(restaurantId);
     if (removed != null) {
       _liked = List.of(_liked)..removeAt(index);
@@ -240,6 +287,21 @@ class LikesController extends ChangeNotifier {
       }
       rethrow;
     }
+
+    // As in [like]: the pass has landed, so a refused delete puts the bookmark
+    // back and stays quiet rather than claiming the swipe failed. The row is
+    // left behind on the server; the next [refresh] reads it and agrees.
+    if (wasSavedForLater) {
+      try {
+        await _wishlistRepository.removeRestaurant(restaurantId);
+      } on Object catch (error) {
+        if (generation == _generation) {
+          _laterIds.add(restaurantId);
+          notifyListeners();
+        }
+        debugPrint('Clearing $restaurantId from the wishlist failed: $error');
+      }
+    }
   }
 
   /// Forgets everything; the next [ensureLoaded] refetches for whoever is
@@ -249,6 +311,7 @@ class LikesController extends ChangeNotifier {
     _liked = const [];
     _likedIds = <int>{};
     _laterIds = <int>{};
+    _plannedIds = <int>{};
     _loaded = false;
     _loading = null;
     notifyListeners();

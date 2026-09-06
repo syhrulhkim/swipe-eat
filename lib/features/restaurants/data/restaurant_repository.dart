@@ -106,50 +106,24 @@ class RestaurantRepository {
     return rows.map(Restaurant.fromJson).toList();
   }
 
-  /// The Visited segment: places with a `visited_at` stamp, latest visit
-  /// first.
-  Future<List<Restaurant>> visitedRestaurants({
-    int limit = 50,
-    int offset = 0,
-  }) async {
-    final rows = await _client
-        .rpc<dynamic>('get_visited_restaurants', params: {
-          'p_limit': limit,
-          'p_offset': offset,
-        })
-        .select(_deckColumns)
-        .timeout(_timeout);
-
-    return rows.map(Restaurant.fromJson).toList();
-  }
-
-  /// The Reviewed segment: places the user has written a review for, most
-  /// recently reviewed first.
-  Future<List<Restaurant>> reviewedRestaurants({
-    int limit = 50,
-    int offset = 0,
-  }) async {
-    final rows = await _client
-        .rpc<dynamic>('get_reviewed_restaurants', params: {
-          'p_limit': limit,
-          'p_offset': offset,
-        })
-        .select(_deckColumns)
-        .timeout(_timeout);
-
-    return rows.map(Restaurant.fromJson).toList();
-  }
-
-  /// Which liked rows are saved for later — the up-swipe's rows.
+  /// Which liked rows are still on the wishlist — the up-swipe's rows.
   ///
-  /// `get_super_liked_ids` is the wire name; see [SwipeRepository.record] for
-  /// why the old one is still on the wire.
+  /// Reads `wishlist_items` rather than the old `get_super_liked_ids` RPC
+  /// (D94). Eaten rows are excluded: a place you have been to is no longer a
+  /// place you are saving for later. The RPC and the `super_like` column are
+  /// still there, untouched, and nothing in the client calls them.
   Future<Set<int>> laterIds() async {
     final rows = await _client
-        .rpc<dynamic>('get_super_liked_ids')
-        .timeout(_timeout) as List<dynamic>;
+        .from('wishlist_items')
+        .select('restaurant_id')
+        .isFilter('eaten_at', null)
+        .not('restaurant_id', 'is', null)
+        .timeout(_timeout);
 
-    return {for (final id in rows) (id as num).toInt()};
+    return {
+      for (final row in rows)
+        if (row['restaurant_id'] case final num id) id.toInt(),
+    };
   }
 
   /// How many people have bitten this place, across every account. Backed by

@@ -37,6 +37,9 @@ dependencies:
   sentry_flutter: ^9.28.0
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
+  # Hands the wishlist to the OS share sheet as plain text, so "where should we
+  # eat" can leave the app in whatever chat the group already uses.
+  share_plus: ^13.3.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

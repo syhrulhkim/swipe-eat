@@ -30,19 +30,22 @@ class FakeRestaurantRepository implements RestaurantRepository {
   /// Rows the detail route can open by id.
   List<Restaurant> catalogRows = const [];
 
-  /// What `get_visited_restaurants` / `get_reviewed_restaurants` /
-  /// `get_super_liked_ids` would return.
-  List<Restaurant> visitedRows = const [];
-  List<Restaurant> reviewedRows = const [];
+  /// Which restaurants are still on the wishlist — what `laterIds` would
+  /// return. It reads `wishlist_items` now, not `get_super_liked_ids` (D94),
+  /// but the question the fake answers is unchanged.
   Set<int> laterRows = const {};
+
+  /// Reads [laterRows] from somewhere else, so a test can point this at a
+  /// wishlist fake and have a Later written through one repository show up in
+  /// the other — which is what the real two tables do, both being one
+  /// database. See `wireFakeBackend`.
+  Set<int> Function()? laterSource;
 
   bool failDeck = false;
   bool failLiked = false;
   bool failSearch = false;
   bool failFetchById = false;
-  bool failVisited = false;
-  bool failReviewed = false;
-  bool failSuperLiked = false;
+  bool failLater = false;
 
   /// The cuisineId of the latest [search] call, null included.
   int? lastSearchCuisineId;
@@ -98,28 +101,6 @@ class FakeRestaurantRepository implements RestaurantRepository {
     return searchRows;
   }
 
-  @override
-  Future<List<Restaurant>> visitedRestaurants({
-    int limit = 50,
-    int offset = 0,
-  }) async {
-    if (failVisited) {
-      throw Exception('visited unavailable');
-    }
-    return List.of(visitedRows);
-  }
-
-  @override
-  Future<List<Restaurant>> reviewedRestaurants({
-    int limit = 50,
-    int offset = 0,
-  }) async {
-    if (failReviewed) {
-      throw Exception('reviewed unavailable');
-    }
-    return List.of(reviewedRows);
-  }
-
   final Map<int, int> ngapCounts = {};
 
   @override
@@ -127,10 +108,10 @@ class FakeRestaurantRepository implements RestaurantRepository {
 
   @override
   Future<Set<int>> laterIds() async {
-    if (failSuperLiked) {
-      throw Exception('super likes unavailable');
+    if (failLater) {
+      throw Exception('wishlist unavailable');
     }
-    return Set.of(laterRows);
+    return laterSource?.call() ?? Set.of(laterRows);
   }
 }
 
@@ -139,14 +120,12 @@ class SwipeCall {
     required this.restaurantId,
     required this.liked,
     required this.source,
-    this.later = false,
     this.latitude,
     this.longitude,
   });
 
   final int restaurantId;
   final bool liked;
-  final bool later;
   final String source;
   final double? latitude;
   final double? longitude;
@@ -166,7 +145,6 @@ class FakeSwipeRepository implements SwipeRepository {
   Future<void> record({
     required int restaurantId,
     required bool liked,
-    bool later = false,
     String source = 'deck',
     double? latitude,
     double? longitude,
@@ -177,7 +155,6 @@ class FakeSwipeRepository implements SwipeRepository {
     final call = SwipeCall(
       restaurantId: restaurantId,
       liked: liked,
-      later: later,
       source: source,
       latitude: latitude,
       longitude: longitude,
