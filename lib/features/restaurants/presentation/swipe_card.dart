@@ -107,8 +107,16 @@ class _SwipeCardState extends State<SwipeCard> {
           decoration: BoxDecoration(
             color: kSurfaceDark,
             borderRadius: BorderRadius.circular(kRadiusCard),
-            border: Border.all(color: kHairline),
             boxShadow: kCardShadow,
+          ),
+          // The hairline goes in *front* of the media, not behind it. A
+          // background border is painted before the child, and the clip fills
+          // the card to its outer edge, so the photo covered the outline
+          // everywhere — most visibly at the corners, where the card looked
+          // like it had no edge at all.
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(kRadiusCard),
+            border: Border.all(color: kHairline),
           ),
           child: Stack(
             fit: StackFit.expand,

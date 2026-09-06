@@ -363,6 +363,23 @@ void main() {
       expect(find.byType(RestaurantInfoBlock), findsOneWidget);
     });
 
+    testWidgets('the hairline is drawn over the photo, not under it',
+        (tester) async {
+      // The media fills the card and the clip runs to the card's outer edge,
+      // so a border in the background decoration is painted first and then
+      // covered — the outline disappears, most obviously at the corners.
+      await pumpCard(tester, card());
+
+      final container = tester.widget<Container>(cardSurface);
+      final background = container.decoration! as BoxDecoration;
+      expect(background.border, isNull,
+          reason: 'a background border would paint behind the photo');
+
+      final foreground = container.foregroundDecoration! as BoxDecoration;
+      expect(foreground.border, Border.all(color: kHairline));
+      expect(foreground.borderRadius, BorderRadius.circular(kRadiusCard));
+    });
+
     testWidgets('a clip says it is playing silent', (tester) async {
       await pumpCard(tester, card(videoUrl: 'https://tiktok.test/v/1'));
 
