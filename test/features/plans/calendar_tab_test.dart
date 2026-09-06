@@ -7,11 +7,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/dashboard/state/dashboard_tab_request.dart';
+import 'package:swipe_eat/features/friends/presentation/friend_avatar.dart';
+import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/plans/models/plan.dart';
 import 'package:swipe_eat/features/plans/presentation/calendar_tab.dart';
 import 'package:swipe_eat/features/plans/state/plans_controller.dart';
 
 import '../../support/widget_test_support.dart';
+import '../friends/fake_friends_repository.dart';
 import 'fake_plans_repository.dart';
 
 const Size _phoneViewport = Size(390, 844);
@@ -49,11 +52,53 @@ List<Plan> _designPlans() {
   ];
 }
 
+/// The design's third plan card: four people asked, one of whom said no.
+List<Plan> _partyPlans() {
+  return [
+    testPlan(
+      1,
+      restaurantId: 11,
+      date: DateTime(2026, 9, 4),
+      hour: 20,
+      name: 'Warung Kak Ros',
+      neighbourhood: 'Kampung Baru',
+      withFriends: true,
+      members: const [
+        PlanMember(userId: 'aiman', status: 'going'),
+        PlanMember(userId: 'mei', status: 'going'),
+        PlanMember(userId: 'syafiq', status: 'invited'),
+        PlanMember(userId: 'nadia', status: 'declined'),
+      ],
+    ),
+  ];
+}
+
+/// The same four people, with the names and faces `plan.members` cannot carry.
+FakeFriendsRepository _partyRoster() {
+  return FakeFriendsRepository(
+    planPeople: [
+      testPlanPerson(1, 'aiman', name: 'Aiman Zulkifli', status: 'going'),
+      testPlanPerson(1, 'mei', name: 'Mei Kee Tan', status: 'going'),
+      testPlanPerson(1, 'syafiq', name: 'Syafiq Yusof'),
+      testPlanPerson(1, 'nadia', name: 'Nadia Rahim', status: 'declined'),
+    ],
+  );
+}
+
 class _Harness {
-  _Harness(this.controller, this.repository, this.tabs, this.pushed);
+  _Harness(
+    this.controller,
+    this.repository,
+    this.friends,
+    this.friendsRepository,
+    this.tabs,
+    this.pushed,
+  );
 
   final PlansController controller;
   final FakePlansRepository repository;
+  final FriendsController friends;
+  final FakeFriendsRepository friendsRepository;
   final DashboardTabRequest tabs;
   final List<String> pushed;
 }
@@ -62,6 +107,7 @@ Future<_Harness> _pumpTab(
   WidgetTester tester, {
   List<Plan> rows = const [],
   FakePlansRepository? repository,
+  FakeFriendsRepository? friendsRepository,
   Size viewport = _phoneViewport,
   TextScaler textScaler = TextScaler.noScaling,
   Position? position,
@@ -74,6 +120,12 @@ Future<_Harness> _pumpTab(
     followAuthChanges: false,
   );
   addTearDown(controller.dispose);
+  final friendsBacking = friendsRepository ?? FakeFriendsRepository();
+  final friends = FriendsController(
+    repository: friendsBacking,
+    followAuthChanges: false,
+  );
+  addTearDown(friends.dispose);
   final tabs = DashboardTabRequest();
   addTearDown(tabs.dispose);
   final pushed = <String>[];
@@ -86,6 +138,7 @@ Future<_Harness> _pumpTab(
           backgroundColor: kBackgroundDark,
           body: CalendarTab(
             controller: controller,
+            friends: friends,
             tabRequests: tabs,
             resolvePosition: () async => position ?? _kualaLumpur(),
           ),
@@ -113,7 +166,14 @@ Future<_Harness> _pumpTab(
   );
   await tester.pumpAndSettle();
 
-  return _Harness(controller, backing, tabs, pushed);
+  return _Harness(
+    controller,
+    backing,
+    friends,
+    friendsBacking,
+    tabs,
+    pushed,
+  );
 }
 
 void main() {
@@ -157,13 +217,14 @@ void main() {
       await _pumpTab(tester, rows: _designPlans());
 
       expect(find.text('Warung Kak Ros'), findsOneWidget);
-      // Meal, neighbourhood and, when a fix has landed, the distance.
-      expect(find.text('Lunch · Kepong · 8.7 km'), findsOneWidget);
+      // Who is coming, neighbourhood and, when a fix has landed, the
+      // distance. Nobody was invited to this one, so it is "Just you".
+      expect(find.text('Just you · Kepong · 8.7 km'), findsOneWidget);
       expect(find.text('12:30'), findsOneWidget);
 
       // No coordinates on this one, so the distance is left off rather than
       // guessed at.
-      expect(find.text('Dinner · Pudu'), findsOneWidget);
+      expect(find.text('Just you · Pudu'), findsOneWidget);
       expect(find.text('20:00'), findsOneWidget);
     });
 
@@ -196,7 +257,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Lunch · Kepong'), findsOneWidget);
+      expect(find.text('Just you · Kepong'), findsOneWidget);
     });
 
     testWidgets('a row reads as one sentence and answers both gestures',
@@ -205,7 +266,7 @@ void main() {
       await _pumpTab(tester, rows: _designPlans());
 
       final node = tester.getSemantics(find.text('Warung Kak Ros'));
-      expect(node.label, 'Warung Kak Ros, Lunch · Kepong · 8.7 km, 12:30');
+      expect(node.label, 'Warung Kak Ros, Just you · Kepong · 8.7 km, 12:30');
       expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(
         node.getSemanticsData().hasAction(SemanticsAction.longPress),
@@ -383,6 +444,190 @@ void main() {
         isFalse,
       );
       handle.dispose();
+    });
+  });
+
+  group('CalendarTab people', () {
+    testWidgets('a plan with guests says who is coming instead of the meal',
+        (tester) async {
+      await _pumpTab(
+        tester,
+        rows: _partyPlans(),
+        friendsRepository: _partyRoster(),
+      );
+
+      // The design's third plan card, verbatim, with the neighbourhood this
+      // row already knew how to add.
+      expect(
+        find.text('3 friends · 2 confirmed · Kampung Baru'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a plan nobody was invited to is still "Just you"',
+        (tester) async {
+      await _pumpTab(tester, rows: _designPlans());
+
+      expect(find.byType(FriendAvatar), findsNothing);
+    });
+
+    testWidgets('the faces stop at three however many are coming',
+        (tester) async {
+      await _pumpTab(
+        tester,
+        rows: _partyPlans(),
+        friendsRepository: _partyRoster(),
+      );
+
+      // Four are on the plan, one of whom said no; the stack draws three and
+      // lets the line carry the number.
+      expect(find.byType(FriendAvatar), findsNWidgets(kAvatarStackMax));
+      expect(find.text('AZ'), findsOneWidget);
+    });
+
+    testWidgets('somebody who said no is neither counted nor drawn',
+        (tester) async {
+      await _pumpTab(
+        tester,
+        rows: [
+          testPlan(
+            1,
+            date: DateTime(2026, 9, 4),
+            name: 'Warung Kak Ros',
+            neighbourhood: 'Kampung Baru',
+            members: const [
+              PlanMember(userId: 'aiman', status: 'going'),
+              PlanMember(userId: 'nadia', status: 'declined'),
+            ],
+          ),
+        ],
+        friendsRepository: FakeFriendsRepository(
+          planPeople: [
+            testPlanPerson(1, 'aiman', name: 'Aiman Zulkifli', status: 'going'),
+            testPlanPerson(1, 'nadia', name: 'Nadia Rahim', status: 'declined'),
+          ],
+        ),
+      );
+
+      expect(
+        find.text('1 friend · 1 confirmed · Kampung Baru'),
+        findsOneWidget,
+      );
+      expect(find.byType(FriendAvatar), findsOneWidget);
+      expect(find.text('NA'), findsNothing);
+    });
+
+    testWidgets('the count is right before the faces arrive', (tester) async {
+      // The line is read off `plan.members`, which the plan itself carries, so
+      // a roster that never lands costs the faces and nothing else.
+      final friendsRepository = FakeFriendsRepository()
+        ..failPlanPeopleWith = StateError('offline');
+      await _pumpTab(
+        tester,
+        rows: _partyPlans(),
+        friendsRepository: friendsRepository,
+      );
+
+      expect(
+        find.text('3 friends · 2 confirmed · Kampung Baru'),
+        findsOneWidget,
+      );
+      expect(find.byType(FriendAvatar), findsNothing);
+      expect(friendsRepository.calls, contains('planPeople'));
+    });
+
+    testWidgets('the rosters are asked for once, not once per card',
+        (tester) async {
+      // `loadPlanPeople` notifies, and a notification rebuilds this tab. A
+      // load fired from `build` would loop; this is the assertion that
+      // catches it.
+      final harness = await _pumpTab(
+        tester,
+        rows: _designPlans(),
+        friendsRepository: _partyRoster(),
+      );
+
+      expect(harness.friendsRepository.planPeopleAsked, [
+        [1, 2, 3],
+      ]);
+    });
+
+    testWidgets('the same plans reloaded do not ask again', (tester) async {
+      final harness = await _pumpTab(
+        tester,
+        rows: _designPlans(),
+        friendsRepository: _partyRoster(),
+      );
+
+      await harness.controller.refresh();
+      await tester.pumpAndSettle();
+
+      expect(harness.friendsRepository.planPeopleAsked, hasLength(1));
+    });
+
+    testWidgets('a plan that was not there before is asked about',
+        (tester) async {
+      final harness = await _pumpTab(
+        tester,
+        rows: _designPlans(),
+        friendsRepository: _partyRoster(),
+      );
+
+      harness.repository.setRows([
+        ..._designPlans(),
+        testPlan(9, date: DateTime(2026, 9, 20), name: 'Nasi Kandar Pelita'),
+      ]);
+      await harness.controller.refresh();
+      await tester.pumpAndSettle();
+
+      expect(harness.friendsRepository.planPeopleAsked, hasLength(2));
+      expect(harness.friendsRepository.planPeopleAsked.last, contains(9));
+    });
+
+    testWidgets("the people line is part of the row's one sentence",
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpTab(
+        tester,
+        rows: _partyPlans(),
+        friendsRepository: _partyRoster(),
+      );
+
+      final node = tester.getSemantics(find.text('Warung Kak Ros'));
+      expect(
+        node.label,
+        'Warung Kak Ros, 3 friends · 2 confirmed · Kampung Baru, '
+        '20:00',
+      );
+      // The faces themselves say nothing: the sentence has already counted
+      // them.
+      expect(find.bySemanticsLabel('AZ'), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('three faces and a long line fit the narrowest phone at a '
+        'doubled text scale', (tester) async {
+      await _pumpTab(
+        tester,
+        rows: _partyPlans(),
+        friendsRepository: _partyRoster(),
+        viewport: _narrowViewport,
+        textScaler: const TextScaler.linear(2),
+      );
+
+      expect(tester.takeException(), isNull);
+
+      // The month grid alone fills a 568 pt screen at this scale, so the row
+      // is below it rather than missing.
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(FriendAvatar), findsNWidgets(kAvatarStackMax));
+      expect(
+        find.text('3 friends · 2 confirmed · Kampung Baru'),
+        findsOneWidget,
+      );
     });
   });
 
