@@ -447,13 +447,18 @@ class _InviteFoot extends StatelessWidget {
             ],
           );
         }
+        // `justify-content:space-between` with the design's own cap on the
+        // button. `Flexible` rather than `Expanded`: an expanded child gets a
+        // tight width, which would make the cap inert.
         return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             counter,
             const SizedBox(width: AppSpacing.md),
-            Expanded(
+            Flexible(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
+                constraints:
+                    const BoxConstraints(maxWidth: kInviteButtonMaxWidth),
                 child: button,
               ),
             ),

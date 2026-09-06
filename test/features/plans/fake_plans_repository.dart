@@ -148,6 +148,10 @@ class FakePlansRepository implements PlansRepository {
         coverUrl: held.coverUrl,
         tag: held.tag,
         neighbourhood: held.neighbourhood,
+        latitude: held.latitude,
+        longitude: held.longitude,
+        // Same row, new time: the guests stay on it.
+        members: held.members,
       );
       return held.id;
     }

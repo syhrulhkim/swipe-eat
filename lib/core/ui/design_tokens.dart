@@ -1430,6 +1430,11 @@ const double kSearchBarHeight = 46;
 /// glance, not a label.
 const double kInviteCountFontSize = 22;
 
+/// `.invite-foot .btn{max-width:220px}` — how wide "Send invites" is allowed
+/// to get. The prototype's own cap: a pill stretched across a phone reads as a
+/// banner rather than a button.
+const double kInviteButtonMaxWidth = 220;
+
 /// Below this the invite screen's foot stacks its button under the count, for
 /// the same reason [kPickedBarStackWidth] exists: a pill that cannot shrink
 /// beside a figure that grows with the text scale.
