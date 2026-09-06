@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -56,6 +57,10 @@ void main() {
   late List<String> contactBook;
   late int contactReads;
 
+  /// When non-null, the contacts reader hangs on this until the test completes
+  /// it — a permission sheet the user has not answered, or a slow phone.
+  Completer<void>? contactGate;
+
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     authRepository = FakeAuthRepository()
@@ -75,6 +80,7 @@ void main() {
     );
     contactBook = <String>[];
     contactReads = 0;
+    contactGate = null;
   });
 
   tearDown(() async {
@@ -101,6 +107,7 @@ void main() {
               resolvePlace: (_) async => 'Peserai, Batu Pahat',
               readContacts: () async {
                 contactReads += 1;
+                await contactGate?.future;
                 return contactBook;
               },
               friends: friends,
@@ -370,6 +377,66 @@ void main() {
 
       expect(friendsRepository.actions, isEmpty,
           reason: 'Skip after a match is still a no');
+    });
+
+    testWidgets('Skip during a slow search still sends nothing',
+        (tester) async {
+      // The race the guard exists to stop: tap Find, then tap Skip while the
+      // permission sheet is still up. Skip clears the ticks and moves on, and
+      // the search lands afterwards. Without the step check in `_findFriends`
+      // the late result refills the set and the wizard sends requests to six
+      // people who were never agreed to.
+      contactBook = ['012-345 6789'];
+      friendsRepository = FakeFriendsRepository(matches: _designMatches());
+      friends.dispose();
+      friends = FriendsController(
+        repository: friendsRepository,
+        followAuthChanges: false,
+      );
+      contactGate = Completer<void>();
+
+      await reachFriends(tester);
+      await tester.tap(find.text('Find friends from contacts'));
+      await tester.pump();
+
+      await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+      expect(find.text('How do you eat?'), findsOneWidget);
+
+      // The address book arrives late.
+      contactGate!.complete();
+      await tester.pumpAndSettle();
+
+      await tester.tap(primaryButton('Continue')); // location
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      expect(friendsRepository.actions, isEmpty,
+          reason: 'a result for a step the user left is not theirs to act on');
+    });
+
+    testWidgets('Continue cannot be tapped while contacts are being read',
+        (tester) async {
+      // Same race from the other side: leaving the step forward mid-search
+      // would tick people in behind the user just as leaving it sideways does.
+      // Here the button is simply not offered until the search lands.
+      contactBook = ['012-345 6789'];
+      contactGate = Completer<void>();
+
+      await reachFriends(tester);
+      await tester.tap(find.text('Find friends from contacts'));
+      await tester.pump();
+
+      final button = tester.widget<AppPrimaryButton>(primaryButton('Continue'));
+      expect(button.onPressed, isNull);
+
+      contactGate!.complete();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AppPrimaryButton>(primaryButton('Continue')).onPressed,
+        isNotNull,
+      );
     });
   });
 

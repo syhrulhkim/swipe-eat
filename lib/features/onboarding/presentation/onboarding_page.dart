@@ -213,7 +213,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
     try {
       final numbers = await widget.readContacts();
       final matches = await _friends.matchContacts(numbers);
-      if (!mounted) {
+      // A result that arrives for a step the user has already left is dropped
+      // whole, ticks and all. Skip clears `friendIds` and moves on; without
+      // this line a slow permission sheet or a slow network could refill the
+      // set behind them and `_finish` would send requests they never asked to
+      // send. Skip has to mean skipped even when it is tapped mid-flight.
+      if (!mounted || _step != _friendsStep) {
         return;
       }
       setState(() {
@@ -229,7 +234,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       });
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {
-      if (!mounted) {
+      if (!mounted || _step != _friendsStep) {
         return;
       }
       setState(() {
@@ -255,7 +260,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
   /// Somebody who skips this step has told the app to stay out of their
   /// address book, and the way to honour that is to not go in.
   void _skipFriends() {
-    setState(_draft.friendIds.clear);
+    setState(() {
+      _draft.friendIds.clear();
+      // A search still in flight is abandoned here, not awaited: the result is
+      // dropped when it lands (see `_findFriends`), and leaving the flag up
+      // would grey out Continue on every step after this one.
+      _searchingContacts = false;
+    });
     _goToStep(_step + 1);
   }
 
@@ -491,7 +502,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
         AppPrimaryButton(
           label: _primaryLabel,
           expand: true,
-          onPressed: _canAdvance && !_saving && !_locating ? _next : null,
+          onPressed: _canAdvance && !_saving && !_locating && !_searchingContacts
+              ? _next
+              : null,
         ),
       ],
     );

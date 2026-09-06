@@ -122,13 +122,11 @@ begin
       end if;
 
     when 'decline', 'remove' then
-      -- A blocked row is the blocker's to delete. Anyone else's remove finds
-      -- nothing here, and the delete policy above would have refused it too:
-      -- the guard is stated twice on purpose, because a policy and a function
-      -- that disagree is how a hole reopens.
+      -- The `status <> 'blocked'` guard is belt and braces beside the delete
+      -- policy above; a blocked caller's delete now matches no row either way.
       delete from public.friendships
        where user_lo = v_lo and user_hi = v_hi
-         and (status <> 'blocked' or requester_id = v_uid)
+         and status <> 'blocked'
       returning * into v_row;
 
     when 'block' then
