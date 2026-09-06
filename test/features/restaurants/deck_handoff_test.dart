@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
+import 'package:swipe_eat/features/restaurants/data/deck_cache.dart';
 import 'package:swipe_eat/features/restaurants/state/deck_controller.dart';
 import 'package:swipe_eat/features/restaurants/state/deck_handoff.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
@@ -12,12 +14,14 @@ void main() {
   late FakeAuthRepository auth;
   late AuthController authController;
   late FakeRestaurantRepository restaurants;
+  late FakeDeckCache cache;
 
   setUp(() {
     handoff = DeckHandoff();
     auth = FakeAuthRepository();
     authController = AuthController(auth);
     restaurants = FakeRestaurantRepository();
+    cache = FakeDeckCache();
   });
 
   tearDown(() async {
@@ -30,6 +34,7 @@ void main() {
       restaurants: restaurants,
       swipes: FakeSwipeRepository(),
       likes: LikesController(followAuthChanges: false),
+      cache: cache,
       handoff: handoff,
     );
   }
@@ -140,6 +145,29 @@ void main() {
       expect(deck.handoffLabel, 'Nearby · 2 places');
     });
 
+    test('the offline fallback drops the hand-off label with the cards',
+        () async {
+      final deck = buildDeck();
+      addTearDown(deck.dispose);
+
+      deck.dealFrom([testRestaurant(1)], label: 'Nearby · 1 place');
+      expect(deck.handoffLabel, 'Nearby · 1 place');
+
+      // The server is unreachable, so the deck falls back to the saved one.
+      restaurants.failDeck = true;
+      cache.cached = CachedDeck(
+        restaurants: [testRestaurant(2), testRestaurant(3)],
+        savedAt: DateTime(2026, 9, 4, 12),
+      );
+      await deck.load();
+
+      expect(deck.cards.map((card) => card.id).toList(), [2, 3]);
+      expect(deck.isStale, isTrue);
+      // These cards came off the device days ago, not off the map a moment
+      // ago: crediting them to "Nearby · 1 place" would be a lie.
+      expect(deck.handoffLabel, isNull);
+    });
+
     test('a disposed deck stops listening to the hand-off', () {
       final deck = buildDeck();
       deck.dispose();
@@ -147,6 +175,40 @@ void main() {
       // Would throw "used after dispose" through notifyListeners if the
       // listener were still attached.
       handoff.handOff([testRestaurant(6)]);
+    });
+  });
+
+  group('DeckController re-deals when a hard rule changes', () {
+    test('each of the three diet and budget answers re-deals the deck',
+        () async {
+      const user = AppUser(id: 'u1', name: 'Aisyah', email: 'a@example.com');
+      authController.applyUser(user);
+      final deck = buildDeck();
+      addTearDown(deck.dispose);
+      await deck.load();
+      expect(restaurants.deckFetches, 1);
+
+      // The reload is fire-and-forget off the auth notification.
+      Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+      // Each is a hard rule in `deck_scored` (D105): flipping one changes
+      // which places may be dealt at all, so stale cards would break its
+      // promise.
+      authController.applyUser(user.copyWith(halalOnly: true));
+      await settle();
+      expect(restaurants.deckFetches, 2);
+
+      authController.applyUser(
+        user.copyWith(halalOnly: true, vegetarian: true),
+      );
+      await settle();
+      expect(restaurants.deckFetches, 3);
+
+      authController.applyUser(
+        user.copyWith(halalOnly: true, vegetarian: true, budgetMax: 30),
+      );
+      await settle();
+      expect(restaurants.deckFetches, 4);
     });
   });
 }

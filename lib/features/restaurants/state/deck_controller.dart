@@ -112,9 +112,10 @@ class DeckController extends ChangeNotifier {
   int _loadGeneration = 0;
 
   /// The deck-shaping profile state the current deck was dealt under: radius,
-  /// discovery filters. The tabs live in an IndexedStack that
-  /// never re-inits, so a change to any of them has to be listened for — they
-  /// are server-side filters, and stale cards would break their promises.
+  /// discovery filters, and the diet & budget hard rules. The tabs live in an
+  /// IndexedStack that never re-inits, so a change to any of them has to be
+  /// listened for — they are server-side filters, and stale cards would break
+  /// their promises.
   ///
   /// Deliberately excludes `lastPlaceName` and the stored fix: every load
   /// syncs those through [applyUser], and including them would make each load
@@ -130,6 +131,11 @@ class DeckController extends ChangeNotifier {
       user.filterMinRating,
       user.filterCuisineIds.join(','),
       user.filterDietaryTagIds.join(','),
+      // Hard rules in `deck_scored` (D105): flipping one in Settings changes
+      // which places may be dealt at all, so the deck has to be re-dealt.
+      user.halalOnly,
+      user.vegetarian,
+      user.budgetMax,
     ].join('|');
   }
 
@@ -142,8 +148,20 @@ class DeckController extends ChangeNotifier {
   /// so anything that needs a row to exist must wait for its write to land.
   final Map<int, Future<void>> _pendingWrites = {};
 
+  bool _disposed = false;
+
+  /// True when [generation] no longer speaks for this deck: a newer load (or a
+  /// hand-off) has started, or the controller is gone. Either way the run that
+  /// asks returns without notifying — a notification after dispose throws.
+  bool _isStale(int generation) =>
+      _disposed || generation != _loadGeneration;
+
   @override
   void dispose() {
+    _disposed = true;
+    // Anything still awaiting belongs to a generation that no longer exists,
+    // so it goes quiet instead of notifying a disposed notifier.
+    _loadGeneration += 1;
     authController.removeListener(_onAuthChanged);
     _handoff.removeListener(_onHandoff);
     unawaited(_messages.close());
@@ -200,6 +218,9 @@ class DeckController extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    if (_disposed) {
+      return;
+    }
     final generation = ++_loadGeneration;
     _loading = true;
     _error = null;
@@ -225,7 +246,7 @@ class DeckController extends ChangeNotifier {
         latitude: hasRealPosition ? position.latitude : null,
         longitude: hasRealPosition ? position.longitude : null,
       );
-      if (generation != _loadGeneration) {
+      if (_isStale(generation)) {
         return;
       }
 
@@ -246,12 +267,12 @@ class DeckController extends ChangeNotifier {
       ));
     } on Object catch (error) {
       debugPrint('Deck load failed: $error');
-      if (generation != _loadGeneration) {
+      if (_isStale(generation)) {
         return;
       }
 
       final cached = await _cache.read(authController.sessionUserId ?? '');
-      if (generation != _loadGeneration) {
+      if (_isStale(generation)) {
         return;
       }
 
@@ -268,6 +289,9 @@ class DeckController extends ChangeNotifier {
       _cards = cached.restaurants.map(RestaurantCard.fromRestaurant).toList();
       _index = 0;
       _dealtFromCacheAt = cached.savedAt;
+      // These cards are the cache's, not the map's: leaving the hand-off label
+      // on them would credit "Nearby · 6 places" to a deck saved days ago.
+      _handoffLabel = null;
       players.clear();
       notifyListeners();
     }

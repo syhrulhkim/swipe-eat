@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 Cross-references: [STACK.md](STACK.md), [Redesign/NGAP-DESIGN-SYSTEM.md](../Redesign/NGAP-DESIGN-SYSTEM.md), [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md), [General/PLAN.md](../General/PLAN.md)
 
 # Design System
@@ -44,8 +44,8 @@ call site.
 | `kCreamMuted` | `#FFF3E8` @ 45% | Muted metadata |
 | `kFresh` | `#9DF2B8` | **"Open now" only** — the one non-orange accent |
 
-`kFresh` currently has no call site: it needs opening hours, which the schema
-does not have. It is defined so the rule that owns it is written down.
+`kFresh` has two call sites, both of them the same sentence: the Nearby pin's
+open line and the deck card's open chip. It says "open now" and nothing else.
 
 ### Surfaces
 
@@ -326,6 +326,15 @@ six `kNearbyPinSlots` (two of them big) as fractions of the map area, the
 me-dot at `kNearbyMeDotFraction` (50%, 52%). The map opens at
 `kNearbyInitialZoom` (15) for the one frame before it is composed.
 
+The pin is the one place in the app whose type does **not** follow the system
+text size all the way: `flutter_map` is told a marker's height before its
+caption is laid out, so the caption is wrapped in
+`MediaQuery.withClampedTextScaling` at `kNearbyPinMaxTextScale` (1.6) and the
+box stays the size the map was promised. The clamp covers the distance badge
+too, so the badge cannot outgrow the blob it hangs off. Everything else on the
+screen — the stepper, the results bar, every sheet the map opens — scales
+without a ceiling (D73).
+
 **The scrim** — `kNearbyMapScrim` between the tiles and the markers. OSM's
 raster tiles are a daylight map, and cream text over them is unreadable without
 it. It is a flat overlay rather than a colour matrix on the tile layer, because
@@ -566,7 +575,6 @@ instances and their licences already existed. Lexend was removed in turn.
 
 ## 10. Known gaps
 
-- **`kFresh` has no call site.** It needs opening hours; the schema has none.
 - **The Explore, Group and Profile tab bodies are untouched.** Phase 3 changed
   the frame around them, not their contents.
 - **The bite is on Bites tiles only** — not the swipe card (D81), and not yet

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -22,7 +24,7 @@ class NearbyQuery {
 /// extends, so an interface change breaks the fake instead of silently
 /// diverging from it (D69).
 class FakeNearbyRepository implements NearbyRepository {
-  FakeNearbyRepository({this.stored});
+  FakeNearbyRepository({this.stored, this.passport});
 
   /// Returned for every radius unless [rowsByRadius] names that radius.
   List<NearbyPlace> rows = const [];
@@ -33,8 +35,16 @@ class FakeNearbyRepository implements NearbyRepository {
   /// What the profile has on file, for a user who denied location.
   NearbyOrigin? stored;
 
+  /// The passport pin the profile carries, if any — the origin that beats even
+  /// a real device fix.
+  NearbyOrigin? passport;
+
   bool fail = false;
   bool failStored = false;
+
+  /// Gates [fetchNearby] so a test can hold a load open — dispose the
+  /// controller mid-flight, then let the answer arrive.
+  Completer<void>? gate;
 
   final List<NearbyQuery> queries = [];
 
@@ -46,6 +56,10 @@ class FakeNearbyRepository implements NearbyRepository {
     int limit = 60,
   }) async {
     queries.add(NearbyQuery(latitude, longitude, radiusKm, limit));
+    final gate = this.gate;
+    if (gate != null) {
+      await gate.future;
+    }
     if (fail) {
       throw Exception('nearby unavailable');
     }
@@ -53,11 +67,11 @@ class FakeNearbyRepository implements NearbyRepository {
   }
 
   @override
-  Future<NearbyOrigin?> storedOrigin() async {
+  Future<NearbyProfileOrigins> profileOrigins() async {
     if (failStored) {
       throw Exception('profile unavailable');
     }
-    return stored;
+    return NearbyProfileOrigins(passport: passport, stored: stored);
   }
 }
 
@@ -94,6 +108,7 @@ NearbyPlace testPlace(
   String tag = 'Kaya toast',
   required double distanceKm,
   bool? openNow,
+  bool swiped = false,
   int? priceFrom,
   OpeningHours hours = OpeningHours.unknown,
   List<String> imageUrls = const [],
@@ -103,6 +118,7 @@ NearbyPlace testPlace(
   return NearbyPlace(
     distanceKm: distanceKm,
     openNow: openNow,
+    swiped: swiped,
     restaurant: Restaurant(
       id: id,
       name: name ?? 'Place $id',

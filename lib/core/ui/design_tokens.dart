@@ -829,6 +829,16 @@ const double kNearbyPinSmallSize = 52;
 /// A pin's marker box is its blob plus this.
 const double kNearbyPinCaptionHeight = 74;
 
+/// How far a pin's own type is allowed to follow the system text size.
+///
+/// A marker on a map is a fixed box — `flutter_map` is told the height before
+/// the caption is laid out, and the tiles do not reflow. The caption's three
+/// lines plus their gap fit inside [kNearbyPinCaptionHeight] up to about 1.75,
+/// so the pin stops short of that and the rest of the screen — the stepper,
+/// the results bar, every sheet the map opens — keeps scaling all the way
+/// (D73).
+const double kNearbyPinMaxTextScale = 1.6;
+
 /// The clear space kept between two pins once they have been pushed apart.
 const double kNearbyPinGap = 4;
 

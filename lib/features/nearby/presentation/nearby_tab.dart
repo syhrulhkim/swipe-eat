@@ -14,6 +14,7 @@ import '../../auth/state/auth_controller.dart';
 import '../../restaurants/models/restaurant_card.dart';
 import '../../restaurants/models/restaurant_detail_data.dart';
 import '../../restaurants/presentation/discovery_filter_sheet.dart';
+import '../../restaurants/state/deck_handoff.dart';
 import '../../restaurants/state/likes_controller.dart';
 import '../data/nearby_repository.dart' show NearbyOrigin;
 import '../domain/nearby_format.dart';
@@ -52,6 +53,7 @@ class NearbyTab extends StatefulWidget {
     this.controller,
     this.tileProvider,
     this.likes,
+    this.handoff,
   });
 
   final AuthController authController;
@@ -67,13 +69,20 @@ class NearbyTab extends StatefulWidget {
   /// Which places are already bitten. Defaults to the shared instance.
   final LikesController? likes;
 
+  /// Where "Swipe all" publishes. Defaults to the shared instance; injected so
+  /// a test can wire this map to the deck that receives from it.
+  final DeckHandoff? handoff;
+
   @override
   State<NearbyTab> createState() => _NearbyTabState();
 }
 
 class _NearbyTabState extends State<NearbyTab> {
   late final NearbyController _nearby = widget.controller ??
-      NearbyController(authController: widget.authController);
+      NearbyController(
+        authController: widget.authController,
+        handoff: widget.handoff,
+      );
   late final bool _ownsController = widget.controller == null;
   late final LikesController _likes = widget.likes ?? LikesController.instance;
 
@@ -345,7 +354,10 @@ class _NearbyTabState extends State<NearbyTab> {
                   _nearby.error == null &&
                   _nearby.places.isNotEmpty)
                 NearbyResultsBar(
-                  resultCount: _nearby.places.length,
+                  // Only what the deck has never shown: the pins still name
+                  // everything in the circle, but "Swipe all" would be
+                  // re-dealing the rest (D117).
+                  resultCount: _nearby.swipeAllCount,
                   openNowCount: _nearby.openNowCount,
                   minPriceFrom: _nearby.minPriceFrom,
                   onSwipeAll: _nearby.swipeAll,

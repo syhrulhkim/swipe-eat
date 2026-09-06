@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
@@ -6,18 +8,27 @@ import 'package:swipe_eat/features/auth/state/auth_controller.dart';
 import 'package:swipe_eat/features/nearby/data/nearby_repository.dart';
 import 'package:swipe_eat/features/nearby/domain/nearby_format.dart';
 import 'package:swipe_eat/features/nearby/state/nearby_controller.dart';
+import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
 import 'package:swipe_eat/features/restaurants/state/deck_handoff.dart';
 
 import '../auth/fake_auth_repository.dart';
 import '../profile/fake_profile_repository.dart';
 import 'fake_nearby_repository.dart';
 
-AppUser _user({int? searchRadiusKm}) {
+AppUser _user({
+  int? searchRadiusKm,
+  bool halalOnly = false,
+  bool vegetarian = false,
+  int? budgetMax,
+}) {
   return AppUser(
     id: 'user-1',
     name: 'Aisyah',
     email: 'aisyah@example.com',
     searchRadiusKm: searchRadiusKm,
+    halalOnly: halalOnly,
+    vegetarian: vegetarian,
+    budgetMax: budgetMax,
   );
 }
 
@@ -306,6 +317,45 @@ void main() {
       expect(handoff.label, 'Nearby · 1 place');
     });
 
+    test('leaves out the places the deck has already shown', () async {
+      repository.rows = [
+        testPlace(1, distanceKm: 0.2, swiped: true),
+        testPlace(2, distanceKm: 0.4),
+        testPlace(3, distanceKm: 0.6, swiped: true),
+        testPlace(4, distanceKm: 0.8),
+      ];
+
+      final nearby = build();
+      await nearby.load();
+
+      // The pins still show all four: the map says what is there (D117).
+      expect(nearby.places.length, 4);
+      expect(nearby.swipeAllCount, 2);
+
+      nearby.swipeAll();
+
+      expect(handoff.restaurants.map((row) => row.id).toList(), [2, 4]);
+      expect(handoff.label, 'Nearby · 2 places');
+    });
+
+    test('a circle of nothing but swiped places hands over nothing', () async {
+      repository.rows = [
+        testPlace(1, distanceKm: 0.2, swiped: true),
+        testPlace(2, distanceKm: 0.4, swiped: true),
+      ];
+
+      final nearby = build();
+      await nearby.load();
+
+      expect(nearby.places.length, 2);
+      expect(nearby.swipeAllCount, 0);
+
+      nearby.swipeAll();
+
+      expect(handoff.revision, 0);
+      expect(handoff.restaurants, isEmpty);
+    });
+
     test('an empty map hands over nothing', () async {
       final nearby = build();
       await nearby.load();
@@ -348,16 +398,130 @@ void main() {
       expect(repository.queries.length, 2);
     });
 
-    test('a changed search radius in Settings does not move the map',
+    test('a changed search radius does not move a circle the thumb has set',
         () async {
       final nearby = build();
       await nearby.load();
+      // The stepper has been touched, so the circle is the user's answer.
+      await nearby.widen();
+      expect(nearby.radiusKm, 5);
+
+      authController.applyUser(_user(searchRadiusKm: 12));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(nearby.radiusKm, 5);
+      expect(repository.queries.length, 2);
+    });
+
+    test('the circle stays put once the stepper has been used, even to the '
+        'same value', () async {
+      final nearby = build();
+      await nearby.load();
+      // A refused tap still counts as an answer: the user looked and stayed.
+      await nearby.setRadiusKm(kNearbyDefaultRadiusKm);
 
       authController.applyUser(_user(searchRadiusKm: 12));
       await Future<void>.delayed(Duration.zero);
 
       expect(nearby.radiusKm, kNearbyDefaultRadiusKm);
-      expect(repository.queries.length, 1);
+    });
+
+    test('turning on a diet rule refetches the map', () async {
+      final nearby = build();
+      await nearby.load();
+
+      authController.applyUser(_user(halalOnly: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.queries.length, 2);
+
+      authController.applyUser(_user(halalOnly: true, vegetarian: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.queries.length, 3);
+
+      authController.applyUser(
+        _user(halalOnly: true, vegetarian: true, budgetMax: 30),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.queries.length, 4);
+    });
+  });
+
+  group('NearbyController radius catching up', () {
+    test('a profile that hydrates after the controller moves the circle',
+        () async {
+      // Built before the profile arrived: the map opened on the default.
+      authController = AuthController(auth);
+      final nearby = NearbyController(
+        authController: authController,
+        repository: repository,
+        profiles: FakeProfileRepository(_user()),
+        handoff: handoff,
+        resolvePosition: () async => testPosition(),
+      );
+      addTearDown(nearby.dispose);
+      await nearby.load();
+      expect(nearby.radiusKm, kNearbyDefaultRadiusKm);
+
+      authController.applyUser(_user(searchRadiusKm: 12));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(nearby.radiusKm, 12);
+      expect(repository.queries.last.radiusKm, 12);
+    });
+  });
+
+  group('NearbyController origin', () {
+    test('the passport pin beats even a real device fix', () async {
+      repository.passport = const NearbyOrigin(3.1390, 101.6869);
+      repository.stored = const NearbyOrigin(5.4141, 100.3288);
+
+      final nearby = build();
+      await nearby.load();
+
+      // The me-dot, the camera fit and the query all read this one origin, so
+      // the client resolves the passport rather than letting the RPC swap it.
+      expect(nearby.origin!.latitude, 3.1390);
+      expect(repository.queries.single.latitude, 3.1390);
+      expect(repository.queries.single.longitude, 101.6869);
+    });
+  });
+
+  group('NearbyController lifecycle', () {
+    test('reads its clock in Kuala Lumpur time by default', () {
+      authController = AuthController(auth)..applyUser(_user());
+      final nearby = NearbyController(
+        authController: authController,
+        repository: repository,
+        profiles: FakeProfileRepository(_user()),
+        handoff: handoff,
+        resolvePosition: () async => testPosition(),
+      );
+      addTearDown(nearby.dispose);
+
+      // The catalogue's hours are Malaysian and the server evaluates them in
+      // Asia/Kuala_Lumpur; a device clock elsewhere would disagree.
+      expect(
+        nearby.now.difference(OpeningHours.kualaLumpurNow()).abs(),
+        lessThan(const Duration(seconds: 2)),
+      );
+    });
+
+    test('a load still in flight goes quiet when the controller is disposed',
+        () async {
+      final gate = Completer<void>();
+      repository.gate = gate;
+      repository.rows = [testPlace(1, distanceKm: 0.2)];
+
+      final nearby = build();
+      final loading = nearby.load();
+
+      nearby.dispose();
+      gate.complete();
+
+      // Would throw "A NearbyController was used after being disposed" if the
+      // run notified after the await.
+      await loading;
+      expect(nearby.places, isEmpty);
     });
   });
 }

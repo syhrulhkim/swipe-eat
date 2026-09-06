@@ -113,7 +113,6 @@ Conventions the controllers follow:
 | `/onboarding` | While `profiles.onboarded_at` is null |
 | `/dashboard` | The five-tab shell |
 | `/settings` | |
-| `/explore/cuisine/:id` | From an Explore tile |
 | `/restaurant/:id` | By **id**, not by a payload object |
 
 Two details that matter:

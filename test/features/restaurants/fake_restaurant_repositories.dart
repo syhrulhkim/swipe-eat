@@ -1,5 +1,6 @@
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 
+import 'package:swipe_eat/features/restaurants/data/deck_cache.dart';
 import 'package:swipe_eat/features/restaurants/data/restaurant_repository.dart';
 import 'package:swipe_eat/features/restaurants/data/swipe_repository.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
@@ -52,12 +53,17 @@ class FakeRestaurantRepository implements RestaurantRepository {
 
   int likedFetches = 0;
 
+  /// How many times a deck has been asked for, so a test can assert that a
+  /// changed profile rule really did re-deal.
+  int deckFetches = 0;
+
   @override
   Future<List<Restaurant>> fetchDeck({
     double? latitude,
     double? longitude,
     int limit = 30,
   }) async {
+    deckFetches++;
     if (failDeck) {
       throw Exception('deck unavailable');
     }
@@ -197,4 +203,31 @@ void wireFakeBackend(
         ? [testRestaurant(call.restaurantId), ...without(call.restaurantId)]
         : without(call.restaurantId);
   };
+}
+
+/// Stands in for the on-device deck cache. `implements` rather than extends,
+/// so an interface change breaks the fake instead of silently diverging from
+/// it (D69).
+class FakeDeckCache implements DeckCache {
+  /// What a read answers with — null is a cache miss.
+  CachedDeck? cached;
+
+  final List<List<Restaurant>> saves = [];
+  int clears = 0;
+
+  @override
+  Future<CachedDeck?> read(String userId) async => cached;
+
+  @override
+  Future<void> save({
+    required String userId,
+    required List<Restaurant> restaurants,
+  }) async {
+    saves.add(List.of(restaurants));
+  }
+
+  @override
+  Future<void> clear() async {
+    clears += 1;
+  }
 }

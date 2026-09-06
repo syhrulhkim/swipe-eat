@@ -31,7 +31,9 @@ class DashboardPage extends StatelessWidget {
   /// Injected by tests; in the app the shared instance is used.
   final VisitPromptController? visitPrompts;
 
-  /// Which deck hand-off to listen to. Defaults to the shared instance.
+  /// Which deck hand-off to listen to, and which the map publishes to and the
+  /// deck deals from. Defaults to the shared instance; injecting one wires all
+  /// three ends of "Swipe all" together in a test.
   final DeckHandoff? handoff;
 
   @override
@@ -243,8 +245,14 @@ class _DashboardShellState extends State<_DashboardShell>
         child: IndexedStack(
           index: _selectedIndex,
           children: [
-            SwipeDeck(authController: widget.authController),
-            NearbyTab(authController: widget.authController),
+            SwipeDeck(
+              authController: widget.authController,
+              handoff: widget.handoff,
+            ),
+            NearbyTab(
+              authController: widget.authController,
+              handoff: widget.handoff,
+            ),
             const LikesTab(),
             const GroupTab(),
             ProfileTab(authController: widget.authController),

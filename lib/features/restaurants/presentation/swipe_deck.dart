@@ -12,6 +12,7 @@ import '../domain/meal_label.dart';
 import '../models/restaurant_card.dart';
 import '../models/restaurant_detail_data.dart';
 import '../state/deck_controller.dart';
+import '../state/deck_handoff.dart';
 import 'discovery_filter_sheet.dart';
 import 'swipe_card.dart';
 import 'tiktok_player.dart';
@@ -27,6 +28,7 @@ class SwipeDeck extends StatefulWidget {
     super.key,
     required this.authController,
     this.controller,
+    this.handoff,
   });
 
   final AuthController authController;
@@ -34,14 +36,21 @@ class SwipeDeck extends StatefulWidget {
   /// Injected by tests; in the app the deck builds its own.
   final DeckController? controller;
 
+  /// Which hand-off the deck deals from ("Swipe all" on the map). Defaults to
+  /// the shared instance; injected so a test can wire one map to one deck.
+  final DeckHandoff? handoff;
+
   @override
   State<SwipeDeck> createState() => _SwipeDeckState();
 }
 
 class _SwipeDeckState extends State<SwipeDeck>
     with SingleTickerProviderStateMixin {
-  late final DeckController _deck =
-      widget.controller ?? DeckController(authController: widget.authController);
+  late final DeckController _deck = widget.controller ??
+      DeckController(
+        authController: widget.authController,
+        handoff: widget.handoff,
+      );
   late final bool _ownsController = widget.controller == null;
   StreamSubscription<String>? _messages;
 

@@ -40,6 +40,11 @@ class NearbyPin extends StatelessWidget {
 
   /// The box the marker occupies: the blob plus the caption under it. Taller
   /// than the content so a pin can never clip its own third line.
+  ///
+  /// A constant, deliberately: `flutter_map` needs a marker's height before
+  /// the caption is laid out, so the pin clamps its own text scale to
+  /// [kNearbyPinMaxTextScale] instead of growing the box. Everything else on
+  /// the screen still scales without limit.
   static double heightFor({required double size}) =>
       size + kNearbyPinCaptionHeight;
 
@@ -69,66 +74,74 @@ class NearbyPin extends StatelessWidget {
       // too, so it is re-declared here — see D83.
       excludeSemantics: true,
       onTap: onTap,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
+      // Clamped, not scaled: see [heightFor]. The whole pin is wrapped, badge
+      // included, so the badge cannot outgrow the blob it sits on.
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: kNearbyPinMaxTextScale,
+        // Top-aligned outside the detector: the box is taller than the pin
+        // draws, and the slack under the caption must not take taps meant for
+        // the map — or for a pin drawn behind it.
         child: Align(
           alignment: Alignment.topCenter,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _Blob(
-                place: place,
-                saved: saved,
-                size: size,
-                ringed: ringed,
-                distance: distance.label,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                restaurant.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontFamily: kTextFontFamily,
-                  fontSize: kFontSizeSmall,
-                  fontWeight: FontWeight.w600,
-                  color: kAccentCream,
-                  height: 1.15,
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _Blob(
+                  place: place,
+                  saved: saved,
+                  size: size,
+                  ringed: ringed,
+                  distance: distance.label,
                 ),
-              ),
-              if (restaurant.tag.isNotEmpty)
+                const SizedBox(height: 6),
                 Text(
-                  restaurant.tag,
+                  restaurant.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontFamily: kTextFontFamily,
-                    fontSize: kFontSizeMicro,
-                    fontWeight: FontWeight.w400,
-                    color: kCreamSecondary,
+                    fontSize: kFontSizeSmall,
+                    fontWeight: FontWeight.w600,
+                    color: kAccentCream,
                     height: 1.15,
                   ),
                 ),
-              if (openLine != null)
-                Text(
-                  openLine.text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: kTextFontFamily,
-                    fontSize: kNearbyDistanceFontSize,
-                    fontWeight: FontWeight.w600,
-                    color: openLine.tone == NearbyOpenTone.fresh
-                        ? kFresh
-                        : kCreamMuted,
-                    height: 1.2,
+                if (restaurant.tag.isNotEmpty)
+                  Text(
+                    restaurant.tag,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: kTextFontFamily,
+                      fontSize: kFontSizeMicro,
+                      fontWeight: FontWeight.w400,
+                      color: kCreamSecondary,
+                      height: 1.15,
+                    ),
                   ),
-                ),
-            ],
+                if (openLine != null)
+                  Text(
+                    openLine.text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: kTextFontFamily,
+                      fontSize: kNearbyDistanceFontSize,
+                      fontWeight: FontWeight.w600,
+                      color: openLine.tone == NearbyOpenTone.fresh
+                          ? kFresh
+                          : kCreamMuted,
+                      height: 1.2,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

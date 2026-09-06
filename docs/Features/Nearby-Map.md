@@ -110,32 +110,57 @@ Changing the radius refetches and re-fits the camera. It **never writes the
 profile**: the map's circle is a look, and Settings' radius is a standing
 preference for the deck. For the same reason `NearbyController` deliberately
 leaves `searchRadiusKm` out of the filter signature it watches, so a change in
-Settings cannot move the map under the user's thumb. Cuisine, dietary tag and
-minimum-rating changes *do* refetch.
+Settings cannot move the map under the user's thumb.
+
+One exception, and it is about a race rather than about Settings: the tab can be
+built **before the profile has hydrated**, in which case the map opened on the
+default 3 km rather than on the user's radius. The controller tracks whether the
+stepper has been touched, and until it has, a profile arriving late is allowed
+to move the circle to its own radius. After the first tap the circle is the
+user's answer and nothing overrules it — including a tap that changed nothing.
+
+Cuisine, dietary tag and minimum-rating changes *do* refetch, and so do the
+three diet & budget answers, because `get_nearby` now applies them as hard rules
+(D105).
 
 ## 3. Where "near" is measured from
 
-Resolved the way `DeckController` resolves it, in order:
+Resolved the way `deck_scored` resolves it, in order:
 
-1. A real device fix, through the injected resolver (D60).
-2. The coordinates the profile stored (`profiles.last_latitude/longitude`),
-   read by `NearbyRepository.storedOrigin()`. `(0, 0)` counts as unknown.
-3. Nothing — and then the map is not drawn at all. `AppEmptyState` asks
+1. The **passport pin** (`profiles.passport_latitude/longitude`) — a pin the
+   user dropped on purpose beats a fix they never chose (D12).
+2. A real device fix, through the injected resolver (D60).
+3. The coordinates the profile stored (`profiles.last_latitude/longitude`).
+   `(0, 0)` counts as unknown, for the passport and the stored pair alike.
+   Both pairs come back from one read, `NearbyRepository.profileOrigins()`,
+   because the passport has to be known *before* the device is asked. A read
+   that fails is not an error the map shows: the device fix is still worth
+   trying, and with no fix either the empty state already says the right thing.
+4. Nothing — and then the map is not drawn at all. `AppEmptyState` asks
    "Where are you eating?", offers **"Use my location"** and a secondary
    **"Not now"**. There is no stepper and no results bar in that state: there
    is nothing to centre them on.
 
 One origin drives all three of the me-dot, the camera fit and the query, so
-they can never disagree.
+they can never disagree. That is also **why the passport is resolved on the
+client** rather than inside `get_nearby` the way `deck_scored` does it: an RPC
+that quietly swapped in a different origin would measure every `distance_km`
+from a place the map is not showing, and the me-dot would sit somewhere else
+again.
 
 ## 4. The `get_nearby` RPC
 
 `public.get_nearby(p_latitude, p_longitude, p_radius_km default 3, p_limit
 default 60)` — `language sql`, `stable`, `set search_path to ''`, security
-invoker. Migration `get_nearby`, checked in at
-`supabase/migrations/20260905120000_get_nearby.sql`.
+invoker. First checked in at
+`supabase/migrations/20260905120000_get_nearby.sql`, then **dropped and
+recreated** by
+`supabase/migrations/20260906140000_get_nearby_diet_budget_swiped.sql`, which is
+what the app calls today. The argument list is unchanged; only the return type
+grew, which is why a drop was needed rather than a replace.
 
-Returns the full restaurant row plus **`distance_km`** and **`open_now`**, with
+Returns the full restaurant row plus **`distance_km`**, **`open_now`** and
+**`swiped`**, with
 `restaurant_images` / `dishes` / `reviews` as `jsonb` aggregates so one round
 trip feeds `Restaurant.fromJson` unchanged. It **returns `table(...)`, not
 `setof restaurants`**, because the two extra columns are the point of the call
@@ -143,22 +168,36 @@ trip feeds `Restaurant.fromJson` unchanged. It **returns `table(...)`, not
 which is why the children are aggregated in SQL instead.
 
 It excludes inactive rows and rows at `latitude = 0 and longitude = 0`, applies
-**the same profile filters `deck_scored` applies** (cuisine, dietary tags,
-minimum rating), orders by `haversine_km` and caps at `p_limit` (hard ceiling
-200). Missing coordinates fall back to the caller's stored profile pair, so the
-function is usable with both arguments null.
+**every rule `deck_scored` applies** — cuisine, dietary tags, minimum rating,
+and the three hard `halal_only` / `vegetarian` / `budget_max` predicates copied
+from it verbatim (D105) — orders by `haversine_km` and caps at `p_limit` (hard
+ceiling 200). Missing coordinates fall back to the caller's stored profile pair,
+so the function is usable with both arguments null. It does **not** read the
+passport pin: that is the client's job here, for the reason in section 3.
+
+The three hard rules keep their `deck_scored` shapes exactly, because the same
+reasoning holds on a map: `halal_only` needs `is_halal is true` (unknown is not
+good enough for a rule the user set to avoid eating somewhere they cannot); the
+vegetarian tag is matched on `dietary_tags.slug` so it survives a reseed; and an
+unknown `price_from` **passes** the budget ceiling, because most rows have no
+price and dropping them would empty the map.
 
 `open_now` comes from `public.is_open_at`, which evaluates in
 Asia/Kuala_Lumpur and returns `null` for unknown hours.
 
-No swipe join: the map shows what is there, including places already swiped.
-The deck's job is to not repeat itself; the map's job is to be complete.
+**`swiped`** is an `exists` against the caller's own `swipes` rows. It is not a
+filter: the map still draws a swiped place, because the map's job is to say what
+is *there*. It is only what "Swipe all" leaves out (D117).
+
+Because `swiped` needs `auth.uid()`, the grant to `anon` is gone: the function
+is executable by `authenticated` and `service_role` only.
 
 RLS was checked rather than assumed — `restaurants`, `restaurant_images`,
 `dishes`, `reviews`, `restaurant_cuisines` and `restaurant_dietary_tags` each
-carry a `select` policy for `authenticated`, and `profiles` has `own profile
-select`, so a security-invoker function reads everything it needs as the signed
--in user.
+carry a `select` policy for `authenticated`, `swipes` carries the owner-only
+`own swipes` policy, and `profiles` has `own profile select`, so a
+security-invoker function reads everything it needs as the signed-in user — and
+the `swiped` subquery can only ever see the caller's own rows.
 
 ## 5. Tiles
 
@@ -175,7 +214,12 @@ transparent image, so the suite never touches the network.
 
 ## 6. "Swipe all *n*"
 
-The bar's one action hands the whole result list to the deck (D103):
+The bar's one action hands the result list to the deck (D103) — minus anything
+the user has already swiped (D117). The pins keep showing all of it; the button
+counts and deals only the unswiped, so a circle the user has worked through
+still shows its pins, under a disabled **"Swipe all 0"**, rather than re-dealing
+cards the deck has already been through.
+
 `DeckHandoff` is a tiny `ChangeNotifier` singleton in
 `lib/features/restaurants/state/`. The map publishes; `DeckController.dealFrom`
 deals the list **without an RPC**, and the dashboard shell brings tab 0
@@ -184,7 +228,13 @@ over the same places twice still re-deals.
 
 `dealFrom` bumps the deck's load generation, so an in-flight `load()` cannot
 land on top of a hand-off, and it clears the staleness marker — these are fresh
-server rows, not a cached deck (D17).
+server rows, not a cached deck (D17). The label is cleared again by **both**
+outcomes of the next `load()`, the offline-cache fallback included: cards read
+off the device days ago must not be credited to "Nearby · 6 places".
+
+`DashboardPage` threads its `handoff` down to `SwipeDeck` and `NearbyTab` as
+well as listening to it itself, so one injected instance wires all three ends of
+the journey — publisher, dealer, and the shell that brings tab 0 forward.
 
 **Not done:** the deck header does not display `DeckController.handoffLabel`
 ("Nearby · 12 places"). The only header slot is `stalenessLabel`, which renders
@@ -197,6 +247,11 @@ change's scope. The label is computed and exposed for whoever adds the slot.
 The catalogue is **Johor (844 rows) and Penang (741)**, with **474 rows
 ungeocoded** — those can never carry a pin, because a wrong fix routes people
 (D47) and `(0, 0)` is excluded by the RPC.
+
+`NearbyPlace.openNow` — the server's `open_now` — is **not what a pin reads**:
+the pin recomputes its line from the row's hours against
+`OpeningHours.kualaLumpurNow`, so the two can only ever agree, and `open_now`
+feeds the results bar's "Open now *n*" and nothing else.
 
 A user in **Kuala Lumpur therefore sees an empty map** — correctly: there is
 nothing of ours near them yet. It resolves when the catalogue is scraped for KL
@@ -212,8 +267,12 @@ resolver, the clock and the repository are all injected.
 - `test/features/nearby/nearby_format_test.dart` — the radius snapping, the
   distance strings, every branch of the open line.
 - `test/features/nearby/nearby_controller_test.dart` — radius walking and its
-  stops, the counts and the cheapest price, the three origin outcomes, the
-  hand-off, and that Settings' radius does not move the map.
+  stops, the counts and the cheapest price, the four origin outcomes including
+  **the passport pin beating a real device fix**, the hand-off and its
+  **skipping of swiped places**, that Settings' radius does not move a circle
+  the thumb has set but *does* move one it has not, that a diet or budget answer
+  refetches, that the default clock is **Kuala Lumpur time**, and that a load in
+  flight when the controller is disposed goes quiet instead of throwing.
 - `test/features/nearby/pin_slots_test.dart` — the six slots never collide at
   390 px, big pins take big slots, a pin keeps to its own side, extras are left
   unassigned.
@@ -223,9 +282,12 @@ resolver, the clock and the repository are all injected.
   distance-scaled sizes, the me-dot on its mark and the pins in their slots,
   two places on one spot drawn apart, the
   bite, the badge, tapping through to a detail route, the stepper, the results
-  bar, the empty state, the filter count, and **no overflow at 320 px** (D73).
+  bar, the empty state, the filter count, **no overflow at 320 px**, and **a pin
+  that keeps its marker box at `TextScaler.linear(2.0)`** (D73).
 - `test/features/restaurants/deck_handoff_test.dart` — the notifier and
-  `dealFrom`, including the in-flight-load race.
+  `dealFrom`, including the in-flight-load race, that the **offline-cache
+  fallback drops the hand-off label** with the cards it replaces, and that each
+  of the three diet & budget answers re-deals the deck.
 - `test/features/nearby/fake_nearby_repository.dart` — `implements
   NearbyRepository` (D69), plus `FakeTileProvider` and the fixtures.
 
@@ -237,3 +299,4 @@ resolver, the clock and the repository are all injected.
 | D102 | The map **replaces** the cuisine grid and the per-cuisine page, which are deleted rather than kept alongside it. The DB functions behind them (`get_cuisine_counts`, `get_top_picks`) are retained. | locked 2026-09-05 |
 | D103 | "Swipe all" hands the result **list** to the deck through `DeckHandoff` rather than re-querying; the deck deals what the map already fetched. | locked 2026-09-05 |
 | D116 | The map draws the **nearest five** places, sized by distance (96 px at the origin to 52 px at the radius edge), laid into the **design's six slots** with the two closest in the two big ones and each pin on its own side of the me-dot, then spread apart in screen space so no two overlap. The camera is zoomed to hold the five and moved to put the me-dot at 50%/52%. Five is what a thumb can pick between; the results bar and "Swipe all" still speak for the full fetch. The distance badge carries the truth the position no longer does. | locked 2026-09-06 |
+| D117 | "Swipe all" deals only the places the caller has **not already swiped**; the pins still show all of them. `get_nearby` answers `swiped` per row, and the button counts and hands over the rest. Saying what is there is the map's job; not repeating itself is the deck's, and a hand-off of cards the deck has already shown reads as the app forgetting. | locked 2026-09-06 |
