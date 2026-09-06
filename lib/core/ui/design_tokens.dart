@@ -1019,3 +1019,128 @@ class AppFilterChip extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Welcome and sign-up — the design's `.onb` and `.su`
+// (docs/Redesign/assets/ngap-app-screens.html, S1 and 01b).
+//
+// These are the first two screens a new user sees, and they are the only ones
+// that carry the wordmark. Everything here is shared by both, so the sign-up
+// screen cannot drift into being a second design of the same moment.
+// ---------------------------------------------------------------------------
+
+/// The welcome screen's glow. Same device as [kScreenGlow] and the same two
+/// colours, but wider, taller and starting at [kAccentEmber] rather than
+/// [kAccentLava] — the design's `.onb .screen` overrides the app's `--grad`
+/// with `radial-gradient(140% 60% at 50% -8%, ember 0%, char 44%, transparent
+/// 74%)`, because this is the one screen with nothing else on it.
+const RadialGradient kWelcomeGlow = RadialGradient(
+  center: Alignment.topCenter,
+  radius: 0.5,
+  colors: [kAccentEmber, kAccentChar, Color(0x005A160C)],
+  stops: [0.0, 0.44, 0.74],
+);
+
+/// One card in the welcome screen's preview stack — `.onb .stackpreview .card`.
+/// Smaller than a deck card on purpose: three of them have to read as a deck
+/// at a glance, which needs all three visible at once.
+const double kWelcomeCardWidth = 196;
+const double kWelcomeCardHeight = 244;
+
+/// The wordmark, top-left of both screens (`.onb .brand`, `.su .brand`).
+const double kFontSizeBrand = 22;
+
+/// The welcome screen's headline. Two lines, and smaller than
+/// [kFontSizeHero] because it is set at two lines rather than one.
+const double kFontSizeWelcomeHero = 40;
+
+/// The name over a preview card, and the first line of the sign-up hero's
+/// caption — `.onb .card .name` and `.su .hero .cap b`, both display 18.
+const double kFontSizeCoverName = 18;
+
+/// A provider button on the sign-up screen — the design's `.btn` at its full
+/// 52 px. Taller than [kPillButtonHeight] because these are the only buttons
+/// on their screen and they carry a mark as well as a label.
+const double kAuthButtonHeight = 52;
+
+/// The round mark inside a provider button — `.su .btn .ic`.
+const double kAuthProviderMarkSize = 22;
+
+/// How much of the screen the welcome stack and the sign-up hero are each
+/// given — the design's `height:38%` on both.
+const double kAuthHeroFraction = 0.38;
+
+/// The welcome screen's glow, painted behind its content.
+///
+/// A second widget rather than a flag on [ScreenGlow]: the two ellipses are
+/// different shapes, and the app's glow is a constant the rest of the product
+/// relies on being identical everywhere. This one exists for exactly one
+/// screen, and says so.
+class WelcomeGlow extends StatelessWidget {
+  const WelcomeGlow({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width * 1.4;
+    // The CSS ellipse is 140x60 where [ScreenGlow]'s is 130x48, so the box is
+    // built by scaling that one's construction by the ratio of the two.
+    final height = width * 1.11;
+
+    return Positioned(
+      left: -(width - MediaQuery.sizeOf(context).width) / 2,
+      width: width,
+      // The -8% lift, expressed against the ellipse's own height.
+      top: -height * 0.08,
+      height: height,
+      child: const IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: kWelcomeGlow,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The wordmark: "Ngap." in the display face, with the full stop in ember.
+///
+/// The stop is the only orange in the app that is not a control or the glow.
+/// It is the product's name rather than decoration — the bite the app is
+/// named after, punctuated.
+TextStyle appBrandStyle(BuildContext context) {
+  return Theme.of(context).textTheme.titleLarge!.copyWith(
+        fontFamily: kDisplayFontFamily,
+        color: kTextOnPhoto,
+        fontSize: kFontSizeBrand,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.44,
+        height: 1.1,
+      );
+}
+
+/// The welcome screen's two-line headline — `.h-hero` at 40.
+TextStyle appWelcomeHeroStyle(BuildContext context) {
+  return Theme.of(context).textTheme.headlineLarge!.copyWith(
+        fontFamily: kDisplayFontFamily,
+        color: kTextOnPhoto,
+        fontSize: kFontSizeWelcomeHero,
+        fontWeight: FontWeight.w800,
+        height: 0.98,
+        letterSpacing: -1.0,
+      );
+}
+
+/// A restaurant's name over a small cover — the preview stack's cards and the
+/// sign-up hero's caption.
+TextStyle appCoverNameStyle(BuildContext context) {
+  return Theme.of(context).textTheme.titleMedium!.copyWith(
+        fontFamily: kDisplayFontFamily,
+        color: kTextOnPhoto,
+        fontSize: kFontSizeCoverName,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.18,
+        height: 1.1,
+      );
+}

@@ -16,6 +16,8 @@ class FakeAuthRepository implements AuthRepository {
     this.profile,
     this.supportsGoogleSignIn = false,
     this.supportsAppleSignIn = false,
+    this.supportsPhoneSignIn = false,
+    this.supportsGuestBrowsing = false,
   });
 
   bool sessionPresent;
@@ -26,6 +28,12 @@ class FakeAuthRepository implements AuthRepository {
 
   @override
   bool supportsAppleSignIn;
+
+  @override
+  bool supportsPhoneSignIn;
+
+  @override
+  bool supportsGuestBrowsing;
 
   /// Held open so a test can delay the profile read and observe the
   /// intermediate state.
@@ -102,6 +110,29 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<void> signInWithApple() async {
     calls.add('apple');
+    _maybeFail();
+    sessionPresent = true;
+  }
+
+  @override
+  Future<void> signInWithPhone(String phone) async {
+    calls.add('phone:$phone');
+    _maybeFail();
+  }
+
+  @override
+  Future<void> verifyPhoneOtp({
+    required String phone,
+    required String token,
+  }) async {
+    calls.add('verify:$phone:$token');
+    _maybeFail();
+    sessionPresent = true;
+  }
+
+  @override
+  Future<void> signInAsGuest() async {
+    calls.add('guest');
     _maybeFail();
     sessionPresent = true;
   }

@@ -58,6 +58,8 @@ class AuthController extends ChangeNotifier {
 
   bool get supportsGoogleSignIn => _repository.supportsGoogleSignIn;
   bool get supportsAppleSignIn => _repository.supportsAppleSignIn;
+  bool get supportsPhoneSignIn => _repository.supportsPhoneSignIn;
+  bool get supportsGuestBrowsing => _repository.supportsGuestBrowsing;
 
   /// Restores any persisted session and starts listening for auth changes.
   /// Subscribing before the first resolve means a token refresh or a sign-out
@@ -97,6 +99,27 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() => _run(_repository.signInWithGoogle);
+
+  /// Asks for the SMS code. True means "sent", not "signed in" — the session
+  /// only arrives once [verifyPhoneOtp] accepts the code.
+  Future<bool> signInWithPhone(String phone) {
+    return _run(() async {
+      await _repository.signInWithPhone(phone);
+      _notice = 'Code sent to $phone.';
+    });
+  }
+
+  Future<bool> verifyPhoneOtp({
+    required String phone,
+    required String code,
+  }) {
+    return _run(
+      () => _repository.verifyPhoneOtp(phone: phone, token: code),
+    );
+  }
+
+  /// Signs in anonymously so the app can be browsed before an account exists.
+  Future<bool> continueAsGuest() => _run(_repository.signInAsGuest);
 
   Future<bool> signInWithApple() => _run(_repository.signInWithApple);
 

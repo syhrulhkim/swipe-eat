@@ -28,6 +28,23 @@ class AppConfig {
 
   static bool get hasGoogleSignIn => googleWebClientId.isNotEmpty;
 
+  /// Whether the build offers phone (SMS) sign-in.
+  ///
+  /// Off by default and gated exactly like Google, for the same reason: phone
+  /// auth needs an SMS provider (Twilio, MessageBird, …) enabled in the
+  /// Supabase dashboard, which is out-of-repo setup with a real per-message
+  /// cost. Until that is done the button hides itself rather than failing at
+  /// tap time — see docs/Features/Auth.md.
+  static const bool phoneAuthEnabled =
+      bool.fromEnvironment('PHONE_AUTH_ENABLED');
+
+  /// Whether the sign-up screen offers "Later" — browsing without an account.
+  ///
+  /// Needs the anonymous provider enabled on the project, which it is not, so
+  /// the escape hatch stays hidden instead of signing nobody in.
+  static const bool guestBrowsingEnabled =
+      bool.fromEnvironment('GUEST_BROWSING_ENABLED');
+
   /// Sentry's ingest URL for this project. Not defaulted: a build made without
   /// it — every local run and every test — reports nothing at all rather than
   /// filling a project with noise from developer machines.
