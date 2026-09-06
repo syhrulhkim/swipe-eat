@@ -259,3 +259,13 @@ Then on a real device, in a release build:
   Neither blocks submission — the app hides the directions button on a missing
   coordinate and shows an em dash for a missing rating — but it does affect how
   the app looks in review.
+- `PHONE_AUTH_ENABLED` is **off**, and must stay off until an SMS provider
+  (Twilio, MessageBird, Vonage…) is configured in the Supabase dashboard →
+  Authentication → Providers → **Phone**. The flow is built and tested; the
+  define is the only switch. Turning it on without the provider gives every
+  user a "Continue with phone number" button that fails on tap, and SMS costs
+  real money per message, so the two go together —
+  see [Features/Auth.md](../Features/Auth.md) (D113).
+- `GUEST_BROWSING_ENABLED` is off for the same shape of reason: the anonymous
+  provider is not enabled on the project, so the sign-up screen's "Later"
+  stays hidden (D115).

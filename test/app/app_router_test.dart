@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:swipe_eat/app/app_router.dart';
-import 'package:swipe_eat/features/auth/presentation/login_page.dart';
+import 'package:swipe_eat/features/auth/presentation/welcome_page.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/presentation/splash_page.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
@@ -62,27 +62,28 @@ void main() {
       await tester.pump();
 
       expect(find.byType(SplashPage), findsOneWidget);
-      expect(find.byType(LoginPage), findsNothing,
-          reason: 'showing login before resolving would flash on every launch');
+      expect(find.byType(WelcomePage), findsNothing,
+          reason: 'showing the welcome screen before resolving would flash '
+              'on every launch');
     });
 
-    testWidgets('lands on login once resolved without a session',
+    testWidgets('lands on the welcome screen once resolved without a session',
         (tester) async {
       await pumpApp(tester);
       await controller.bootstrap();
       await tester.pumpAndSettle();
 
-      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.byType(WelcomePage), findsOneWidget);
       expect(find.byType(SplashPage), findsNothing);
     });
 
-    testWidgets('an unauthenticated deep link is sent to login',
+    testWidgets('an unauthenticated deep link is sent to the welcome screen',
         (tester) async {
       await controller.bootstrap();
       await pumpApp(tester, deepLink: '/settings');
       await tester.pumpAndSettle();
 
-      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.byType(WelcomePage), findsOneWidget);
     });
 
     testWidgets('a signed-in account that owes onboarding lands on the wizard',
@@ -126,7 +127,7 @@ void main() {
       await pumpApp(tester, deepLink: '/onboarding');
       await tester.pumpAndSettle();
 
-      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.byType(WelcomePage), findsOneWidget);
       expect(find.byType(OnboardingPage), findsNothing);
     });
   });

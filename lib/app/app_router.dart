@@ -2,9 +2,10 @@ import 'package:go_router/go_router.dart';
 
 import '../core/observability/crash_reporting.dart';
 import '../core/ui/page_transitions.dart';
-import '../features/auth/presentation/login_page.dart';
-import '../features/auth/presentation/register_page.dart';
+import '../features/auth/presentation/phone_sign_in_page.dart';
+import '../features/auth/presentation/sign_up_page.dart';
 import '../features/auth/presentation/splash_page.dart';
+import '../features/auth/presentation/welcome_page.dart';
 import '../features/auth/state/auth_controller.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
@@ -22,7 +23,11 @@ GoRouter createRouter(AuthController authController) {
     observers: crashReportingObservers(),
     redirect: (context, state) {
       final location = state.matchedLocation;
-      final isOnAuthPage = location == '/login' || location == '/register';
+      // The welcome screen and everything the sign-up screen leads to. A
+      // signed-out user is allowed to sit on any of them; every other route
+      // funnels back to the welcome screen.
+      final isOnAuthPage =
+          location == '/welcome' || location.startsWith('/signup');
       final isOnOnboarding = location == '/onboarding';
 
       // Session restore is asynchronous, and so is the profile read that
@@ -34,7 +39,7 @@ GoRouter createRouter(AuthController authController) {
       }
 
       if (!authController.isAuthenticated) {
-        return isOnAuthPage ? null : '/login';
+        return isOnAuthPage ? null : '/welcome';
       }
 
       // `onboarded_at` lives in the database, so the wizard is owed per
@@ -57,8 +62,13 @@ GoRouter createRouter(AuthController authController) {
       GoRoute(
         path: '/',
         redirect: (context, state) =>
-            authController.isAuthenticated ? '/dashboard' : '/login',
+            authController.isAuthenticated ? '/dashboard' : '/welcome',
       ),
+      // The email pages these two used to serve are gone; the paths stay so an
+      // old link, a shortcut or a saved deep link lands on the way in rather
+      // than on a 404.
+      GoRoute(path: '/login', redirect: (context, state) => '/welcome'),
+      GoRoute(path: '/register', redirect: (context, state) => '/welcome'),
       // The five screens below are reached by replacement, not by a push: the
       // redirect above decides which one is owed and swaps it in. They
       // crossfade into each other. The pushed routes further down keep the
@@ -72,20 +82,27 @@ GoRouter createRouter(AuthController authController) {
         ),
       ),
       GoRoute(
-        path: '/login',
+        path: '/welcome',
         pageBuilder: (context, state) => fadeThroughPage<void>(
           context,
           key: state.pageKey,
-          child: LoginPage(authController: authController),
+          child: const WelcomePage(),
         ),
       ),
       GoRoute(
-        path: '/register',
+        path: '/signup',
         pageBuilder: (context, state) => fadeThroughPage<void>(
           context,
           key: state.pageKey,
-          child: RegisterPage(authController: authController),
+          child: SignUpPage(authController: authController),
         ),
+      ),
+      // Pushed from the sign-up screen, so it keeps the platform transition
+      // and the iOS swipe-back gesture.
+      GoRoute(
+        path: '/signup/phone',
+        builder: (context, state) =>
+            PhoneSignInPage(authController: authController),
       ),
       GoRoute(
         path: '/onboarding',

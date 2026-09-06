@@ -58,6 +58,14 @@ class AuthRepository {
 
   bool get supportsAppleSignIn => _oauth.isAppleAvailable;
 
+  /// True when the build was made with `PHONE_AUTH_ENABLED=true`. The provider
+  /// itself is switched on in the Supabase dashboard, which this repo cannot
+  /// do, so the define is what the button reads (D113).
+  bool get supportsPhoneSignIn => AppConfig.phoneAuthEnabled;
+
+  /// True when the build was made with `GUEST_BROWSING_ENABLED=true` (D115).
+  bool get supportsGuestBrowsing => AppConfig.guestBrowsingEnabled;
+
   /// Reads the profile row for the signed-in user. Returns null when there is
   /// no session. The row is created by the `handle_new_user` trigger, but a
   /// just-confirmed account can race it, so a missing row is retried once.
@@ -154,6 +162,31 @@ class AuthRepository {
     }
   }
 
+  /// Sends the six-digit SMS code to [phone], which must already be in E.164
+  /// form (`+60…`). No session exists yet — [verifyPhoneOtp] is what signs the
+  /// user in.
+  Future<void> signInWithPhone(String phone) async {
+    await _guard(() => _auth.signInWithOtp(phone: phone.trim()));
+  }
+
+  /// Exchanges the code for a session. A wrong code and an expired one come
+  /// back as the same Supabase error, so they read as one sentence.
+  Future<void> verifyPhoneOtp({
+    required String phone,
+    required String token,
+  }) async {
+    await _guard(() => _auth.verifyOTP(
+          type: OtpType.sms,
+          phone: phone.trim(),
+          token: token.trim(),
+        ));
+  }
+
+  /// Signs in without an account, for the sign-up screen's "Later".
+  Future<void> signInAsGuest() async {
+    await _guard(_auth.signInAnonymously);
+  }
+
   Future<void> sendPasswordReset(String email) async {
     await _guard(() => _auth.resetPasswordForEmail(email.trim()));
   }
@@ -229,6 +262,20 @@ class AuthRepository {
         return 'Too many attempts. Wait a minute and try again.';
       case 'validation_failed':
         return 'Check the details you entered and try again.';
+      case 'otp_expired':
+        // Supabase answers a wrong code with this too, so the sentence has to
+        // cover both without guessing which happened.
+        return 'That code is wrong or has expired. Ask for a new one.';
+      case 'otp_disabled':
+      case 'phone_provider_disabled':
+        return 'Phone sign-in is not switched on yet. Use email instead.';
+      case 'over_sms_send_rate_limit':
+        return 'Too many codes for that number. Wait a minute and try again.';
+      case 'sms_send_failed':
+        return 'The code could not be sent to that number. Check it and try '
+            'again.';
+      case 'anonymous_provider_disabled':
+        return 'Browsing without an account is not switched on yet.';
       default:
         return error.message;
     }

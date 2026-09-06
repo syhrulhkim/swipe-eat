@@ -77,7 +77,7 @@ reasoning first.
 
 | Doc | Status | Covers |
 |---|---|---|
-| [Auth](Features/Auth.md) | ACTIVE | Supabase Auth, email/password, Google, Apple, Mailtrap SMTP |
+| [Auth](Features/Auth.md) | ACTIVE | The welcome and sign-up screens, phone (gated), Google, Apple, the email fallback, Mailtrap SMTP |
 | [Backend-Schema](Features/Backend-Schema.md) | ACTIVE | As-built tables, RPCs, RLS, triggers |
 | [Onboarding-Taste](Features/Onboarding-Taste.md) | ACTIVE | The four-step wizard and the cold-start taste signal |
 | [Swipe-Deck](Features/Swipe-Deck.md) | ACTIVE | The card deck, ranking, super like, rewind, daily limit, streak |
