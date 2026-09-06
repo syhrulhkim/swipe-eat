@@ -15,7 +15,8 @@ class NearbyPin extends StatelessWidget {
     super.key,
     required this.place,
     required this.saved,
-    required this.prominent,
+    required this.size,
+    required this.ringed,
     required this.now,
     required this.onTap,
   });
@@ -25,8 +26,11 @@ class NearbyPin extends StatelessWidget {
   /// Already bitten: the user has this one in their likes.
   final bool saved;
 
-  /// One of the two closest results — drawn larger, with an ember ring.
-  final bool prominent;
+  /// The blob's diameter — set by distance, see `NearbyController.pinSizeFor`.
+  final double size;
+
+  /// One of the two closest results: the ember ring.
+  final bool ringed;
 
   /// The clock the open line is read against, so the pin is a pure function of
   /// its inputs and a test can move time without waiting.
@@ -34,17 +38,15 @@ class NearbyPin extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  /// The box the marker occupies. Taller than the content so a pin can never
-  /// clip its own third line; the slack sits under the text, where markers
-  /// only ever overlap each other.
-  static double heightFor({required bool prominent}) =>
-      prominent ? 170 : 150;
+  /// The box the marker occupies: the blob plus the caption under it. Taller
+  /// than the content so a pin can never clip its own third line.
+  static double heightFor({required double size}) =>
+      size + kNearbyPinCaptionHeight;
 
   /// Puts the blob's centre — not the box's — on the coordinate, so a pin
   /// points at its restaurant rather than hovering above it.
-  static Alignment alignmentFor({required bool prominent}) {
-    final blob = prominent ? kNearbyPinBigSize : kNearbyPinSize;
-    return Alignment(0, 1 - blob / heightFor(prominent: prominent));
+  static Alignment alignmentFor({required double size}) {
+    return Alignment(0, 1 - size / heightFor(size: size));
   }
 
   @override
@@ -78,7 +80,8 @@ class NearbyPin extends StatelessWidget {
               _Blob(
                 place: place,
                 saved: saved,
-                prominent: prominent,
+                size: size,
+                ringed: ringed,
                 distance: distance.label,
               ),
               const SizedBox(height: 6),
@@ -137,18 +140,19 @@ class _Blob extends StatelessWidget {
   const _Blob({
     required this.place,
     required this.saved,
-    required this.prominent,
+    required this.size,
+    required this.ringed,
     required this.distance,
   });
 
   final NearbyPlace place;
   final bool saved;
-  final bool prominent;
+  final double size;
+  final bool ringed;
   final String distance;
 
   @override
   Widget build(BuildContext context) {
-    final size = prominent ? kNearbyPinBigSize : kNearbyPinSize;
     final coverUrl = place.coverUrl;
 
     return Stack(
@@ -158,7 +162,7 @@ class _Blob extends StatelessWidget {
         BiteNotch(
           bitten: saved,
           borderRadius: BorderRadius.circular(kRadiusPill),
-          radius: kNearbyPinBiteRadius,
+          radius: size * kNearbyPinBiteFraction,
           child: Container(
             width: size,
             height: size,
@@ -166,7 +170,7 @@ class _Blob extends StatelessWidget {
               color: kSurfaceDark,
               borderRadius: BorderRadius.circular(kRadiusPill),
               border: Border.all(
-                color: prominent ? kAccentEmber : kHairline,
+                color: ringed ? kAccentEmber : kHairline,
                 width: 2,
               ),
             ),

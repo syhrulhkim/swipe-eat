@@ -813,18 +813,32 @@ const double kNearbyMeHaloSpread = 12;
 const Color kNearbyMeHalo = Color(0x38E8541C);
 
 /// A pin: a circular blob carrying the cover photo, with the name, cuisine and
-/// open line stacked under it. The two closest results use [kNearbyPinBigSize]
-/// and an ember ring — the map's way of saying "start here".
+/// open line stacked under it. The blob at your feet is [kNearbyPinBigSize];
+/// [kNearbyPinSize] is the design's reference blob, midway, and the size the
+/// bite notch fraction is drawn from. The two closest results wear an ember
+/// ring — the map's way of saying "start here".
 const double kNearbyPinSize = 76;
 const double kNearbyPinBigSize = 96;
+
+/// The blob at the edge of the circle. A pin is sized by how far away it is —
+/// [kNearbyPinBigSize] at your feet, this at the radius — so the map reads
+/// like a room: what is near is large, what is far is small.
+const double kNearbyPinSmallSize = 52;
+
+/// The name, cuisine and open line under a blob, with the gap above them.
+/// A pin's marker box is its blob plus this.
+const double kNearbyPinCaptionHeight = 74;
+
+/// The clear space kept between two pins once they have been pushed apart.
+const double kNearbyPinGap = 4;
 
 /// The column under the blob is wider than the blob, so two lines of name fit
 /// without the pin's own width changing between its two sizes.
 const double kNearbyPinWidth = 88;
 
-/// The bite on a pin. A pin is a quarter the size of a card, and the notch is
-/// a proportion of the surface it marks, not a fixed dot.
-const double kNearbyPinBiteRadius = 18;
+/// The bite on a pin, as a fraction of the blob: 18 px on the prototype's
+/// 76 px blob, and the same proportion at every other size the blob takes.
+const double kNearbyPinBiteFraction = 18 / 76;
 
 /// The ember distance badge on a blob's top-right corner.
 const double kNearbyDistanceFontSize = 10;

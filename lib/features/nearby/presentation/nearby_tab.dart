@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
@@ -14,7 +15,9 @@ import '../../restaurants/models/restaurant_card.dart';
 import '../../restaurants/models/restaurant_detail_data.dart';
 import '../../restaurants/presentation/discovery_filter_sheet.dart';
 import '../../restaurants/state/likes_controller.dart';
+import '../data/nearby_repository.dart' show NearbyOrigin;
 import '../domain/nearby_format.dart';
+import '../domain/pin_spread.dart';
 import '../models/nearby_place.dart';
 import '../state/nearby_controller.dart';
 import 'nearby_pin.dart';
@@ -79,11 +82,12 @@ class _NearbyTabState extends State<NearbyTab> {
   /// `fitCamera` before that has no viewport to fit into.
   bool _mapReady = false;
 
-  /// What the camera was last fitted to, so a rebuild that changes neither
+  /// What the camera was last fitted to, so a rebuild that changes none of it
   /// does not fight the user's own panning.
   double? _fittedRadiusKm;
   double? _fittedLatitude;
   double? _fittedLongitude;
+  List<int> _fittedPinIds = const [];
 
   @override
   void initState() {
@@ -112,28 +116,90 @@ class _NearbyTabState extends State<NearbyTab> {
     // camera during a build is a setState during build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _fitToRadius();
+        _fitToPins();
       }
     });
   }
 
-  /// Fits the camera to a box the width of the current radius, so the circle
-  /// the stepper names is the circle the map is showing.
-  void _fitToRadius() {
+  /// Fits the camera to the pins on show and the user's own dot, so the
+  /// default view is those five places at the largest size that fits them.
+  /// With nothing to pin it falls back to the circle the stepper names.
+  void _fitToPins() {
     final origin = _nearby.origin;
     if (origin == null) {
       return;
     }
+    final pinIds = [for (final place in _nearby.pins) place.id];
     if (_fittedRadiusKm == _nearby.radiusKm &&
         _fittedLatitude == origin.latitude &&
-        _fittedLongitude == origin.longitude) {
+        _fittedLongitude == origin.longitude &&
+        listEquals(_fittedPinIds, pinIds)) {
       return;
     }
 
     _fittedRadiusKm = _nearby.radiusKm;
     _fittedLatitude = origin.latitude;
     _fittedLongitude = origin.longitude;
-    _map.fitCamera(_cameraFit(origin.latitude, origin.longitude, _nearby.radiusKm));
+    _fittedPinIds = pinIds;
+    _map.fitCamera(_fitFor(origin, _nearby.pins, _nearby.radiusKm));
+    // The pins' screen positions changed with the camera; lay them out again.
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  static CameraFit _fitFor(
+    NearbyOrigin origin,
+    List<NearbyPlace> pins,
+    double radiusKm,
+  ) {
+    if (pins.isEmpty) {
+      return _cameraFit(origin.latitude, origin.longitude, radiusKm);
+    }
+    final points = [
+      LatLng(origin.latitude, origin.longitude),
+      for (final place in pins)
+        LatLng(place.restaurant.latitude, place.restaurant.longitude),
+    ];
+    return CameraFit.coordinates(
+      coordinates: points,
+      // Room for the biggest pin's blob and caption around the outermost
+      // coordinates, and for the floating controls at top and bottom.
+      padding: const EdgeInsets.fromLTRB(64, 120, 64, 200),
+      maxZoom: 17,
+    );
+  }
+
+  /// Where each pin is drawn: its true coordinate, nudged in screen space
+  /// until no two pins overlap. Read from the live camera, so a pan or zoom
+  /// lays them out afresh; before the map is ready every pin sits where it is.
+  Map<int, LatLng> _displayPoints(List<NearbyPlace> pins) {
+    final display = <int, LatLng>{
+      for (final place in pins)
+        place.id: LatLng(place.restaurant.latitude, place.restaurant.longitude),
+    };
+    if (!_mapReady || pins.length < 2) {
+      return display;
+    }
+    final camera = _map.camera;
+    final boxes = [
+      for (final place in pins)
+        PinBox(
+          id: place.id,
+          anchor: camera.latLngToScreenOffset(display[place.id]!),
+          width: kNearbyPinWidth,
+          height: NearbyPin.heightFor(size: _nearby.pinSizeFor(place)),
+          blobSize: _nearby.pinSizeFor(place),
+        ),
+    ];
+    final shifts = spreadPins(boxes, gap: kNearbyPinGap);
+    for (final box in boxes) {
+      final shift = shifts[box.id]!;
+      if (shift != Offset.zero) {
+        display[box.id] = camera.screenOffsetToLatLng(box.anchor + shift);
+      }
+    }
+    return display;
   }
 
   static CameraFit _cameraFit(double latitude, double longitude, double km) {
@@ -232,6 +298,8 @@ class _NearbyTabState extends State<NearbyTab> {
 
     final now = _nearby.now;
     final centre = LatLng(origin.latitude, origin.longitude);
+    final pins = _nearby.pins;
+    final points = _displayPoints(pins);
 
     return Stack(
       children: [
@@ -240,8 +308,7 @@ class _NearbyTabState extends State<NearbyTab> {
             mapController: _map,
             options: MapOptions(
               initialCenter: centre,
-              initialCameraFit:
-                  _cameraFit(origin.latitude, origin.longitude, _nearby.radiusKm),
+              initialCameraFit: _fitFor(origin, pins, _nearby.radiusKm),
               // Rotation off: every label on this map is upright type, and a
               // tilted "Closes 10 pm" is unreadable for no gain.
               interactionOptions: const InteractionOptions(
@@ -253,6 +320,18 @@ class _NearbyTabState extends State<NearbyTab> {
                 _fittedRadiusKm = _nearby.radiusKm;
                 _fittedLatitude = origin.latitude;
                 _fittedLongitude = origin.longitude;
+                _fittedPinIds = [for (final place in pins) place.id];
+                // Now there is a camera to project through: spread the pins.
+                if (mounted) {
+                  setState(() {});
+                }
+              },
+              // Every pan and zoom moves the pins' screen positions, so their
+              // spread is recomputed on each one. Five boxes; it is cheap.
+              onPositionChanged: (camera, hasGesture) {
+                if (_mapReady && mounted && pins.length > 1) {
+                  setState(() {});
+                }
               },
             ),
             children: [
@@ -283,8 +362,8 @@ class _NearbyTabState extends State<NearbyTab> {
               ),
               MarkerLayer(
                 markers: [
-                  for (final place in _nearby.pins)
-                    _markerFor(place, now: now),
+                  for (final place in pins)
+                    _markerFor(place, at: points[place.id]!, now: now),
                 ],
               ),
             ],
@@ -307,19 +386,24 @@ class _NearbyTabState extends State<NearbyTab> {
     );
   }
 
-  Marker _markerFor(NearbyPlace place, {required DateTime now}) {
-    final prominent = _nearby.isProminent(place);
+  Marker _markerFor(
+    NearbyPlace place, {
+    required LatLng at,
+    required DateTime now,
+  }) {
+    final size = _nearby.pinSizeFor(place);
 
     return Marker(
       key: ValueKey<int>(place.id),
-      point: LatLng(place.restaurant.latitude, place.restaurant.longitude),
+      point: at,
       width: kNearbyPinWidth,
-      height: NearbyPin.heightFor(prominent: prominent),
-      alignment: NearbyPin.alignmentFor(prominent: prominent),
+      height: NearbyPin.heightFor(size: size),
+      alignment: NearbyPin.alignmentFor(size: size),
       child: NearbyPin(
         place: place,
         saved: _likes.isLiked(place.id),
-        prominent: prominent,
+        size: size,
+        ringed: _nearby.isProminent(place),
         now: now,
         onTap: () => _openPlace(place),
       ),

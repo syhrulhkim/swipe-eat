@@ -171,6 +171,43 @@ void main() {
       );
     });
 
+    testWidgets('two places on the same spot are drawn apart, not on top of each other',
+        (tester) async {
+      repository.rows = [
+        testPlace(1, name: 'First', distanceKm: 0.2,
+            latitude: 1.4655, longitude: 103.7578),
+        testPlace(2, name: 'Second', distanceKm: 0.2,
+            latitude: 1.4655, longitude: 103.7578),
+        testPlace(3, name: 'Third', distanceKm: 0.21,
+            latitude: 1.46551, longitude: 103.75781),
+      ];
+      await pumpTab(tester);
+      await tester.pump();
+
+      final pins = find.byType(NearbyPin);
+      expect(pins, findsNWidgets(3));
+      final rects = [
+        for (var i = 0; i < 3; i++) tester.getRect(pins.at(i)),
+      ];
+      for (var i = 0; i < rects.length; i++) {
+        for (var j = i + 1; j < rects.length; j++) {
+          expect(rects[i].overlaps(rects[j]), isFalse,
+              reason: 'pins $i and $j overlap');
+        }
+      }
+    });
+
+    testWidgets('a nearer place gets a bigger blob than a farther one',
+        (tester) async {
+      seedThreePlaces();
+      await pumpTab(tester);
+
+      final pins = tester.widgetList<NearbyPin>(find.byType(NearbyPin)).toList();
+      final byId = {for (final pin in pins) pin.place.id: pin.size};
+      expect(byId[1]!, greaterThan(byId[2]!));
+      expect(byId[2]!, greaterThan(byId[3]!));
+    });
+
     testWidgets('every pin wears its distance as a badge', (tester) async {
       seedThreePlaces();
       await pumpTab(tester);
@@ -180,7 +217,7 @@ void main() {
       expect(find.text('1.2 km'), findsOneWidget);
     });
 
-    testWidgets('the two closest pins are drawn big, the rest are not',
+    testWidgets('the two closest pins carry the ember ring, the rest do not',
         (tester) async {
       seedThreePlaces();
       await pumpTab(tester);
@@ -191,7 +228,7 @@ void main() {
       expect(pins.length, 3);
 
       final prominent = {
-        for (final pin in pins) pin.place.id: pin.prominent,
+        for (final pin in pins) pin.place.id: pin.ringed,
       };
       expect(prominent[1], isTrue);
       expect(prominent[2], isTrue);
@@ -223,7 +260,8 @@ void main() {
               child: NearbyPin(
                 place: testPlace(1, name: 'Banana Leaf House', distanceKm: 0.45),
                 saved: true,
-                prominent: false,
+                size: kNearbyPinSize,
+                ringed: false,
                 now: DateTime(2026, 9, 8, 19, 41),
                 onTap: () {},
               ),

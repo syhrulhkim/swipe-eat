@@ -58,6 +58,7 @@ not the row number.
 | D34 | Filters are applied in `deck_scored`'s `candidates` CTE so they bind the exhaustion fallback too, not just the fresh-cards query. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-31 |
 | D36 | The three taste switches are weights; radius and dietary tags are hard filters. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-08-23 |
 | D103 | "Swipe all" hands the map's result **list** to the deck through `DeckHandoff` rather than re-querying; the deck deals what the map already fetched. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-05 |
+| D116 | The Nearby map draws the **nearest five** places, sized by distance (`kNearbyPinBigSize` at the origin to `kNearbyPinSmallSize` at the radius edge) and spread apart in screen space so no two overlap, with the camera fitted to those five. Five is what a thumb can pick between; the results bar and "Swipe all" still speak for the full fetch. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-06 |
 | D105 | `halal_only`, `vegetarian` and `budget_max` are **hard** deck filters: a place the user cannot eat at is a wrong result, not a worse one. Halal requires `is_halal is true` — unknown is not good enough — which is why it is off by default, with only 27 of 1 605 live rows certified. An unknown `price_from` **passes** the budget ceiling, because 1 419 rows have no price and dropping them would empty the deck. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-09-05 |
 
 ## Feature behaviour

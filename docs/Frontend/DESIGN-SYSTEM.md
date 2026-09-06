@@ -307,14 +307,21 @@ than sitting on them.
 
 | Pin | Blob | Border |
 |---|---|---|
-| Ordinary | 76 (`kNearbyPinSize`) | 2 px `kHairline` |
-| The two closest | 96 (`kNearbyPinBigSize`) | 2 px `kAccentEmber` |
+| At the origin | 96 (`kNearbyPinBigSize`) | 2 px `kHairline` |
+| At the radius edge | 52 (`kNearbyPinSmallSize`) | 2 px `kHairline` |
+| The two closest | as above | 2 px `kAccentEmber` |
 
-Ember on the two closest is not decoration — they are the two the user is most
-likely to act on, and orange marks what is actionable (D78's rule, not its
-exception). The blob carries a `BiteNotch` at `kNearbyPinBiteRadius` (18) when
-the place is saved, so the map speaks the same silhouette as the Bites grid
-(D79), and an ember distance badge (10 px w700 on `kOnAccent`) at the top right.
+The blob's size is a linear lerp of distance over radius between the two
+tokens (`NearbyController.pinSizeFor`), so nearness is drawn, not just
+labelled. Ember on the two closest is not decoration — they are the two the
+user is most likely to act on, and orange marks what is actionable (D78's rule,
+not its exception). The blob carries a `BiteNotch` at
+`kNearbyPinBiteFraction` (18/76) of its size when the place is saved, so the
+map speaks the same silhouette as the Bites grid (D79), and an ember distance
+badge (10 px w700 on `kOnAccent`) at the top right. The caption under the blob
+is `kNearbyPinCaptionHeight` (74) tall, and the whole box is kept
+`kNearbyPinGap` (4) clear of every other pin by `spreadPins` (D116). Only the
+nearest five are drawn.
 
 **The scrim** — `kNearbyMapScrim` between the tiles and the markers. OSM's
 raster tiles are a daylight map, and cream text over them is unreadable without

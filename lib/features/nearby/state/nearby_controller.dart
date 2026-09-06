@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../../core/location/user_location.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../auth/models/app_user.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../profile/data/profile_repository.dart';
@@ -15,9 +16,10 @@ import '../models/nearby_place.dart';
 
 /// How many pins the map draws. The RPC returns up to 60 so the results bar's
 /// counts and its minimum price describe the whole radius; only the nearest
-/// [kNearbyPinLimit] are drawn, because a blob is 76 px wide and any more
-/// than this is a pile, not a map.
-const int kNearbyPinLimit = 30;
+/// [kNearbyPinLimit] are drawn. Five is a view, not a pile: each pin keeps its
+/// name and cuisine legible, and the five closest are the five the user is
+/// about to choose between. "Swipe all N" is the way to the rest.
+const int kNearbyPinLimit = 5;
 
 /// The RPC's page size: what the results bar counts over.
 const int kNearbyFetchLimit = 60;
@@ -106,11 +108,20 @@ class NearbyController extends ChangeNotifier {
       ? _places
       : _places.sublist(0, kNearbyPinLimit);
 
-  /// The two closest results are drawn big. Nothing else about them differs —
-  /// it is the map's way of saying "start here".
+  /// The two closest results carry the ember ring. Nothing else about them
+  /// differs — it is the map's way of saying "start here".
   bool isProminent(NearbyPlace place) {
     final index = _places.indexOf(place);
     return index >= 0 && index < 2;
+  }
+
+  /// The blob's diameter for [place]: the closer, the larger. Full size at
+  /// your feet, [kNearbyPinSmallSize] at the edge of the circle, linear in
+  /// between — so a glance at the map says how far without reading a badge.
+  double pinSizeFor(NearbyPlace place) {
+    final radius = _radiusKm <= 0 ? 1.0 : _radiusKm;
+    final t = (place.distanceKm / radius).clamp(0.0, 1.0);
+    return kNearbyPinBigSize + (kNearbyPinSmallSize - kNearbyPinBigSize) * t;
   }
 
   bool _loading = true;

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
@@ -171,7 +172,7 @@ void main() {
       expect(nearby.minPriceFrom, isNull);
     });
 
-    test('draws at most the nearest 30 pins of a full result set', () async {
+    test('draws at most the nearest five pins of a full result set', () async {
       repository.rows = [
         for (var index = 0; index < 60; index++)
           testPlace(index, distanceKm: index * 0.05),
@@ -199,6 +200,25 @@ void main() {
       expect(nearby.isProminent(nearby.places[0]), isTrue);
       expect(nearby.isProminent(nearby.places[1]), isTrue);
       expect(nearby.isProminent(nearby.places[2]), isFalse);
+    });
+
+    test('sizes a pin by its distance: near is big, far is small', () async {
+      repository.rows = [
+        testPlace(1, distanceKm: 0),
+        testPlace(2, distanceKm: 1.5),
+        testPlace(3, distanceKm: 3),
+        testPlace(4, distanceKm: 9),
+      ];
+      final nearby = build();
+      await nearby.load();
+
+      final sizes = [for (final p in nearby.places) nearby.pinSizeFor(p)];
+      expect(sizes[0], kNearbyPinBigSize);
+      expect(sizes[1], lessThan(sizes[0]));
+      expect(sizes[1], greaterThan(sizes[2]));
+      // At and beyond the edge of the circle the pin is as small as it gets.
+      expect(sizes[2], kNearbyPinSmallSize);
+      expect(sizes[3], kNearbyPinSmallSize);
     });
 
     test('a failed fetch clears the pins and offers a message', () async {
