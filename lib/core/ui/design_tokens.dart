@@ -1439,3 +1439,15 @@ const double kInviteButtonMaxWidth = 220;
 /// the same reason [kPickedBarStackWidth] exists: a pill that cannot shrink
 /// beside a figure that grows with the text scale.
 const double kInviteFootStackWidth = 320;
+
+/// `.settings{grid-template-columns:1fr 1fr}` — the You tab's two ghost
+/// buttons sit side by side until the pair is narrower than this, and stack
+/// after. Wider than [kInviteFootStackWidth] because there are two pills here
+/// rather than one, and "Friends · 38" is the longer label of the two.
+const double kSettingsGridStackWidth = 360;
+
+/// Above this rendered size, a person row's two answer buttons stack instead
+/// of sitting side by side. Measured in scaled pixels rather than as a
+/// multiplier because the thing that runs out of room is the width the words
+/// take, and that is what [kFontSizeSmall] scaled up actually is.
+const double kRowActionsStackFontSize = 17;

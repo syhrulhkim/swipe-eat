@@ -9,6 +9,7 @@ import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/radius_options.dart';
 import '../../auth/models/app_user.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../friends/state/friends_controller.dart';
 import '../../onboarding/models/onboarding_draft.dart';
 import '../../restaurants/state/likes_controller.dart';
 import '../data/profile_repository.dart';
@@ -40,6 +41,7 @@ class ProfileTab extends StatefulWidget {
     super.key,
     required this.authController,
     this.likes,
+    this.friends,
     this.repository,
     this.stats = const ProfileStats(),
     this.notificationCount = 0,
@@ -49,6 +51,7 @@ class ProfileTab extends StatefulWidget {
 
   /// Injected by tests; in the app the tab builds its own.
   final LikesController? likes;
+  final FriendsController? friends;
   final ProfileRepository? repository;
 
   /// Filled by a later phase. Zero is an honest answer, not a placeholder:
@@ -64,6 +67,8 @@ class ProfileTab extends StatefulWidget {
 
 class _ProfileTabState extends State<ProfileTab> {
   late final LikesController _likes = widget.likes ?? LikesController.instance;
+  late final FriendsController _friends =
+      widget.friends ?? FriendsController.instance;
   late final ProfileRepository _repository =
       widget.repository ?? ProfileRepository();
 
@@ -75,6 +80,9 @@ class _ProfileTabState extends State<ProfileTab> {
     unawaited(_likes.ensureLoaded().catchError((Object error) {
       debugPrint('Profile likes load failed: $error');
     }));
+    // The count on the ghost button. `ensureLoaded` swallows its own failures
+    // and leaves the count at zero, which is the same shape a new account has.
+    unawaited(_friends.ensureLoaded());
   }
 
   /// Applies a preference change to the session first and writes it after.
@@ -244,9 +252,9 @@ class _ProfileTabState extends State<ProfileTab> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      // Two sources: the profile row (name, rules, radius) and the likes cache
-      // (the bites count).
-      animation: Listenable.merge([widget.authController, _likes]),
+      // Three sources: the profile row (name, rules, radius), the likes cache
+      // (the bites count) and the friends cache (the ghost button's count).
+      animation: Listenable.merge([widget.authController, _likes, _friends]),
       builder: (context, _) {
         final user = widget.authController.user;
 
@@ -307,14 +315,14 @@ class _ProfileTabState extends State<ProfileTab> {
                       ),
                     ],
                     const SizedBox(height: 28),
-                    // The design's `.settings` grid is two ghost buttons; the
-                    // other one is Friends, which belongs to a phase that has
-                    // people in it. One button that works beats two where one
-                    // goes nowhere.
-                    AppSecondaryButton(
-                      label: 'Settings',
-                      expand: true,
-                      onPressed: () => context.push('/settings'),
+                    // The design's `.settings` grid: two ghost buttons side by
+                    // side. They stack below [kSettingsGridStackWidth] rather
+                    // than squeezing, because "Friends · 38" and "Settings"
+                    // both grow with the text scale and a pill does not.
+                    _SettingsGrid(
+                      friendCount: _friends.count,
+                      onFriends: () => context.push('/friends'),
+                      onSettings: () => context.push('/settings'),
                     ),
                   ],
                 ),
@@ -331,6 +339,61 @@ class _ProfileTabState extends State<ProfileTab> {
 /// list that comes back exactly this long is a page, not a total, so the tile
 /// reports it as "200+" rather than claiming an exact count it cannot know.
 const int _likedFetchLimit = 200;
+
+/// The design's `.settings` — two ghost buttons, Friends and Settings.
+///
+/// Side by side down to [kSettingsGridStackWidth] and stacked below it. Two
+/// pills that cannot shrink, sharing a row that can, is the one arrangement
+/// that overflows on a 320 pt phone at a doubled text scale.
+class _SettingsGrid extends StatelessWidget {
+  const _SettingsGrid({
+    required this.friendCount,
+    required this.onFriends,
+    required this.onSettings,
+  });
+
+  /// Drawn even at zero. "Friends · 0" is the truth about a new account, and a
+  /// button that appeared once you had friends would be a button nobody could
+  /// find in order to get any.
+  final int friendCount;
+  final VoidCallback onFriends;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final friends = AppSecondaryButton(
+      label: 'Friends · $friendCount',
+      expand: true,
+      onPressed: onFriends,
+    );
+    final settings = AppSecondaryButton(
+      label: 'Settings',
+      expand: true,
+      onPressed: onSettings,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < kSettingsGridStackWidth) {
+          return Column(
+            children: [
+              friends,
+              const SizedBox(height: AppSpacing.sm),
+              settings,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: friends),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: settings),
+          ],
+        );
+      },
+    );
+  }
+}
 
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.count});

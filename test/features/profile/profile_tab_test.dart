@@ -5,12 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
+import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/profile/presentation/profile_tab.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
 import 'package:swipe_eat/features/onboarding/models/onboarding_draft.dart';
 
 import '../../support/widget_test_support.dart';
 import '../auth/fake_auth_repository.dart';
+import '../friends/fake_friends_repository.dart';
 import '../restaurants/fake_restaurant_repositories.dart';
 import 'fake_profile_repository.dart';
 
@@ -55,6 +57,7 @@ void main() {
   late AuthController auth;
   late FakeProfileRepository profile;
   late LikesController likes;
+  late FriendsController friends;
 
   Future<void> pumpTab(
     WidgetTester tester, {
@@ -63,6 +66,7 @@ void main() {
     int likedCount = 142,
     ProfileStats stats = const ProfileStats(),
     int notificationCount = 0,
+    int friendCount = 0,
     TextScaler textScaler = TextScaler.noScaling,
   }) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -95,6 +99,16 @@ void main() {
     );
     addTearDown(likes.dispose);
 
+    friends = FriendsController(
+      repository: FakeFriendsRepository(
+        friends: [
+          for (var i = 0; i < friendCount; i++) testFriend('u$i'),
+        ],
+      ),
+      followAuthChanges: false,
+    );
+    addTearDown(friends.dispose);
+
     useViewport(tester, viewport);
     // Routed rather than bare: the Settings button pushes '/settings', and a
     // bare MaterialApp would throw rather than navigate.
@@ -108,6 +122,7 @@ void main() {
               body: ProfileTab(
                 authController: auth,
                 likes: likes,
+                friends: friends,
                 repository: profile,
                 stats: stats,
                 notificationCount: notificationCount,
@@ -119,6 +134,11 @@ void main() {
           path: '/settings',
           builder: (context, state) =>
               const Scaffold(body: Text('settings route')),
+        ),
+        GoRoute(
+          path: '/friends',
+          builder: (context, state) =>
+              const Scaffold(body: Text('friends route')),
         ),
       ],
     );
@@ -526,6 +546,31 @@ void main() {
       expect(find.text('3 km'), findsOneWidget);
     });
 
+    testWidgets('the design\'s other ghost button counts the friends',
+        (tester) async {
+      await pumpTab(tester, friendCount: 38);
+
+      expect(find.text('Friends · 38'), findsOneWidget);
+    });
+
+    testWidgets('a new account gets the button anyway, at zero',
+        (tester) async {
+      // "Friends · 0" is true, and a button that only appeared once you had
+      // friends would be the one nobody could find in order to get any.
+      await pumpTab(tester);
+
+      expect(find.text('Friends · 0'), findsOneWidget);
+    });
+
+    testWidgets('Friends opens the friends page', (tester) async {
+      await pumpTab(tester, friendCount: 2);
+
+      await tester.tap(find.text('Friends · 2'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('friends route'), findsOneWidget);
+    });
+
     testWidgets('Settings opens the settings page', (tester) async {
       await pumpTab(tester);
 
@@ -556,6 +601,25 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('You'), findsOneWidget);
+    });
+
+    testWidgets('both ghost buttons stack rather than squeeze at 320 px at '
+        'double text size', (tester) async {
+      await pumpTab(
+        tester,
+        viewport: _narrowViewport,
+        textScaler: _hugeTextScale,
+        friendCount: 38,
+      );
+
+      expect(tester.takeException(), isNull);
+
+      await tester.scrollUntilVisible(find.text('Settings'), 300);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Friends · 38'), findsOneWidget);
+      expect(find.text('Settings'), findsOneWidget);
     });
 
     testWidgets('the budget sheet fits a narrow screen at double text size',

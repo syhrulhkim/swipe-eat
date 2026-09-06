@@ -128,6 +128,10 @@ void main() {
       expect(controller.requests, hasLength(2));
       expect(controller.incomingRequests, hasLength(1));
       expect(controller.incomingRequests.single.profile.id, 'a');
+      // And the other half is the one the friends page shows under "Waiting
+      // to hear back": still not a thing to do, but a thing to see.
+      expect(controller.outgoingRequests, hasLength(1));
+      expect(controller.outgoingRequests.single.profile.id, 'b');
     });
 
     test('accepting moves a person from requests into friends', () async {

@@ -66,6 +66,12 @@ class FriendsController extends ChangeNotifier {
   List<FriendRequest> get incomingRequests =>
       [for (final r in _requests) if (r.incoming) r];
 
+  /// The ones I sent and nobody has answered. Not a thing to do either, but
+  /// the friends page shows them so that a request sent during onboarding is
+  /// visible somewhere rather than vanishing into a table.
+  List<FriendRequest> get outgoingRequests =>
+      [for (final r in _requests) if (!r.incoming) r];
+
   bool get isLoaded => _loaded;
   bool get loading => _loading;
   String? get error => _error;
@@ -177,6 +183,20 @@ class FriendsController extends ChangeNotifier {
     final generation = _generation;
     _loading = true;
     _error = null;
+    // The "I am loading" notification waits a microtask before it goes out.
+    //
+    // `ensureLoaded` is called from `initState` on four screens now, and an
+    // `initState` runs inside a build. A shared controller that notified there
+    // would be asking every *other* listening screen to rebuild in the middle
+    // of a build, which Flutter refuses outright — the calendar tab is mounted
+    // and listening while the You tab, the invite screen and the friends page
+    // are each opened. The flags above are already set, so anything built in
+    // this frame still sees the spinner; only the notification is late, and
+    // only by a microtask.
+    await Future<void>.microtask(() {});
+    if (generation != _generation) {
+      return;
+    }
     notifyListeners();
 
     try {

@@ -39,6 +39,10 @@ class FakeFriendsRepository implements FriendsRepository {
   /// What would actually have gone over the wire.
   final List<List<String>> sentHashes = [];
 
+  /// Swaps the address book between calls, for a test that retries a failed
+  /// load and expects the second one to find something.
+  void setFriends(List<FriendProfile> friends) => _friends = friends;
+
   final List<(String, FriendAction)> actions = [];
   final List<(int, List<String>)> invites = [];
   final List<(int, String?, String?)> castVotes = [];

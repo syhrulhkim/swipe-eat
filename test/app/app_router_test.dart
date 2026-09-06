@@ -8,6 +8,7 @@ import 'package:swipe_eat/features/auth/presentation/welcome_page.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/presentation/splash_page.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
+import 'package:swipe_eat/features/friends/presentation/friends_page.dart';
 import 'package:swipe_eat/features/friends/presentation/invite_page.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
@@ -264,6 +265,15 @@ void main() {
       expect(find.byType(InvitePage), findsNothing);
       expect(find.byType(PlanDatePage), findsNothing);
       expect(router.routerDelegate.currentConfiguration.uri.path, '/dashboard');
+    });
+
+    testWidgets('the You tab\'s other ghost button has a page behind it',
+        (tester) async {
+      await pumpApp(tester, deepLink: '/friends');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FriendsPage), findsOneWidget);
+      expect(find.text('Aiman Zulkifli'), findsOneWidget);
     });
   });
 }

@@ -11,6 +11,7 @@ import '../features/auth/presentation/welcome_page.dart';
 import '../features/auth/state/auth_controller.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
 import '../features/dashboard/state/dashboard_tab_request.dart';
+import '../features/friends/presentation/friends_page.dart';
 import '../features/friends/presentation/invite_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
 import '../features/plans/presentation/plan_date_page.dart';
@@ -129,6 +130,12 @@ GoRouter createRouter(AuthController authController) {
         path: '/settings',
         builder: (context, state) =>
             SettingsPage(authController: authController),
+      ),
+      // Pushed from the You tab's other ghost button. Nothing is passed: the
+      // page reads the one shared friends cache the whole app reads.
+      GoRoute(
+        path: '/friends',
+        builder: (context, state) => const FriendsPage(),
       ),
       // Pushed from the Bites tab's "Wishlist →" chip, so it keeps the
       // platform transition and the iOS swipe-back gesture.
