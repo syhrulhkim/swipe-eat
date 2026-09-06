@@ -461,4 +461,47 @@ void main() {
       expect(controller.items.length, 1);
     });
   });
+
+  group('WishlistController.addRestaurant', () {
+    test('adds a catalogue place and finds it again by restaurant id',
+        () async {
+      await controller.ensureLoaded();
+      await controller.addRestaurant(7, title: 'Warung Kak Ros');
+
+      expect(repository.calls, contains('addRestaurant:7'));
+      final item = controller.itemForRestaurant(7);
+      expect(item, isNotNull);
+      expect(item!.title, 'Warung Kak Ros');
+      expect(controller.toGoCount, 1);
+    });
+
+    test('a place already on the list is a no-op, not a second row', () async {
+      repository = FakeWishlistRepository(rows: [
+        testWishlistItem(1, restaurantId: 7),
+      ]);
+      controller = WishlistController(repository: repository);
+      await controller.ensureLoaded();
+
+      await controller.addRestaurant(7);
+
+      expect(repository.calls.contains('addRestaurant:7'), isFalse);
+      expect(controller.items.length, 1);
+    });
+
+    test('itemForRestaurant answers null for a place nobody saved', () async {
+      await controller.ensureLoaded();
+
+      expect(controller.itemForRestaurant(99), isNull);
+    });
+
+    test('a refused write reports itself and adds nothing', () async {
+      repository.failWrite = true;
+      await controller.ensureLoaded();
+
+      await controller.addRestaurant(7);
+
+      expect(controller.error, 'Could not add that place.');
+      expect(controller.items, isEmpty);
+    });
+  });
 }

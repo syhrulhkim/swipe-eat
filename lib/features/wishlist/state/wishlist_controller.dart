@@ -157,6 +157,51 @@ class WishlistController extends ChangeNotifier {
     }
   }
 
+  /// The restaurant's row, if it has one. The detail screen's bookmark reads
+  /// its filled state from this rather than from [LikesController], because
+  /// the wishlist is the thing it toggles and a second source could disagree.
+  WishlistItem? itemForRestaurant(int restaurantId) {
+    for (final item in _items) {
+      if (item.restaurantId == restaurantId) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  /// Puts a catalogue restaurant on the list — the detail screen's bookmark.
+  ///
+  /// Unlike [addManual] this cannot paint first: the row's id comes from the
+  /// insert, and the bookmark has to be able to un-add what it just added. A
+  /// restaurant already on the list is a no-op, not an error, which is what
+  /// the repository's duplicate-null means.
+  Future<void> addRestaurant(int restaurantId, {String? title}) async {
+    final generation = _generation;
+    if (itemForRestaurant(restaurantId) != null) {
+      return;
+    }
+
+    try {
+      final item = await _repository.addRestaurant(
+        restaurantId,
+        title: title,
+      );
+      if (generation != _generation || item == null) {
+        return;
+      }
+      _items = sortWishlist([item, ..._items]);
+      _loaded = true;
+      _error = null;
+      notifyListeners();
+    } on Object catch (error) {
+      debugPrint('Wishlist add failed: $error');
+      if (generation == _generation) {
+        _error = 'Could not add that place.';
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> remove(int id) async {
     final generation = _generation;
     final index = _items.indexWhere((item) => item.id == id);

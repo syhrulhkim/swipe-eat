@@ -1,30 +1,64 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
+import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/location/distance_label.dart';
 import '../../../core/location/open_directions.dart';
-import '../../../core/location/place_name.dart';
 import '../../../core/location/user_position_state.dart';
-import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/page_transitions.dart';
-import '../../../core/ui/rating_label.dart';
-import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
+import '../../wishlist/state/wishlist_controller.dart';
+import '../data/restaurant_repository.dart';
+import '../data/tiktok_player_factory.dart';
+import '../domain/opening_hours.dart';
+import '../models/dish.dart';
 import '../models/restaurant_detail_data.dart';
 import '../state/likes_controller.dart';
 import '../state/visit_prompt_controller.dart';
+import 'detail/about_paragraph.dart';
+import 'detail/detail_cta_bar.dart';
+import 'detail/detail_hero.dart';
+import 'detail/dish_list.dart';
+import 'detail/facts_strip.dart';
+import 'detail/friends_bite_row.dart';
 import 'tiktok_player.dart';
 
-/// One restaurant in full: hero photo, the facts, its location and its top
-/// review.
+/// S3 — one restaurant, top to bottom: the clip, what it costs and how many
+/// people have bitten it, what they order, and the one thing to do next.
+///
+/// Reviews are not here. With six reviews across the whole catalogue the card
+/// they used to sit in was empty on almost every restaurant, and the redesign
+/// spends that space on dishes instead.
 class RestaurantDetailPage extends StatefulWidget {
   const RestaurantDetailPage({
     super.key,
     required this.data,
+    this.repository,
+    this.wishlist,
+    this.tiktokPlayerFuture,
+    this.clock = OpeningHours.kualaLumpurNow,
   });
 
   final RestaurantDetailData data;
+
+  /// Injected by tests; in the app the page builds its own. Only the ngap
+  /// count is read through it.
+  final RestaurantRepository? repository;
+
+  /// Injected by tests. The page makes one when it is not given one, and
+  /// disposes only what it made.
+  final WishlistController? wishlist;
+
+  /// A warmed player, so a widget test never starts a real WebView. Null in
+  /// the app: the page opens its own and stops it on the way out.
+  final Future<TikTokPlayerHandle>? tiktokPlayerFuture;
+
+  /// What time it is in Kuala Lumpur, for the open line. See
+  /// [OpeningHours.kualaLumpurNow] for why not the device clock.
+  final DateTime Function() clock;
 
   @override
   State<RestaurantDetailPage> createState() => _RestaurantDetailPageState();
@@ -32,49 +66,205 @@ class RestaurantDetailPage extends StatefulWidget {
 
 class _RestaurantDetailPageState extends State<RestaurantDetailPage>
     with UserPositionState {
-  int _heroIndex = 0;
-  final GlobalKey _locationKey = GlobalKey();
-  final GlobalKey _reviewKey = GlobalKey();
-  String? _placeName;
+  late final RestaurantRepository _repository =
+      widget.repository ?? RestaurantRepository();
 
-  bool get _liked => LikesController.instance.isLiked(widget.data.id);
+  late final WishlistController _wishlist =
+      widget.wishlist ?? WishlistController();
+  late final bool _ownsWishlist = widget.wishlist == null;
+
+  /// The hero's player. Owned here when the caller passed none, so it is also
+  /// stopped here — there is no cache on this screen to evict it.
+  Future<TikTokPlayerHandle>? _playerFuture;
+  late final bool _ownsPlayer = widget.tiktokPlayerFuture == null;
+
+  /// True while the fullscreen route holds the player.
+  bool _fullscreenOpen = false;
+
+  /// Null until the count arrives, and still null if it never does — an
+  /// unanswered fact is a hidden tile, not a zero.
+  int? _ngapCount;
+
+  bool _settingDate = false;
+
+  int get _id => widget.data.id;
+
+  bool get _liked => LikesController.instance.isLiked(_id);
 
   @override
   void initState() {
     super.initState();
     loadUserPosition();
-    unawaited(_resolvePlaceName());
-    LikesController.instance.addListener(_onLikesChanged);
-    // Best-effort: an unreachable backend leaves the heart empty, and the
-    // toggle below surfaces its own error if the user then taps it.
+
+    final videoUrl = widget.data.videoUrl;
+    if (videoUrl != null && videoUrl.isNotEmpty) {
+      _playerFuture = widget.tiktokPlayerFuture ?? createTikTokPlayer(videoUrl);
+      // A player nobody has mounted yet has no listener, so a failed load
+      // would surface as an unhandled async error. The view still reports it.
+      unawaited(_playerFuture!.then((_) {}, onError: (Object error) {
+        debugPrint('TikTok player load failed: $error');
+      }));
+    }
+
+    LikesController.instance.addListener(_onControllerChanged);
+    _wishlist.addListener(_onControllerChanged);
+
+    // Best-effort: an unreachable backend leaves the marks empty, and the
+    // taps below surface their own errors if the user then uses them.
     LikesController.instance.ensureLoaded().catchError((Object error) {
       debugPrint('Likes load failed: $error');
     });
+    unawaited(_wishlist.ensureLoaded());
+    unawaited(_loadNgapCount());
   }
 
   @override
   void dispose() {
-    LikesController.instance.removeListener(_onLikesChanged);
+    LikesController.instance.removeListener(_onControllerChanged);
+    _wishlist.removeListener(_onControllerChanged);
+    if (_ownsWishlist) {
+      _wishlist.dispose();
+    }
+    if (_ownsPlayer) {
+      final player = _playerFuture;
+      if (player != null) {
+        // Otherwise the WebView keeps its audio and its network alive until
+        // the collector gets to it.
+        unawaited(player.then((handle) => handle.release()).catchError(
+              (Object error) =>
+                  debugPrint('TikTok player release failed: $error'),
+            ));
+      }
+    }
     super.dispose();
   }
 
-  void _onLikesChanged() {
+  void _onControllerChanged() {
     if (mounted) {
       setState(() {});
     }
   }
 
-  Future<void> _resolvePlaceName() async {
-    final name = await resolvePlaceNameForCoordinates(
-      widget.data.latitude,
-      widget.data.longitude,
+  Future<void> _loadNgapCount() async {
+    try {
+      final count = await _repository.ngapCount(_id);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _ngapCount = count);
+    } on Object catch (error) {
+      // A count we could not read is a fact we do not have; the tile stays
+      // hidden rather than claiming nobody has been.
+      debugPrint('Ngap count failed: $error');
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // The title's meta line
+  // -------------------------------------------------------------------------
+
+  /// "Kampung Baru · 1.2 km · open till 2 am", with every unknown part gone.
+  String _metaLine() {
+    final neighbourhood = widget.data.neighbourhood?.trim();
+    final open = widget.data.hours.statusLabel(widget.clock());
+    final distance = _distanceSegment();
+
+    return [
+      if (neighbourhood != null && neighbourhood.isNotEmpty) neighbourhood,
+      if (distance != null) distance,
+      // The design writes it lower-case, mid-sentence: it is the third fact in
+      // a list, not the start of one.
+      if (open != null) open.toLowerCase(),
+    ].join(' · ');
+  }
+
+  /// The deck's distance wording without its verb — "1.2 km away" reads as a
+  /// sentence, and this line is a list. Null rather than the deck's city
+  /// fallback: on this screen an unknown distance is a segment we drop.
+  String? _distanceSegment() {
+    final position = userPosition;
+    if (position == null ||
+        !hasMapFix(widget.data.latitude, widget.data.longitude)) {
+      return null;
+    }
+
+    final label = distanceLabelFrom(
+      position,
+      latitude: widget.data.latitude,
+      longitude: widget.data.longitude,
     );
-    if (!mounted || name == null) {
+    return label.endsWith(' away')
+        ? label.substring(0, label.length - ' away'.length)
+        : label;
+  }
+
+  List<String> _heroTags() {
+    final tag = widget.data.tag.trim();
+    return [
+      if (tag.isNotEmpty) tag,
+      if (widget.data.isHalal == true) 'Halal',
+    ];
+  }
+
+  // -------------------------------------------------------------------------
+  // The facts
+  // -------------------------------------------------------------------------
+
+  /// Only what the catalogue can answer (D111). The design's third tile is a
+  /// typical wait, which we have no data for at all, so it never appears.
+  List<DetailFact> _facts() {
+    final priceFrom = widget.data.priceFrom;
+    final ngaps = _ngapCount;
+
+    return [
+      if (priceFrom != null)
+        DetailFact(
+          // Not the design's "RM 8–15 per person": what we hold is the
+          // cheapest dish on the menu, so the tile says that instead of
+          // implying a band nobody measured.
+          value: 'From ${formatRinggit(priceFrom)}',
+          caption: 'cheapest dish',
+        ),
+      if (ngaps != null && ngaps > 0)
+        DetailFact(value: formatThousands(ngaps), caption: 'ngaps'),
+    ];
+  }
+
+  // -------------------------------------------------------------------------
+  // Actions
+  // -------------------------------------------------------------------------
+
+  Future<void> _openPlayer(String videoUrl) async {
+    setState(() => _fullscreenOpen = true);
+    await Navigator.of(context).push(
+      // The same fade the deck opens the player with: one screen reached two
+      // ways should not arrive two ways.
+      fadeThroughRoute<void>(
+        context,
+        (_) => TikTokPlayerScreen(
+          videoUrl: videoUrl,
+          playerFuture: _playerFuture,
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() => _fullscreenOpen = false);
+    }
+  }
+
+  Future<void> _toggleWishlist() async {
+    final existing = _wishlist.itemForRestaurant(_id);
+    if (existing != null) {
+      await _wishlist.remove(existing.id);
+    } else {
+      await _wishlist.addRestaurant(_id, title: widget.data.title);
+    }
+
+    final error = _wishlist.error;
+    if (!mounted || error == null) {
       return;
     }
-    setState(() {
-      _placeName = name;
-    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 
   Future<void> _openDirections() async {
@@ -87,7 +277,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
       // Remember the trip so the dashboard can ask whether it happened. Never
       // blocks the tap; a cache that will not write only costs the question.
       unawaited(VisitPromptController.instance.recordDirections(
-        restaurantId: widget.data.id,
+        restaurantId: _id,
         name: widget.data.title,
       ));
       return;
@@ -100,574 +290,131 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
     );
   }
 
-  Future<void> _toggleLike() async {
+  /// "Set a date" bites the place first (D112).
+  ///
+  /// A plan is a thing you do about a restaurant you want; a plan on a place
+  /// that is not in your bites would be an orphan the Bites tab never shows.
+  /// A like that will not write stops the push — arriving at the planner
+  /// having silently failed the thing the planner assumes is worse than not
+  /// arriving.
+  Future<void> _setDate() async {
     final likes = LikesController.instance;
-    try {
-      if (likes.isLiked(widget.data.id)) {
-        await likes.unlike(widget.data.id, source: 'detail');
-      } else {
-        await likes.like(widget.data.id, source: 'detail');
+    if (!likes.isLiked(_id)) {
+      setState(() => _settingDate = true);
+      try {
+        await likes.like(_id, source: 'detail');
+      } on Object catch (error) {
+        debugPrint('Like before plan failed: $error');
+        if (!mounted) {
+          return;
+        }
+        setState(() => _settingDate = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save that change.')),
+        );
+        return;
       }
-    } on Object catch (error) {
-      debugPrint('Like toggle failed: $error');
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save that change.')),
-      );
-    }
-  }
-
-  String _distanceLabel() {
-    final position = userPosition;
-    if (position == null) {
-      return 'Distance loading';
+      setState(() => _settingDate = false);
     }
 
-    if (!hasMapFix(widget.data.latitude, widget.data.longitude)) {
-      // Measuring to the 0,0 sentinel reports the distance to Null Island,
-      // which reads as a real answer.
-      return 'Distance unknown';
-    }
-
-    final meters = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
-      widget.data.latitude,
-      widget.data.longitude,
-    );
-
-    if (meters >= 100000) {
-      return '100km +';
-    }
-
-    if (meters >= 1000) {
-      return '${(meters / 1000).toStringAsFixed(1)} km away';
-    }
-
-    return '${meters.toStringAsFixed(0)} m away';
-  }
-
-  void _scrollToSection(GlobalKey key) {
-    final context = key.currentContext;
-    if (context == null) {
+    if (!mounted) {
       return;
     }
-
-    unawaited(
-      Scrollable.ensureVisible(
-        context,
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOutCubic,
-        alignment: 0.08,
-      ),
-    );
+    final imageUrls = widget.data.imageUrls;
+    // The push resolves when the planner pops; nothing here waits on it.
+    unawaited(context.push('/plans/new', extra: <String, dynamic>{
+      'restaurantId': _id,
+      'title': widget.data.title,
+      'coverUrl': imageUrls.isEmpty ? null : imageUrls.first,
+      'neighbourhood': widget.data.neighbourhood,
+      'tag': widget.data.tag,
+    }));
   }
 
-  /// The facts under the title. Rating is dropped rather than shown as a dash:
-  /// an empty column reads as a missing answer, and the title already carries
-  /// the rating when there is one.
-  List<AppStat> _heroStats() {
-    final rating = ratingLabel(widget.data.rating);
-
-    return [
-      AppStat(label: 'Distance', value: _distanceLabel()),
-      if (rating != '–') AppStat(label: 'Rating', value: rating),
-    ];
-  }
-
-  Widget _heroPlaceholder() {
-    return TikTokThumbnailPlaceholder(
-      creatorHandle: tiktokCreatorHandle(widget.data.videoUrl),
-    );
-  }
+  // -------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    final imageUrls = widget.data.imageUrls;
-    final heroIndex =
-        imageUrls.isEmpty ? 0 : _heroIndex.clamp(0, imageUrls.length - 1);
-    final heroUrl = imageUrls.isEmpty ? null : imageUrls[heroIndex];
-    final videoUrl = widget.data.videoUrl;
+    final data = widget.data;
+    final videoUrl = data.videoUrl;
+    final hasVideo = videoUrl != null && videoUrl.isNotEmpty;
+    final onWishlist = _wishlist.itemForRestaurant(_id) != null;
+    final facts = _facts();
 
     return Scaffold(
       backgroundColor: kBackgroundDark,
-      body: Stack(
-        fit: StackFit.expand,
+      body: Column(
         children: [
-          // Hero image pinned behind the scrolling content.
-          Positioned.fill(
-            child: heroUrl == null
-                ? _heroPlaceholder()
-                : AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: SizedBox.expand(
-                      key: ValueKey(heroUrl),
-                      child: Image.network(
-                        heroUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return _heroPlaceholder();
-                        },
-                      ),
-                    ),
-                  ),
-          ),
-          const PhotoWash(),
-          const PhotoTopScrim(),
-          const PhotoBottomScrim(),
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                _buildHeroPane(context, videoUrl),
-                _buildDetails(context),
-              ],
+          SizedBox(
+            height: math.max(
+              kDetailHeroMinHeight,
+              MediaQuery.sizeOf(context).height * kDetailHeroFraction,
             ),
-          ),
-          _buildTopControls(context, imageUrls, heroIndex, videoUrl),
-        ],
-      ),
-    );
-  }
-
-  /// The first screenful: name, distance, chips and the round action buttons,
-  /// sized to the viewport so the details start exactly below the fold.
-  Widget _buildHeroPane(BuildContext context, String? videoUrl) {
-    return SizedBox(
-      height: MediaQuery.sizeOf(context).height,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-          child: Column(
-            // Left-aligned, not centred: the eyebrow, title and facts read as
-            // one stack down the left edge, the way the rest of the app now
-            // introduces a screen.
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Spacer(),
-              if (widget.data.tag.isNotEmpty) ...[
-                AppEyebrow(label: widget.data.tag),
-                const SizedBox(height: 8),
-              ],
-              Text.rich(
-                TextSpan(
-                  text: widget.data.title,
-                  style: appTitleStyle(context),
-                  children: [
-                    if (ratingLabel(widget.data.rating) != '–')
-                      TextSpan(
-                        text: '  ${ratingLabel(widget.data.rating)}',
-                        style: appTitleMutedStyle(context),
-                      ),
-                  ],
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 16),
-              // The facts as a label-above-value strip rather than a row of
-              // chips: distance and rating are answers to questions, and a
-              // chip gives a number no name.
-              AppStatStrip(stats: _heroStats()),
-              if (videoUrl != null && videoUrl.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppChip(
-                    icon: Icons.music_note_rounded,
-                    label: 'TikTok Review',
-                    tint: kAccentEmber,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  AppIconButton(
-                    icon: Icons.favorite_rounded,
-                    iconColor: _liked ? kAccentEmber : kTextOnPhoto,
-                    semanticLabel: _liked ? 'Liked' : 'Like',
-                    onTap: () => unawaited(_toggleLike()),
-                  ),
-                  const SizedBox(width: 12),
-                  AppIconButton(
-                    icon: Icons.chat_bubble_rounded,
-                    semanticLabel: 'Reviews',
-                    onTap: () => _scrollToSection(_reviewKey),
-                  ),
-                  const SizedBox(width: 12),
-                  AppIconButton(
-                    icon: Icons.route_rounded,
-                    semanticLabel: 'Location',
-                    onTap: () => _scrollToSection(_locationKey),
-                  ),
-                  const SizedBox(width: 12),
-                  AppIconButton(
-                    icon: Icons.close_rounded,
-                    semanticLabel: 'Close',
-                    onTap: () => unawaited(Navigator.of(context).maybePop()),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetails(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: kBackgroundDark,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.screenPadding,
-        20,
-        AppSpacing.screenPadding,
-        32,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.data.details,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  height: 1.4,
-                ),
-          ),
-          const SizedBox(height: 16),
-          if (widget.data.imageUrls.isNotEmpty) ...[
-            _DetailCard(
-              title: 'More photos',
-              child: Column(
-                children: widget.data.imageUrls
-                    .map(
-                      (imageUrl) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(kRadiusThumb),
-                          child: AspectRatio(
-                            aspectRatio: 1.7,
-                            child: Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return TikTokThumbnailPlaceholder(
-                                  creatorHandle: tiktokCreatorHandle(
-                                    widget.data.videoUrl,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          KeyedSubtree(
-            key: _locationKey,
-            child: _DetailCard(
-              title: 'Location',
-              child: _buildLocationBody(context),
-            ),
-          ),
-          const SizedBox(height: 12),
-          KeyedSubtree(
-            key: _reviewKey,
-            child: _DetailCard(
-              title: 'Top review',
-              child: _buildReviewBody(context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLocationBody(BuildContext context) {
-    final hasFix = hasMapFix(widget.data.latitude, widget.data.longitude);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.location_pin, color: Colors.white),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_placeName != null) ...[
-                    Text(
-                      _placeName!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 2),
-                  ],
-                  Text(
-                    hasFix
-                        ? '${_distanceLabel()} from your location'
-                        : 'No location on file for this place',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.78),
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        if (hasFix) ...[
-          const SizedBox(height: 12),
-          // The one cream button on this screen: leaving for the restaurant is
-          // the only thing the page is asking you to do.
-          AppPrimaryButton(
-            label: 'Get directions',
-            icon: Icons.directions_rounded,
-            expand: true,
-            onPressed: () => unawaited(_openDirections()),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildReviewBody(BuildContext context) {
-    if (widget.data.reviewText.isEmpty) {
-      return Text(
-        'No reviews yet',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.66),
-            ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.data.reviewName,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.68),
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          widget.data.reviewText,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
-                height: 1.35,
-              ),
-        ),
-      ],
-    );
-  }
-
-  /// Fixed top controls: back, photo switcher, video.
-  ///
-  /// Positioned rather than a plain Stack child: StackFit.expand would stretch
-  /// this row to the full screen height, centring the controls vertically and
-  /// letting the invisible row swallow drags meant for the scroll view
-  /// underneath.
-  Widget _buildTopControls(
-    BuildContext context,
-    List<String> imageUrls,
-    int heroIndex,
-    String? videoUrl,
-  ) {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Row(
-            children: [
-              AppIconButton(
+            child: DetailHero(
+              title: data.title,
+              tags: _heroTags(),
+              metaLine: _metaLine(),
+              videoUrl: videoUrl,
+              imageUrl: data.imageUrls.isEmpty ? null : data.imageUrls.first,
+              bitten: _liked,
+              playerFuture: _playerFuture,
+              videoHiddenForFullscreen: _fullscreenOpen,
+              onOpenPlayer:
+                  hasVideo ? () => unawaited(_openPlayer(videoUrl)) : null,
+              leading: AppIconButton(
                 icon: Icons.arrow_back_rounded,
                 size: kUtilityButtonSize,
-                background: kFillOnPhoto,
                 semanticLabel: 'Back',
                 onTap: () => unawaited(Navigator.of(context).maybePop()),
               ),
-              Expanded(
-                child: imageUrls.length > 1
-                    ? Center(
-                        child: HeroThumbnailStrip(
-                          imageUrls: imageUrls,
-                          activeIndex: heroIndex,
-                          onSelected: (index) {
-                            setState(() {
-                              _heroIndex = index;
-                            });
-                          },
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+              trailing: AppIconButton(
+                icon: onWishlist
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded,
+                size: kUtilityButtonSize,
+                iconColor: onWishlist ? kAccentEmber : kTextOnPhoto,
+                semanticLabel:
+                    onWishlist ? 'Remove from wishlist' : 'Add to wishlist',
+                onTap: () => unawaited(_toggleWishlist()),
               ),
-              if (videoUrl != null && videoUrl.isNotEmpty)
-                AppIconButton(
-                  icon: Icons.play_arrow_rounded,
-                  size: kUtilityButtonSize,
-                  background: kFillOnPhoto,
-                  semanticLabel: 'Watch TikTok review',
-                  onTap: () {
-                    unawaited(
-                      Navigator.of(context).push(
-                        // The same fade the deck opens the player with: one
-                        // screen reached two ways should not arrive two ways.
-                        fadeThroughRoute<void>(
-                          context,
-                          (_) => TikTokPlayerScreen(videoUrl: videoUrl),
-                        ),
-                      ),
-                    );
-                  },
-                )
-              else
-                const SizedBox(width: kUtilityButtonSize),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Top-center photo switcher: a strip of mini thumbnails over the hero image;
-/// the active one gets an accent ring.
-///
-/// Public only so widget tests have a stable handle on the strip. Nothing
-/// outside this file builds one.
-class HeroThumbnailStrip extends StatelessWidget {
-  const HeroThumbnailStrip({
-    super.key,
-    required this.imageUrls,
-    required this.activeIndex,
-    required this.onSelected,
-  });
-
-  final List<String> imageUrls;
-  final int activeIndex;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final visible = imageUrls.length > 5 ? imageUrls.sublist(0, 5) : imageUrls;
-
-    // Five 36px thumbnails need ~216px, more than the slot between the back
-    // and play buttons on a 320pt-wide phone. Shrink the strip to fit instead
-    // of overflowing it off the right edge.
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: _pill(visible),
-    );
-  }
-
-  Widget _pill(List<String> visible) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(kRadiusPill),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: kFillOnPhoto,
-          borderRadius: BorderRadius.circular(kRadiusPill),
-          border: Border.all(color: kHairline),
-        ),
-        child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < visible.length; i++)
-                Padding(
-                  padding: EdgeInsets.only(left: i == 0 ? 0 : 6),
-                  // Matches _StripThumb on the Like tab: screen readers need
-                  // to know these photo swatches are buttons.
-                  child: Semantics(
-                    label: 'Photo ${i + 1} of ${visible.length}',
-                    button: true,
-                    selected: i == activeIndex,
-                    child: GestureDetector(
-                      onTap: () => onSelected(i),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(kRadiusPill),
-                          border: Border.all(
-                            color: i == activeIndex
-                                ? kAccentEmber
-                                : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(kRadiusPill),
-                          child: Image.network(
-                            visible[i],
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const ColoredBox(
-                                color: kFillOnPhoto,
-                                child: Icon(
-                                  Icons.image_not_supported_rounded,
-                                  color: Colors.white54,
-                                  size: 16,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                20,
+                AppSpacing.md,
+                20,
+                AppSpacing.md,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (facts.isNotEmpty) ...[
+                    FactsStrip(facts: facts),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  if (data.dishes.isNotEmpty) ...[
+                    DishList(dishes: data.dishes),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  if (data.details.trim().isNotEmpty)
+                    AboutParagraph(text: data.details),
+                  const FriendsBiteRow(avatars: [], caption: null),
+                ],
+              ),
+            ),
           ),
-        ),
-    );
-  }
-}
-
-class _DetailCard extends StatelessWidget {
-  const _DetailCard({
-    required this.title,
-    required this.child,
-  });
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kSurfacePanel,
-        borderRadius: BorderRadius.circular(kRadiusPanel),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: appPanelTitleStyle(context)),
-          const SizedBox(height: 10),
-          child,
+          DetailCtaBar(
+            busy: _settingDate,
+            onSetDate: () => unawaited(_setDate()),
+            onDirections: hasMapFix(data.latitude, data.longitude)
+                ? () => unawaited(_openDirections())
+                : null,
+          ),
         ],
       ),
     );
