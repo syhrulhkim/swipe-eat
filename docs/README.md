@@ -87,7 +87,8 @@ reasoning first.
 | [TikTok-Video](Features/TikTok-Video.md) | ACTIVE | The embedded player, warming, the thumbnail cache job |
 | [Restaurant-Data](Features/Restaurant-Data.md) | ACTIVE | Scrape → extract → review → geocode pipeline |
 | [Account-Deletion-Legal](Features/Account-Deletion-Legal.md) | SHIPPED | Store-mandated deletion and the public legal pages |
-| [Group-Dining](Features/Group-Dining.md) | DRAFT | The one nav tab that is not built |
+| [Plans-Calendar](Features/Plans-Calendar.md) | ACTIVE | Pick a date, the Calendar tab, and the planned state everywhere |
+| [Group-Dining](Features/Group-Dining.md) | SUPERSEDED | Tab 3 is the Calendar now; the shared-deck sketch survives |
 | [Quiz](Features/Quiz.md) | ORPHANED | Schema with no UI reaching it |
 
 ## Proposed: the Ngap redesign

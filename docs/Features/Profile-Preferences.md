@@ -43,9 +43,11 @@ Below that, in the design's order:
    missing word.
 2. **`.stats`** — three tiles. **bites** is the liked count from the shared
    likes cache. **plans kept** and **eating-out streak** come from a
-   `ProfileStats` parameter that a later phase fills; until then they read
-   **0** rather than being hidden, because a tile that appears later would
-   change the row's shape (D106).
+   `ProfileStats` parameter, and are **live since 2026-09-06**: the dashboard
+   fills it from `plan_stats()` via `PlansController` — see
+   [Plans-Calendar.md](Plans-Calendar.md). They still read **0** rather than
+   hiding when there is nothing to count, because a tile that appears later
+   would change the row's shape (D106).
 3. **Your taste** — Halal only, Spice (five pips, `spice_level` lit), Budget
    per person, Default radius. Each row opens a bottom sheet carrying the same
    control the first run used, writes optimistically and reverts with a

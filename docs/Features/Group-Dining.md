@@ -1,16 +1,24 @@
-Status: DRAFT
+Status: Superseded 2026-09-06 by [Plans-Calendar.md](Plans-Calendar.md)
 Owner: Swipe Eat team
-Last updated: 2026-09-03
-Cross-references: [General/PLAN.md](../General/PLAN.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md)
+Last updated: 2026-09-06
+Cross-references: [Plans-Calendar.md](Plans-Calendar.md), [General/PLAN.md](../General/PLAN.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md)
 
 # Group Dining
 
-**Not built.** Tab index 3 exists and ships an honest empty state.
+**Superseded.** Tab index 3 is the **Calendar** now — see
+[Plans-Calendar.md](Plans-Calendar.md). `group_tab.dart` is deleted and the
+empty state it held is gone with it.
 
-File: `lib/features/dashboard/presentation/group_tab.dart` — 30 lines, all of
-it the empty state.
+What survives from this document is section 3 onward: the shared-deck sketch
+and its open questions are still unanswered, and still worth answering before
+any schema. Plans took the tab; they did not answer group swiping.
 
-## 1. What ships today
+The `plan_members` and `plan_time_votes` tables the plans phase added are the
+nearest thing that exists to the "session and its members" sketched below, but
+they carry a *plan*, not a deck. A group session would still need its own
+shape.
+
+## 1. What used to ship here
 
 ```
 Swipe together
@@ -22,10 +30,9 @@ Group
   and the places you all like win — are on the way.
 ```
 
-The tab exists because the design's nav carries five items. It says so
-honestly rather than pretending, and rather than being hidden (D7). A nav that
-silently changes shape between builds is worse than a nav with one visible
-"coming soon".
+The tab existed because the design's nav carries five items, and it said so
+honestly rather than being hidden (D7). D87 then renamed the tab to Calendar,
+and the plans phase filled it.
 
 ## 2. Why it is the most interesting unbuilt feature
 

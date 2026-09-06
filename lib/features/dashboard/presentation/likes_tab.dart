@@ -8,6 +8,7 @@ import '../../../core/ui/app_spacing.dart';
 import '../../restaurants/models/restaurant.dart';
 import '../../restaurants/models/restaurant_card.dart';
 // `toDetailPayload` is an extension on RestaurantCard and lives here.
+import '../../plans/state/plans_controller.dart';
 import '../../restaurants/models/restaurant_detail_data.dart';
 import '../../restaurants/state/likes_controller.dart';
 import 'dashboard_widgets.dart';
@@ -15,7 +16,11 @@ import 'likes_tab_view.dart';
 
 /// The places the user has bitten, filtered by the design's chip row.
 class LikesTab extends StatefulWidget {
-  const LikesTab({super.key});
+  const LikesTab({super.key, this.plans});
+
+  /// The calendar the "Planned" chips and the tiles' day badges read.
+  /// Injected by tests; in the app the shared instance is used.
+  final PlansController? plans;
 
   @override
   State<LikesTab> createState() => _LikesTabState();
@@ -26,16 +31,22 @@ class _LikesTabState extends State<LikesTab> {
   // notifies when a like lands anywhere in the app (deck, detail page).
   String? _error;
 
+  late final PlansController _plans = widget.plans ?? PlansController.instance;
+
   @override
   void initState() {
     super.initState();
     LikesController.instance.addListener(_onLikesChanged);
+    // The chips filter on the calendar, so the tab has to hear about a plan
+    // made anywhere else in the app.
+    _plans.addListener(_onLikesChanged);
     unawaited(_loadLikes());
   }
 
   @override
   void dispose() {
     LikesController.instance.removeListener(_onLikesChanged);
+    _plans.removeListener(_onLikesChanged);
     super.dispose();
   }
 
@@ -125,7 +136,8 @@ class _LikesTabState extends State<LikesTab> {
                 for (final restaurant in likes.liked)
                   if (likes.isSavedForLater(restaurant.id)) restaurant.id,
               },
-              plannedIds: likes.plannedRestaurantIds,
+              plannedIds: _plans.plannedRestaurantIds,
+              plannedLabels: _plans.plannedLabels,
               onOpenRestaurant: _openRestaurant,
               onOpenWishlist: () => unawaited(_openWishlist()),
             ),

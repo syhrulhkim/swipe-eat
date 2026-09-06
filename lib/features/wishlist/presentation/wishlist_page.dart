@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
+import '../../plans/state/plans_controller.dart';
 import '../state/wishlist_controller.dart';
 import 'wishlist_row.dart';
 
@@ -16,7 +17,12 @@ import 'wishlist_row.dart';
 /// its own scaffold and its own back button instead of borrowing
 /// [DashboardTabShell]'s header.
 class WishlistPage extends StatefulWidget {
-  const WishlistPage({super.key, this.controller, this.onShare});
+  const WishlistPage({
+    super.key,
+    this.controller,
+    this.onShare,
+    this.plans,
+  });
 
   /// Injected by tests. Left null the page owns one, backed by the real
   /// repository.
@@ -27,6 +33,10 @@ class WishlistPage extends StatefulWidget {
   /// implementation for one.
   final Future<void> Function(String text)? onShare;
 
+  /// The calendar the rows' day badges read. Injected by tests; in the app the
+  /// shared instance is used.
+  final PlansController? plans;
+
   @override
   State<WishlistPage> createState() => _WishlistPageState();
 }
@@ -35,6 +45,8 @@ class _WishlistPageState extends State<WishlistPage> {
   late final WishlistController _controller =
       widget.controller ?? WishlistController();
   final TextEditingController _input = TextEditingController();
+
+  late final PlansController _plans = widget.plans ?? PlansController.instance;
 
   /// True only when this page made the controller, so an injected one outlives
   /// the route the way its owner expects.
@@ -240,9 +252,15 @@ class _WishlistPageState extends State<WishlistPage> {
 
         final item = items[index - 1];
 
+        final restaurantId = item.restaurantId;
+
         return WishlistRow(
           key: ValueKey(item.id),
           item: item,
+          // A manual row has no restaurant, so it can never carry a day.
+          plannedLabel: restaurantId == null
+              ? null
+              : _plans.plannedLabelFor(restaurantId),
           onTap: () => unawaited(_controller.toggleEaten(item.id)),
         );
       },

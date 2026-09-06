@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../nearby/presentation/nearby_tab.dart';
+import '../../plans/presentation/calendar_tab.dart';
+import '../../plans/state/plans_controller.dart';
 import '../../profile/presentation/profile_tab.dart';
 import '../../restaurants/data/likes_migration.dart';
 import '../../restaurants/data/visit_prompt_cache.dart';
@@ -13,8 +15,8 @@ import '../../restaurants/presentation/visit_prompt_sheet.dart';
 import '../../restaurants/state/deck_handoff.dart';
 import '../../restaurants/state/likes_controller.dart';
 import '../../restaurants/state/visit_prompt_controller.dart';
+import '../state/dashboard_tab_request.dart';
 import 'dashboard_bottom_nav.dart';
-import 'group_tab.dart';
 import 'likes_tab.dart';
 
 /// The signed-in home: five tabs behind one bottom bar.
@@ -24,6 +26,8 @@ class DashboardPage extends StatelessWidget {
     required this.authController,
     this.visitPrompts,
     this.handoff,
+    this.tabRequests,
+    this.plans,
   });
 
   final AuthController authController;
@@ -34,6 +38,12 @@ class DashboardPage extends StatelessWidget {
   /// Which deck hand-off to listen to. Defaults to the shared instance.
   final DeckHandoff? handoff;
 
+  /// Which tab-switch requests to listen to. Defaults to the shared instance.
+  final DashboardTabRequest? tabRequests;
+
+  /// The plans cache the You tab's figures and the Bites chips read.
+  final PlansController? plans;
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -42,6 +52,8 @@ class DashboardPage extends StatelessWidget {
         authController: authController,
         visitPrompts: visitPrompts,
         handoff: handoff,
+        tabRequests: tabRequests,
+        plans: plans,
       ),
     );
   }
@@ -52,11 +64,15 @@ class _DashboardShell extends StatefulWidget {
     required this.authController,
     this.visitPrompts,
     this.handoff,
+    this.tabRequests,
+    this.plans,
   });
 
   final AuthController authController;
   final VisitPromptController? visitPrompts;
   final DeckHandoff? handoff;
+  final DashboardTabRequest? tabRequests;
+  final PlansController? plans;
 
   @override
   State<_DashboardShell> createState() => _DashboardShellState();
@@ -70,6 +86,18 @@ class _DashboardShellState extends State<_DashboardShell>
       widget.visitPrompts ?? VisitPromptController.instance;
 
   late final DeckHandoff _handoff = widget.handoff ?? DeckHandoff.instance;
+
+  late final DashboardTabRequest _tabRequests =
+      widget.tabRequests ?? DashboardTabRequest.instance;
+
+  /// The revision this shell has already acted on, so a rebuild cannot drag
+  /// the user back to a tab they have since left. Seeded eagerly in
+  /// `initState`: a `late` initialiser would not run until the first request
+  /// arrived, by which time the revision has already moved and the very first
+  /// request would compare equal and be dropped.
+  int _tabRequestRevision = 0;
+
+  late final PlansController _plans = widget.plans ?? PlansController.instance;
 
   /// The hand-off revision this shell has already reacted to, so a rebuild
   /// cannot pull the user back to the deck they just navigated away from.
@@ -98,6 +126,15 @@ class _DashboardShellState extends State<_DashboardShell>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _handoff.addListener(_onHandoff);
+    _tabRequestRevision = _tabRequests.revision;
+    _tabRequests.addListener(_onTabRequested);
+    _plans.addListener(_onPlansChanged);
+    // The calendar feeds four surfaces that are not the calendar — the Bites
+    // chips, the Bites tiles, the wishlist rows and the You tab's figures — so
+    // it loads with the dashboard rather than waiting for tab 3 to be opened.
+    unawaited(_plans.ensureLoaded().catchError((Object error) {
+      debugPrint('Plans load failed: $error');
+    }));
     // One-time move of pre-auth device likes into the swipes table. Never
     // blocks the dashboard; a failed run retries on the next launch.
     unawaited(migrateDeviceLikes().then((migrated) {
@@ -119,6 +156,8 @@ class _DashboardShellState extends State<_DashboardShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _handoff.removeListener(_onHandoff);
+    _tabRequests.removeListener(_onTabRequested);
+    _plans.removeListener(_onPlansChanged);
     _tabFade.dispose();
     super.dispose();
   }
@@ -215,6 +254,21 @@ class _DashboardShellState extends State<_DashboardShell>
     _setSelectedIndex(0);
   }
 
+  /// The Calendar tab's "New plan", and the landing after "Lock it in".
+  void _onTabRequested() {
+    if (_tabRequests.revision == _tabRequestRevision) {
+      return;
+    }
+    _tabRequestRevision = _tabRequests.revision;
+    _setSelectedIndex(_tabRequests.index);
+  }
+
+  void _onPlansChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   void _setSelectedIndex(int index) {
     if (_selectedIndex == index) {
       return;
@@ -245,9 +299,15 @@ class _DashboardShellState extends State<_DashboardShell>
           children: [
             SwipeDeck(authController: widget.authController),
             NearbyTab(authController: widget.authController),
-            const LikesTab(),
-            const GroupTab(),
-            ProfileTab(authController: widget.authController),
+            LikesTab(plans: _plans),
+            CalendarTab(controller: _plans, tabRequests: _tabRequests),
+            ProfileTab(
+              authController: widget.authController,
+              stats: ProfileStats(
+                plansKept: _plans.stats.plansKept,
+                streakWeeks: _plans.stats.streakWeeks,
+              ),
+            ),
           ],
         ),
       ),

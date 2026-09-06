@@ -176,9 +176,9 @@ the tap action re-declared because excluding drops it (D83).
 
 ## 6. Data-empty today
 
-- **`plannedLabel`** — accepted by both `WishlistRow` and `RestaurantGridCard`,
-  always null. The plans phase fills it in; the rendering is already built and
-  tested.
+- ~~**`plannedLabel`**~~ — **live since 2026-09-06.** `WishlistPage` reads it
+  from `PlansController.plannedLabelFor`, so a wishlist row with a day on it
+  says "Fri 4". See [Plans-Calendar.md](Plans-Calendar.md).
 - **`from_user_id` names** — a friend row says "From a friend" rather than
   "From Aiman", because there is no friend graph to resolve the id against
   yet. `WishlistItem.fromUserName` is the seam.
