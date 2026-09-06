@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/ui/tiktok_thumbnail_placeholder.dart';
+import 'package:swipe_eat/features/friends/presentation/friend_avatar.dart';
+import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/restaurants/data/tiktok_player_factory.dart';
 import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
 import 'package:swipe_eat/features/restaurants/models/dish.dart';
@@ -21,6 +23,7 @@ import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
 import 'package:swipe_eat/features/wishlist/state/wishlist_controller.dart';
 
 import '../../support/widget_test_support.dart';
+import '../friends/fake_friends_repository.dart';
 import '../restaurants/fake_restaurant_repositories.dart';
 import '../wishlist/fake_wishlist_repository.dart';
 
@@ -141,8 +144,14 @@ Future<void> _pumpDetailPage(
   RestaurantDetailData data, {
   DateTime Function()? clock,
   double textScale = 1.0,
+  FakeFriendsRepository? friendsRepository,
 }) async {
   _lastPlansExtra = null;
+  final friends = FriendsController(
+    repository: friendsRepository ?? FakeFriendsRepository(),
+    followAuthChanges: false,
+  );
+  addTearDown(friends.dispose);
   final router = GoRouter(
     routes: [
       GoRoute(
@@ -151,6 +160,7 @@ Future<void> _pumpDetailPage(
           data: data,
           repository: _restaurants,
           wishlist: _wishlist,
+          friends: friends,
           tiktokPlayerFuture: _stalledPlayer(),
           clock: clock ?? OpeningHours.kualaLumpurNow,
         ),
@@ -501,8 +511,10 @@ void main() {
   });
 
   group('friends', () {
-    testWidgets('renders nothing until the social graph exists',
+    testWidgets('renders nothing when nobody you know has been',
         (tester) async {
+      // The common case, and it has to stay silent: "0 friends" on a place
+      // none of your friends have heard of would be worse than no row.
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
@@ -512,6 +524,69 @@ void main() {
         Size.zero,
         reason: 'an empty friends row occupies no space',
       );
+    });
+
+    testWidgets('names two friends and counts the rest', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(
+        tester,
+        _detailData(),
+        friendsRepository: FakeFriendsRepository(
+          liked: [
+            testFriend('u1', name: 'Aiman Zulkifli'),
+            testFriend('u2', name: 'Mei Kee Tan'),
+            testFriend('u3', name: 'Syafiq Rahman'),
+            testFriend('u4', name: 'Priya Raj'),
+            testFriend('u5', name: 'Jia Wen Lim'),
+            testFriend('u6', name: 'Danial Ng'),
+          ],
+        ),
+      );
+
+      expect(find.text("Aiman, Mei and 4 friends ngap'd this"), findsOneWidget);
+      // Three faces, not six: the sentence carries the count.
+      expect(find.byType(FriendAvatar), findsNWidgets(kAvatarStackMax));
+    });
+
+    testWidgets('asks about the restaurant it is showing', (tester) async {
+      final repository = FakeFriendsRepository(
+        liked: [testFriend('u1', name: 'Aiman Zulkifli')],
+      );
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(),
+          friendsRepository: repository);
+
+      expect(repository.likedAsked, [_detailData().id]);
+    });
+
+    testWidgets('a friends row that cannot load is a row that is not there',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(
+        tester,
+        _detailData(),
+        friendsRepository: FakeFriendsRepository(
+          liked: [testFriend('u1', name: 'Aiman Zulkifli')],
+        )..failWhoLikedWith = Exception('offline'),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(FriendsBiteRow)), Size.zero);
+    });
+
+    testWidgets('one friend, at 320 px and double text', (tester) async {
+      useViewport(tester, const Size(320, 568));
+      await _pumpDetailPage(
+        tester,
+        _detailData(),
+        textScale: 2,
+        friendsRepository: FakeFriendsRepository(
+          liked: [testFriend('u1', name: 'Aiman Zulkifli')],
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text("Aiman ngap'd this"), findsOneWidget);
     });
   });
 

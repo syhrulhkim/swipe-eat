@@ -63,6 +63,12 @@ class FakeFriendsRepository implements FriendsRepository {
   /// Set to throw from [invite].
   Object? failInviteWith;
 
+  /// Set to throw from [whoLiked].
+  Object? failWhoLikedWith;
+
+  /// The restaurant ids [whoLiked] was asked about, in order.
+  final List<int> likedAsked = [];
+
   /// The plan ids each [planPeople] call asked for, so a test can prove a
   /// month is fetched once rather than once per card.
   final List<List<int>> planPeopleAsked = [];
@@ -154,6 +160,11 @@ class FakeFriendsRepository implements FriendsRepository {
   @override
   Future<List<FriendProfile>> whoLiked(int restaurantId) async {
     calls.add('whoLiked');
+    final failure = failWhoLikedWith;
+    if (failure != null) {
+      throw failure;
+    }
+    likedAsked.add(restaurantId);
     return _liked;
   }
 

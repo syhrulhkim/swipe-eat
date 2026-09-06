@@ -46,6 +46,7 @@ class FriendsController extends ChangeNotifier {
 
   Map<String, FriendProfile> _byId = const {};
   Map<int, List<PlanPerson>> _planPeople = const {};
+  Map<int, List<FriendProfile>> _likedBy = const {};
   List<FriendProfile> _friends = const [];
   List<FriendRequest> _requests = const [];
   bool _loaded = false;
@@ -90,6 +91,30 @@ class FriendsController extends ChangeNotifier {
   /// carries ids and statuses and no names at all, which is what this fills in.
   List<PlanPerson> peopleFor(int planId) =>
       List.unmodifiable(_planPeople[planId] ?? const <PlanPerson>[]);
+
+  /// Which of your friends have ngap'd a place, or an empty list until the
+  /// answer is in. The detail screen's `.friends` row reads this.
+  List<FriendProfile> whoLiked(int restaurantId) =>
+      List.unmodifiable(_likedBy[restaurantId] ?? const <FriendProfile>[]);
+
+  /// Asks who among your friends liked a restaurant, once per screen opening.
+  ///
+  /// A failure is silent and leaves the row empty: the row is a nicety on a
+  /// screen whose job is the restaurant, and an error message about friends
+  /// on it would be louder than the thing it failed to say.
+  Future<void> loadWhoLiked(int restaurantId) async {
+    final generation = _generation;
+    try {
+      final people = await _repository.whoLiked(restaurantId);
+      if (generation != _generation) {
+        return;
+      }
+      _likedBy = {..._likedBy, restaurantId: people};
+      notifyListeners();
+    } on Object catch (error) {
+      debugPrint('Loading who liked a place failed: $error');
+    }
+  }
 
   /// Loads the rosters for a set of plans in one call.
   ///
@@ -232,6 +257,7 @@ class FriendsController extends ChangeNotifier {
     _friends = const [];
     _requests = const [];
     _planPeople = const {};
+    _likedBy = const {};
     _loaded = false;
     _loading = false;
     _error = null;
