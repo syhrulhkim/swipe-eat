@@ -441,6 +441,42 @@ follow, so the crossing-off reads as something the tap did rather than a state
 the row was always in. The photo desaturates and fades to 50 % on the same
 tap, and the row re-sorts to the bottom.
 
+## 7k. The way in
+
+The two screens a signed-out user sees — welcome (S1) and sign-up (01b) —
+share one small vocabulary, in `lib/features/auth/presentation/auth_widgets.dart`.
+
+**The glow is stronger here.** `WelcomeGlow` / `kWelcomeGlow` is the same
+device as `ScreenGlow`, painted into a wider, taller ellipse and starting at
+`kAccentEmber` rather than `kAccentLava` (the design's `.onb .screen` overrides
+`--grad` with `140% 60% at 50% -8%`). It exists for exactly one screen, which
+is why it is a second widget rather than a flag on the first: the app's glow is
+a constant every other screen relies on being identical.
+
+**The card stack** is three `kWelcomeCardWidth` × `kWelcomeCardHeight`
+(196 × 244) covers at the prototype's transforms — −12° / +9° / −2°, translated
+−38 / +40 / 0, scaled .92 / .96 / 1, at 75 % / 85 % / 100 % opacity. The middle
+card carries the bite, so the signature is on screen before the word "Ngap" has
+been explained. The whole stack is scaled to fit the 38 % of the screen it is
+given (`kAuthHeroFraction`), rather than clipped, so three cards still read as a
+deck on a 320 px phone.
+
+A card whose cover could not be loaded is a plain `kSurfaceDark` surface with no
+name. Never a gap: a card with nothing in it says "a card goes here", where a
+hole in the stack says the app is broken before it has said anything else.
+
+**The sign-in buttons** (`AuthProviderButton`) are the design's `.su .btn`:
+`kAuthButtonHeight` (52) rather than the app's usual 46, left-aligned behind a
+`kAuthProviderMarkSize` (22) round mark. They are the only buttons on their
+screen, they stack, and the eye reads a stack down its left edge. Still only two
+fills (D62) — `primary` is the ember gradient, `ghost` the panel and a hairline.
+`AuthTextButton` is the design's `.textbtn`: drawn at 13 px, tapped at
+`kMinTapTarget`.
+
+**The wordmark** (`AuthBrand`) is display 22/800 with the full stop in ember —
+the one orange mark in the app that is neither a control nor the glow, because
+it is the product's name rather than decoration.
+
 ## 8. Testing
 
 `test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the

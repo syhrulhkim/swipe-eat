@@ -275,14 +275,37 @@ than riding along with a client change.
 The profile's streak — in **weeks** — is a different statistic and is not
 built; it needs plans.
 
-### 4.6 Auth: phone is primary, email is gone
+### 4.6 Auth: phone is primary, email is gone — ✅ resolved 2026-09-06
 
 The design's sign-up offers phone, Apple, Google. Today's app is email/password,
 Google, Apple. Phone auth is a Supabase provider that is not enabled and needs
 an SMS gateway with a real per-message cost.
 
-Also note the design has **no forgot-password flow** — which neatly sidesteps
-the dead-end reset link documented in [Features/Auth.md](../Features/Auth.md).
+**Resolved: the design's two screens shipped, and phone is gated by a
+build-time define exactly as Google already was** (D113). `PHONE_AUTH_ENABLED`
+is off by default, so "Continue with phone number" hides itself rather than
+failing at tap time; the flow behind it — +60, a six-digit code, a resend
+countdown — is written and tested, and the define is the only thing between it
+and users. Switching it on is dashboard work with a per-message bill attached,
+so it is listed in [Release/STORE.md](../Release/STORE.md) rather than done
+here.
+
+**Email stays, behind a text button** (D114). With phone gated by a define,
+Google gated by client ids and Apple gated by the platform, a build with none
+of them configured — every developer build, and the reviewer's — would have no
+way to sign in at all. `/login` and `/register` are gone as screens; the paths
+redirect to `/welcome` so an old link does not 404, and the sign-in, create-
+account and reset forms are one form revealed by "Use email instead" on the
+sign-up screen. The moment phone is live, that button is the thing to remove.
+
+The design's "Later" (browse without an account) is gated the same way, by
+`GUEST_BROWSING_ENABLED`, because the anonymous provider is not enabled either
+(D115).
+
+The design has **no forgot-password flow**, but the fallback form keeps one:
+the dead-end reset link documented in [Features/Auth.md](../Features/Auth.md)
+is still a dead end, and it is still the only recovery an email account has.
+It leaves with the email form.
 
 ### 4.7 Onboarding: "Skip" vs. a hard minimum
 
