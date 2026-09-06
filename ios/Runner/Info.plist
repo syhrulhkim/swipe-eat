@@ -31,6 +31,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSContactsUsageDescription</key>
+	<string>Swipe Eat checks which of your contacts already use the app so you can add them as friends. Numbers are scrambled before they are sent, names are never sent, and nothing is kept.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Swipe Eat uses your location to show how far each restaurant is from you.</string>
 	<key>UIApplicationSceneManifest</key>
