@@ -314,7 +314,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The sheet's own copy of the row; the tab's is still behind it.
-      await tester.tap(find.text('Hides places without halal certification'));
+      await tester.tap(find.text('Only places we know are certified'));
       await tester.pumpAndSettle();
 
       expect(profile.preferenceCalls, hasLength(1));
@@ -344,7 +344,7 @@ void main() {
 
       await tester.tap(find.text('Halal only'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Hides places without halal certification'));
+      await tester.tap(find.text('Only places we know are certified'));
       await tester.pumpAndSettle();
 
       expect(find.text('On'), findsOneWidget,
@@ -413,7 +413,7 @@ void main() {
       await pumpTab(tester);
 
       for (final (row, marker) in const [
-        ('Halal only', 'Hides places without halal certification'),
+        ('Halal only', 'Only places we know are certified'),
         ('Spice', 'How hot is too hot?'),
         ('Budget per person', 'RM 100+'),
         ('Default radius', '2 km'),
@@ -630,7 +630,7 @@ void main() {
       tester.semantics.tap(find.semantics.byLabel('Halal only'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Hides places without halal certification'),
+      expect(find.text('Only places we know are certified'),
           findsOneWidget,
           reason: 'the tap action must open the sheet');
 

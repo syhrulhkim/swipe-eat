@@ -433,14 +433,14 @@ class _RulesSection extends StatelessWidget {
       children: [
         PrefSwitchRow(
           title: 'Halal only',
-          subtitle: 'Hides places without halal certification',
+          subtitle: 'Only places we know are certified',
           value: account.halalOnly,
           onChanged: (value) => onHalalOnly(value, account),
         ),
         const SizedBox(height: 10),
         PrefSwitchRow(
           title: 'Vegetarian options',
-          subtitle: 'Must have a real veg section',
+          subtitle: 'Only places we know have a veg section',
           value: account.vegetarian,
           onChanged: (value) => onVegetarian(value, account),
         ),

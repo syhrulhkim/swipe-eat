@@ -87,6 +87,19 @@ class AppUser {
       (filterDietaryTagIds.isEmpty ? 0 : 1) +
       (filterMinRating == null ? 0 : 1);
 
+  /// The rules the user set that can empty a deck, named the way the screens
+  /// name them. An empty deck under one of these is a consequence of an
+  /// answer, not a broken app, and the empty state says so rather than
+  /// leaving the user to guess.
+  List<String> get narrowingRules => [
+        if (halalOnly) 'Halal only',
+        if (vegetarian) 'Vegetarian options',
+        if (budgetMax != null) 'a budget of RM $budgetMax',
+        if (filterCuisineIds.isNotEmpty) 'a cuisine filter',
+        if (filterDietaryTagIds.isNotEmpty) 'a dietary filter',
+        if (filterMinRating != null) 'a rating filter',
+      ];
+
   /// Builds the user from a `profiles` row, falling back to the auth record
   /// for anything the profile has not been given yet (a fresh OAuth signup
   /// arrives with its name and photo only in `user_metadata`).

@@ -149,7 +149,7 @@ class OnboardingRulesStep extends StatelessWidget {
         const SizedBox(height: AppOnboardingGaps.section),
         PrefSwitchRow(
           title: 'Halal only',
-          subtitle: 'Hides places without halal certification',
+          subtitle: 'Only places we know are certified',
           value: draft.halalOnly,
           onChanged: (value) {
             draft.halalOnly = value;
@@ -159,7 +159,7 @@ class OnboardingRulesStep extends StatelessWidget {
         const SizedBox(height: AppOnboardingGaps.item),
         PrefSwitchRow(
           title: 'Vegetarian options',
-          subtitle: 'Must have a real veg section',
+          subtitle: 'Only places we know have a veg section',
           value: draft.vegetarian,
           onChanged: (value) {
             draft.vegetarian = value;

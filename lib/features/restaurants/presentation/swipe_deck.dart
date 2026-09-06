@@ -277,6 +277,15 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
+  /// "A", "A and B", "A, B and C" — the rules read as a sentence, because the
+  /// card is a sentence.
+  static String _sentenceList(List<String> parts) {
+    if (parts.length == 1) {
+      return parts.single;
+    }
+    return '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}';
+  }
+
   Widget _messageCard({
     required String eyebrow,
     required String title,
@@ -330,6 +339,20 @@ class _SwipeDeckState extends State<SwipeDeck>
     }
 
     if (_deck.cards.isEmpty) {
+      // An empty deck under a rule the user set is a consequence of their own
+      // answer, so the card names the rule instead of implying the app has no
+      // food in it.
+      final rules = widget.authController.user?.narrowingRules ?? const [];
+      if (rules.isNotEmpty) {
+        return _messageCard(
+          eyebrow: 'Nothing dealt',
+          title: 'Your rules leave nothing here',
+          subtitle: '${_sentenceList(rules)} rules out everything we know '
+              'about nearby. Loosen one in Settings and the deck fills again.',
+          actionLabel: 'Reload',
+          art: AppMotion.pin,
+        );
+      }
       return _messageCard(
         eyebrow: 'Nothing dealt',
         title: 'No restaurants yet',

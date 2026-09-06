@@ -111,7 +111,7 @@ class _ProfileTabState extends State<ProfileTab> {
       title: 'Halal only',
       builder: (context, close) => PrefSwitchRow(
         title: 'Halal only',
-        subtitle: 'Hides places without halal certification',
+        subtitle: 'Only places we know are certified',
         value: user.halalOnly,
         onChanged: close,
       ),

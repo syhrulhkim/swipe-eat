@@ -299,4 +299,40 @@ void main() {
       expect(userWith(const {'budget_max': 60}).hasBudget, isFalse);
     });
   });
+
+  group('AppUser.narrowingRules', () {
+    test('a user with no rules narrows nothing', () {
+      const user = AppUser(id: 'u1', email: 'a@b.co', name: 'A');
+      expect(user.narrowingRules, isEmpty);
+    });
+
+    test('every rule that can empty a deck is named the way a screen names it',
+        () {
+      const user = AppUser(
+        id: 'u1',
+        email: 'a@b.co',
+        name: 'A',
+        halalOnly: true,
+        vegetarian: true,
+        budgetMin: 10,
+        budgetMax: 25,
+        filterCuisineIds: [3],
+        filterDietaryTagIds: [4],
+        filterMinRating: 4.5,
+      );
+      expect(user.narrowingRules, [
+        'Halal only',
+        'Vegetarian options',
+        'a budget of RM 25',
+        'a cuisine filter',
+        'a dietary filter',
+        'a rating filter',
+      ]);
+    });
+
+    test('a budget with no ceiling rules nothing out', () {
+      const user = AppUser(id: 'u1', email: 'a@b.co', name: 'A', budgetMin: 10);
+      expect(user.narrowingRules, isEmpty);
+    });
+  });
 }
