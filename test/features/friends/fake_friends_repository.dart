@@ -57,6 +57,13 @@ class FakeFriendsRepository implements FriendsRepository {
   /// Set to throw from [act], and so from [sendRequests] too.
   Object? failActWith;
 
+  /// Set to throw from [planPeople].
+  Object? failPlanPeopleWith;
+
+  /// The plan ids each [planPeople] call asked for, so a test can prove a
+  /// month is fetched once rather than once per card.
+  final List<List<int>> planPeopleAsked = [];
+
   @override
   Future<List<FriendProfile>> friends() async {
     calls.add('friends');
@@ -150,7 +157,12 @@ class FakeFriendsRepository implements FriendsRepository {
   @override
   Future<List<PlanPerson>> planPeople(Iterable<int> planIds) async {
     calls.add('planPeople');
+    final failure = failPlanPeopleWith;
+    if (failure != null) {
+      throw failure;
+    }
     final ids = planIds.toSet();
+    planPeopleAsked.add(ids.toList());
     return [
       for (final person in _planPeople)
         if (ids.contains(person.planId)) person,

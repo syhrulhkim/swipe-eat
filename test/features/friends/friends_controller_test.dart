@@ -251,4 +251,122 @@ void main() {
       expect(controller.isLoaded, isFalse);
     });
   });
+
+  group('plan rosters', () {
+    FakeFriendsRepository repositoryWithPeople() => FakeFriendsRepository(
+          friends: [testFriend('a', name: 'Aiman Zulkifli')],
+          planPeople: [
+            testPlanPerson(1, 'a', name: 'Aiman Zulkifli', status: 'going'),
+            testPlanPerson(1, 'z', name: 'Zara Khan', status: 'invited'),
+            testPlanPerson(2, 'q', name: 'Quinn Lee', status: 'declined'),
+          ],
+        );
+
+    test('a month of plans is one call, not one per card', () async {
+      final repository = repositoryWithPeople();
+      final controller = controllerFor(repository);
+
+      await controller.loadPlanPeople([1, 2, 3]);
+
+      expect(repository.planPeopleAsked, hasLength(1));
+      expect(repository.planPeopleAsked.single, containsAll([1, 2, 3]));
+    });
+
+    test('groups the rows onto the plan each belongs to', () async {
+      final controller = controllerFor(repositoryWithPeople());
+
+      await controller.loadPlanPeople([1, 2]);
+
+      expect(
+        controller.peopleFor(1).map((person) => person.profile.name),
+        ['Aiman Zulkifli', 'Zara Khan'],
+      );
+      expect(controller.peopleFor(2).single.status, 'declined');
+    });
+
+    test('a plan with nobody on it comes back empty, not missing', () async {
+      // The calendar asks for every plan in the month; one with no guests must
+      // answer "nobody" rather than leave the card waiting on a load that
+      // already happened.
+      final controller = controllerFor(repositoryWithPeople());
+
+      await controller.loadPlanPeople([1, 9]);
+
+      expect(controller.peopleFor(9), isEmpty);
+    });
+
+    test('names a guest who is not one of your friends', () async {
+      // The reason this cache exists at all: Zara is on the plan and is a
+      // stranger to me, so the friends map cannot name her and the card would
+      // otherwise draw a blank face.
+      final controller = controllerFor(repositoryWithPeople());
+
+      await controller.loadPlanPeople([1]);
+
+      expect(controller.nameFor('z'), isNull);
+      expect(controller.peopleFor(1).last.profile.name, 'Zara Khan');
+    });
+
+    test('asking for nothing asks the server nothing', () async {
+      final repository = repositoryWithPeople();
+      final controller = controllerFor(repository);
+
+      await controller.loadPlanPeople(const []);
+
+      expect(repository.calls, isEmpty);
+    });
+
+    test('tells its listeners once the roster is in', () async {
+      final controller = controllerFor(repositoryWithPeople());
+      var notifications = 0;
+      controller.addListener(() => notifications += 1);
+
+      await controller.loadPlanPeople([1]);
+
+      expect(notifications, 1);
+    });
+
+    test('a failed load leaves the rosters already held alone', () async {
+      // A card that has been drawing "3 friends · 2 confirmed" should keep
+      // saying so when the next month fails to load, rather than emptying.
+      final repository = repositoryWithPeople();
+      final controller = controllerFor(repository);
+      await controller.loadPlanPeople([1]);
+
+      repository.failPlanPeopleWith = Exception('offline');
+      await controller.loadPlanPeople([2]);
+
+      expect(controller.peopleFor(1), hasLength(2));
+    });
+
+    test('a roster in flight when reset lands is dropped', () async {
+      final repository = repositoryWithPeople();
+      final controller = controllerFor(repository);
+
+      final inFlight = controller.loadPlanPeople([1]);
+      controller.reset();
+      await inFlight;
+
+      expect(controller.peopleFor(1), isEmpty);
+    });
+
+    test('reset forgets the rosters with everything else', () async {
+      final controller = controllerFor(repositoryWithPeople());
+      await controller.loadPlanPeople([1]);
+
+      controller.reset();
+
+      expect(controller.peopleFor(1), isEmpty);
+    });
+
+    test('peopleFor hands back a list the caller cannot edit', () async {
+      final controller = controllerFor(repositoryWithPeople());
+      await controller.loadPlanPeople([1]);
+
+      expect(
+        () => controller.peopleFor(1).add(testPlanPerson(1, 'x')),
+        throwsUnsupportedError,
+      );
+    });
+  });
 }

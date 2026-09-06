@@ -45,6 +45,7 @@ class FriendsController extends ChangeNotifier {
   String? _accountId;
 
   Map<String, FriendProfile> _byId = const {};
+  Map<int, List<PlanPerson>> _planPeople = const {};
   List<FriendProfile> _friends = const [];
   List<FriendRequest> _requests = const [];
   bool _loaded = false;
@@ -79,6 +80,50 @@ class FriendsController extends ChangeNotifier {
       userId == null ? null : _byId[userId];
 
   String? nameFor(String? userId) => profileFor(userId)?.name;
+
+  /// Everybody on a plan, faces and answers included, or an empty list when
+  /// that plan has not been loaded yet.
+  ///
+  /// Separate from the friends cache on purpose: a plan's guests are not
+  /// necessarily *your* friends — somebody the owner invited can be a stranger
+  /// to you — so their names cannot be looked up in [profileFor]. `Plan.members`
+  /// carries ids and statuses and no names at all, which is what this fills in.
+  List<PlanPerson> peopleFor(int planId) =>
+      List.unmodifiable(_planPeople[planId] ?? const <PlanPerson>[]);
+
+  /// Loads the rosters for a set of plans in one call.
+  ///
+  /// The calendar draws a month at a time and would otherwise ask once per
+  /// card. Plans already held are re-read rather than skipped: an answer can
+  /// arrive between two openings of the same screen, and a stale "2 confirmed"
+  /// is the kind of wrong that looks right.
+  ///
+  /// Generation-guarded like [refresh], so a month loaded under one account
+  /// cannot land in the next one's session. A failure leaves what was already
+  /// cached alone — the plan cards keep their old line rather than emptying.
+  Future<void> loadPlanPeople(Iterable<int> planIds) async {
+    final ids = planIds.toSet();
+    if (ids.isEmpty) {
+      return;
+    }
+    final generation = _generation;
+    try {
+      final people = await _repository.planPeople(ids);
+      if (generation != _generation) {
+        return;
+      }
+      final grouped = <int, List<PlanPerson>>{
+        for (final id in ids) id: <PlanPerson>[],
+      };
+      for (final person in people) {
+        (grouped[person.planId] ??= <PlanPerson>[]).add(person);
+      }
+      _planPeople = {..._planPeople, ...grouped};
+      notifyListeners();
+    } on Object catch (error) {
+      debugPrint('Loading plan people failed: $error');
+    }
+  }
 
   /// Loads once; concurrent callers share the request. A failed load clears its
   /// handle so the next call retries rather than caching the failure.
@@ -170,6 +215,7 @@ class FriendsController extends ChangeNotifier {
     _byId = const {};
     _friends = const [];
     _requests = const [];
+    _planPeople = const {};
     _loaded = false;
     _loading = false;
     _error = null;
