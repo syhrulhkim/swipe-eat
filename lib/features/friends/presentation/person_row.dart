@@ -41,75 +41,101 @@ class PersonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final line = subtitle;
+    final content = _content();
+
+    // A row that carries its own buttons — Accept and Decline on the friends
+    // page — is not itself a control, and neither the `Semantics` wrapper nor
+    // the `InkWell` belongs on it. Both merge the subtree beneath them into a
+    // single semantics node, which fuses the name, the subtitle and both
+    // buttons into one unpressable sentence: a screen reader is told
+    // "AI Aiman Wants to be friends Accept Aiman" and given nothing to press.
+    // (The `InkWell` does this even with a null `onTap`, which is what made it
+    // worth finding out.) Left bare, the texts read as texts and each button
+    // keeps its own node.
+    if (trailing != null) {
+      return content;
+    }
 
     return Semantics(
       label: profile.name,
-      value: line,
-      button: trailing == null,
+      value: subtitle,
+      button: true,
       // What a screen reader needs from a row in a multi-select is whether it
       // is picked, which is exactly what `selected` says.
-      selected: trailing == null ? selected : null,
-      // The Texts below would each become their own node and the row would be
-      // read as fragments; excluding them keeps it one. Excluding drops the
-      // InkWell's tap action, so it is re-declared here (D83).
+      selected: selected,
+      // The Texts below would each become their own fragment; excluding them
+      // keeps the row one sentence. Excluding drops the InkWell's tap action,
+      // so it is re-declared here (D83).
       excludeSemantics: true,
-      onTap: trailing == null ? onTap : null,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kRadiusThumb),
-          onTap: trailing != null
-              ? null
-              : () {
-                  HapticFeedback.selectionClick();
-                  onTap();
-                },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: AppSpacing.xs,
-            ),
-            child: Row(
+      onTap: onTap,
+      child: content,
+    );
+  }
+
+  Widget _content() {
+    final body = _body();
+    if (trailing != null) {
+      return body;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kRadiusThumb),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: body,
+      ),
+    );
+  }
+
+  Widget _body() {
+    final line = subtitle;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          FriendAvatar(profile: profile, size: kAvatarSizeRow),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                FriendAvatar(profile: profile, size: kAvatarSizeRow),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        profile.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: kTextFontFamily,
-                          fontSize: kFontSizeBody,
-                          fontWeight: FontWeight.w600,
-                          color: kAccentCream,
-                        ),
-                      ),
-                      if (line != null && line.isNotEmpty)
-                        Text(
-                          line,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: kTextFontFamily,
-                            fontSize: kFontSizeSmall,
-                            color: kCreamSecondary,
-                          ),
-                        ),
-                    ],
+                Text(
+                  profile.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: kTextFontFamily,
+                    fontSize: kFontSizeBody,
+                    fontWeight: FontWeight.w600,
+                    color: kAccentCream,
                   ),
                 ),
-                const SizedBox(width: 12),
-                trailing ?? _Check(selected: selected),
+                if (line != null && line.isNotEmpty)
+                  Text(
+                    line,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: kTextFontFamily,
+                      fontSize: kFontSizeSmall,
+                      color: kCreamSecondary,
+                    ),
+                  ),
               ],
             ),
           ),
-        ),
+          const SizedBox(width: 12),
+          trailing ?? _Check(selected: selected),
+        ],
       ),
     );
   }

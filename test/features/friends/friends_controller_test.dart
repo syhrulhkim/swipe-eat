@@ -185,8 +185,7 @@ void main() {
       expect(sent.single, isNot(contains('123456789')));
     });
 
-    test('sending requests for the picked people refreshes the list',
-        () async {
+    test('sending requests for the picked people refreshes the list', () async {
       final repository = FakeFriendsRepository();
       final controller = controllerFor(repository);
       await controller.ensureLoaded();
@@ -238,7 +237,8 @@ void main() {
       expect(controller.nameFor('a'), isNull);
     });
 
-    test('a load in flight when reset lands cannot publish into the next '
+    test(
+        'a load in flight when reset lands cannot publish into the next '
         'account', () async {
       final repository = FakeFriendsRepository(friends: [testFriend('a')]);
       final controller = controllerFor(repository);

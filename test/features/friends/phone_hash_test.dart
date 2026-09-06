@@ -97,7 +97,8 @@ void main() {
       // A mobile and a work number that normalise the same is the ordinary
       // shape of a contacts list, and sending the duplicate tells the server
       // one more thing than it needs.
-      final hashes = hashContacts(['012-345 6789', '+60123456789', '0123456789']);
+      final hashes =
+          hashContacts(['012-345 6789', '+60123456789', '0123456789']);
       expect(hashes, hasLength(1));
     });
 

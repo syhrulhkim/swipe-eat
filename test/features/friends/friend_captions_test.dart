@@ -132,7 +132,8 @@ void main() {
     });
 
     test('the design\'s own line', () {
-      expect(planPeopleLine(guests: 3, confirmed: 2), '3 friends · 2 confirmed');
+      expect(
+          planPeopleLine(guests: 3, confirmed: 2), '3 friends · 2 confirmed');
     });
 
     test('one friend is singular', () {
@@ -143,6 +144,48 @@ void main() {
       // "3 friends · 0 confirmed" reads as a failure; "3 friends" reads as an
       // invitation nobody has answered, which is what it is.
       expect(planPeopleLine(guests: 3, confirmed: 0), '3 friends');
+    });
+  });
+
+  group('planHeadcount', () {
+    test('an empty plan counts nobody', () {
+      final count = planHeadcount(const []);
+      expect(count.guests, 0);
+      expect(count.confirmed, 0);
+      expect(planPeopleLine(guests: count.guests, confirmed: count.confirmed),
+          'Just you');
+    });
+
+    test('somebody who said no is not at the dinner', () {
+      // The bug this exists to stop: counting declines as guests makes a plan
+      // look fuller the more it empties out.
+      final count = planHeadcount(const ['going', 'declined', 'invited']);
+      expect(count.guests, 2);
+      expect(count.confirmed, 1);
+      expect(planPeopleLine(guests: count.guests, confirmed: count.confirmed),
+          '2 friends · 1 confirmed');
+    });
+
+    test('the design\'s own line comes out of real statuses', () {
+      final count =
+          planHeadcount(const ['going', 'going', 'invited', 'declined']);
+      expect(planPeopleLine(guests: count.guests, confirmed: count.confirmed),
+          '3 friends · 2 confirmed');
+    });
+
+    test('everybody declining leaves the owner alone', () {
+      final count = planHeadcount(const ['declined', 'declined']);
+      expect(count.guests, 0);
+      expect(planPeopleLine(guests: count.guests, confirmed: count.confirmed),
+          'Just you');
+    });
+
+    test('a status nobody planned for still counts as coming', () {
+      // A new status added server-side should read as "invited, not answered"
+      // rather than silently vanishing from every plan card.
+      final count = planHeadcount(const ['maybe']);
+      expect(count.guests, 1);
+      expect(count.confirmed, 0);
     });
   });
 

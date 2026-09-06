@@ -98,7 +98,12 @@ String? friendsBiteCaption(List<String> names, {int named = 2}) {
 /// "Just you", "3 friends · 2 confirmed" — the line under a plan card's title,
 /// and the line the invite screen reads back.
 ///
-/// [guests] counts everybody invited; [confirmed] counts the ones who said yes.
+/// [guests] counts the people still coming — anybody who has not declined;
+/// [confirmed] counts the ones who said yes outright. Somebody who said no is
+/// not a friend at that dinner, and counting them would make a plan look
+/// fuller the more it emptied. [planHeadcount] below reads both numbers off a
+/// list of statuses, so no call site counts for itself.
+///
 /// The owner is not a guest on their own plan, which is why one person on a
 /// plan is "Just you" rather than "1 friend".
 ///
@@ -114,6 +119,26 @@ String planPeopleLine({required int guests, required int confirmed}) {
     return friends;
   }
   return '$friends · $confirmed confirmed';
+}
+
+/// The two numbers [planPeopleLine] wants, read off a plan's guest statuses.
+///
+/// One place decides what "coming" means, because the alternative is three
+/// screens each counting slightly differently and a plan that says "3 friends"
+/// on the card and "2 friends" on the page it opens.
+({int guests, int confirmed}) planHeadcount(Iterable<String> statuses) {
+  var guests = 0;
+  var confirmed = 0;
+  for (final status in statuses) {
+    if (status == 'declined') {
+      continue;
+    }
+    guests += 1;
+    if (status == 'going') {
+      confirmed += 1;
+    }
+  }
+  return (guests: guests, confirmed: confirmed);
 }
 
 /// "3 selected" — the invite foot's own count, and the label a screen reader
