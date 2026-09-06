@@ -72,11 +72,15 @@ class WishlistRepository {
   /// from the catalogue here, so the stored title is still a real name and the
   /// row still renders when the restaurant later goes away.
   ///
-  /// Returns null when the place was already on the list. A partial unique
-  /// index cannot be named as an upsert's conflict target over PostgREST
-  /// (Postgres wants the index predicate; PostgREST sends none), so the
-  /// duplicate is caught rather than pre-empted — and 23505 here means
+  /// Returns null when the place was already on the list *and still to go*. A
+  /// partial unique index cannot be named as an upsert's conflict target over
+  /// PostgREST (Postgres wants the index predicate; PostgREST sends none), so
+  /// the duplicate is caught rather than pre-empted — and 23505 here means
   /// "already saved", which is success as far as the user's gesture goes.
+  ///
+  /// One duplicate is not success: a place the user already ticked off. Saying
+  /// "Later" to somewhere you ate months ago is a request to go again, so the
+  /// existing row is put back on the to-go half rather than left crossed out.
   Future<WishlistItem?> addRestaurant(
     int restaurantId, {
     WishlistSource source = WishlistSource.swiped,
@@ -102,10 +106,29 @@ class WishlistRepository {
       return WishlistItem.fromJson(row);
     } on PostgrestException catch (error) {
       if (error.code == '23505') {
-        return null;
+        return _revive(restaurantId);
       }
       rethrow;
     }
+  }
+
+  /// Puts an already-saved place back on the to-go half. Returns the row when
+  /// it had been eaten (so the caller knows the list changed), and null when
+  /// it was already waiting — the caller's gesture landed either way.
+  Future<WishlistItem?> _revive(int restaurantId) async {
+    final rows = await _client
+        .from('wishlist_items')
+        .update({'eaten_at': null})
+        .eq('user_id', _userId)
+        .eq('restaurant_id', restaurantId)
+        .not('eaten_at', 'is', null)
+        .select(_columns)
+        .timeout(_timeout);
+
+    if (rows.isEmpty) {
+      return null;
+    }
+    return WishlistItem.fromJson(rows.first);
   }
 
   /// The catalogue name, or a neutral stand-in when the row is hidden or gone.

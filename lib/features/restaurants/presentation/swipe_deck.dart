@@ -53,6 +53,7 @@ class _SwipeDeckState extends State<SwipeDeck>
       );
   late final bool _ownsController = widget.controller == null;
   StreamSubscription<String>? _messages;
+  StreamSubscription<String>? _likeMessages;
 
   Offset _dragOffset = Offset.zero;
 
@@ -87,6 +88,7 @@ class _SwipeDeckState extends State<SwipeDeck>
   void initState() {
     super.initState();
     _messages = _deck.messages.listen(_showMessage);
+    _likeMessages = _deck.likeMessages.listen(_showMessage);
     if (_ownsController) {
       unawaited(_deck.load());
     }
@@ -95,6 +97,7 @@ class _SwipeDeckState extends State<SwipeDeck>
   @override
   void dispose() {
     unawaited(_messages?.cancel());
+    unawaited(_likeMessages?.cancel());
     _motionController.dispose();
     if (_ownsController) {
       _deck.dispose();

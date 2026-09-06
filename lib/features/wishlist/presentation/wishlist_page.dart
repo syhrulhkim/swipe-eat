@@ -40,14 +40,37 @@ class _WishlistPageState extends State<WishlistPage> {
   /// the route the way its owner expects.
   late final bool _ownsController = widget.controller == null;
 
+  /// The last error already shown, so one failure raises one snackbar rather
+  /// than a fresh one on every rebuild.
+  String? _shownError;
+
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onControllerChanged);
     unawaited(_controller.ensureLoaded());
+  }
+
+  /// A write that failed after the list is on screen has nowhere to be seen —
+  /// the error card only renders before the first load. Say it out loud
+  /// instead, or the tick that snapped back and the row that came back look
+  /// like the app losing track.
+  void _onControllerChanged() {
+    final error = _controller.error;
+    if (error == null) {
+      _shownError = null;
+      return;
+    }
+    if (error == _shownError || !_controller.isLoaded || !mounted) {
+      return;
+    }
+    _shownError = error;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChanged);
     _input.dispose();
     if (_ownsController) {
       _controller.dispose();
@@ -55,13 +78,18 @@ class _WishlistPageState extends State<WishlistPage> {
     super.dispose();
   }
 
-  void _add() {
+  Future<void> _add() async {
     final text = _input.text;
     if (text.trim().isEmpty) {
       return;
     }
-    _input.clear();
-    unawaited(_controller.addManual(text));
+    // The field is cleared only once the row has landed. Clearing first loses
+    // the user's typing on a failed write, which on a bad connection is the
+    // most likely outcome.
+    final added = await _controller.addManual(text);
+    if (added && mounted) {
+      _input.clear();
+    }
   }
 
   Future<void> _share() async {

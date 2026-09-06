@@ -87,6 +87,13 @@ class LikesController extends ChangeNotifier {
   /// rather than later so the filter is real code the day the ids arrive
   /// instead of a screen that has to be rebuilt around them.
   Set<int> _plannedIds = <int>{};
+
+  /// Things worth telling the user about that are not failures of the gesture
+  /// they made. The deck and the Bites tab drain this into a snackbar; nothing
+  /// else depends on it.
+  final StreamController<String> _messages =
+      StreamController<String>.broadcast();
+  Stream<String> get messages => _messages.stream;
   bool _loaded = false;
   Future<void>? _loading;
   StreamSubscription<AuthState>? _authSubscription;
@@ -235,6 +242,12 @@ class LikesController extends ChangeNotifier {
           _laterIds.remove(restaurantId);
           notifyListeners();
         }
+        // The swipe is safe on the server and the card is gone either way, so
+        // the bookmark vanishing without a word would read as the app losing
+        // the gesture. Say which half failed.
+        if (!_messages.isClosed) {
+          _messages.add('Saved the like, not the wishlist.');
+        }
         debugPrint('Saving $restaurantId to the wishlist failed: $error');
       }
     }
@@ -351,6 +364,7 @@ class LikesController extends ChangeNotifier {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    unawaited(_messages.close());
     super.dispose();
   }
 }

@@ -102,9 +102,20 @@ class FakeWishlistRepository implements WishlistRepository {
     if (failWrite) {
       throw Exception('write refused');
     }
-    // The unique index: one row per restaurant per user.
-    if (_rows.any((row) => row.restaurantId == restaurantId)) {
-      return null;
+    // The unique index: one row per restaurant per user. An existing row that
+    // was ticked off comes back to the to-go half, as the real repository's
+    // 23505 branch does.
+    final existing =
+        _rows.where((row) => row.restaurantId == restaurantId).firstOrNull;
+    if (existing != null) {
+      if (existing.eatenAt == null) {
+        return null;
+      }
+      final revived = existing.copyWith(clearEatenAt: true);
+      _rows = [
+        for (final row in _rows) if (row.id == existing.id) revived else row,
+      ];
+      return revived;
     }
     final item = WishlistItem(
       id: _nextId++,

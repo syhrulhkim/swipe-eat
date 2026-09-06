@@ -476,6 +476,35 @@ void main() {
       expect(controller.isSavedForLater(7), isFalse);
     });
 
+    test('a refused wishlist row says which half failed', () async {
+      wishlist.failWrite = true;
+      final said = <String>[];
+      final sub = controller.messages.listen(said.add);
+      addTearDown(sub.cancel);
+
+      await controller.like(7, later: true);
+      await pumpEventQueue();
+
+      expect(said, ['Saved the like, not the wishlist.']);
+    });
+
+    test('saying Later to a place already ticked off puts it back on the list',
+        () async {
+      // Ate there in August; in September it comes round again and the user
+      // swipes up. The row must return to the to-go half, not silently do
+      // nothing.
+      wishlist.seed([
+        testWishlistItem(9, restaurantId: 7, eatenAt: DateTime(2026, 8, 24)),
+      ]);
+      await controller.refresh();
+      expect(controller.isSavedForLater(7), isFalse);
+
+      await controller.like(7, later: true);
+
+      expect(controller.isSavedForLater(7), isTrue);
+      expect(wishlist.rows.single.isEaten, isFalse);
+    });
+
     test('a refused wishlist delete leaves the pass standing', () async {
       await controller.like(7, later: true);
       wishlist.failWrite = true;

@@ -123,17 +123,22 @@ class WishlistController extends ChangeNotifier {
   ///
   /// Blank input is not an error, it is a no-op — the plus button being live
   /// with an empty field is a design choice, not a promise to store nothing.
-  Future<void> addManual(String title) async {
+  /// Returns whether the row landed, so the caller can decide what to do with
+  /// the text the user typed: keeping it on a failure is the difference
+  /// between a retry and retyping.
+  Future<bool> addManual(String title) async {
     final trimmed = title.trim();
     if (trimmed.isEmpty) {
-      return;
+      return false;
     }
     final generation = _generation;
 
     try {
       final item = await _repository.addManual(trimmed);
       if (generation != _generation) {
-        return;
+        // The account changed under the write. The row is on the server for
+        // whoever wrote it, so the text is not worth keeping here.
+        return true;
       }
       if (!_loaded) {
         // The add bar is live in the error state, so a place can be typed
@@ -143,17 +148,19 @@ class WishlistController extends ChangeNotifier {
         // instead — the row is written, and the fetch returns it with the
         // others.
         await refresh();
-        return;
+        return _error == null;
       }
       _items = sortWishlist([item, ..._items]);
       _error = null;
       notifyListeners();
+      return true;
     } on Object catch (error) {
       debugPrint('Wishlist add failed: $error');
       if (generation == _generation) {
         _error = 'Could not add that place.';
         notifyListeners();
       }
+      return false;
     }
   }
 

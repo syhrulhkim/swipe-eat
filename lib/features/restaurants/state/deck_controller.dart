@@ -55,6 +55,11 @@ class DeckController extends ChangeNotifier {
   final SwipeRepository _swipes;
   final ProfileRepository _profiles;
   final LikesController _likes;
+
+  /// The likes controller's own message channel, surfaced here so a screen
+  /// that already listens to this controller hears both without wiring two
+  /// subscriptions to two objects.
+  Stream<String> get likeMessages => _likes.messages;
   final DeckCache _cache;
   final DeckHandoff _handoff;
   final Future<Position> Function() _resolvePosition;

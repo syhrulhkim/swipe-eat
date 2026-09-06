@@ -352,6 +352,35 @@ void main() {
       expect(find.text('Line Clear'), findsOneWidget);
     });
 
+    testWidgets('a refused add keeps the typing and says so', (tester) async {
+      final repository = FakeWishlistRepository();
+      await _pumpPage(tester, repository: repository);
+      repository.failWrite = true;
+
+      await tester.enterText(find.byType(TextField), 'Sup Kambing Haji Samuri');
+      await tester.tap(find.bySemanticsLabel('Add'));
+      await tester.pumpAndSettle();
+
+      // The row did not land, so the words the user typed are still there to
+      // try again with.
+      expect(tester.widget<TextField>(find.byType(TextField)).controller?.text,
+          'Sup Kambing Haji Samuri');
+      expect(find.text('Could not add that place.'), findsOneWidget);
+    });
+
+    testWidgets('a failed toggle says so once the list is up', (tester) async {
+      final repository = FakeWishlistRepository(
+        rows: [testWishlistItem(1, title: 'Alpha')],
+      );
+      await _pumpPage(tester, repository: repository);
+      repository.failWrite = true;
+
+      await tester.tap(find.text('Alpha'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Could not update that place.'), findsOneWidget);
+    });
+
     testWidgets('an empty field files nothing', (tester) async {
       final repository = FakeWishlistRepository();
       await _pumpPage(tester, repository: repository);
