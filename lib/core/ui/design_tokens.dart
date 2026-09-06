@@ -834,8 +834,9 @@ const double kNearbyPinCaptionHeight = 74;
 /// A marker on a map is a fixed box — `flutter_map` is told the height before
 /// the caption is laid out, and the tiles do not reflow. The caption's three
 /// lines plus their gap fit inside [kNearbyPinCaptionHeight] up to about 1.75,
-/// so the pin stops there and the rest of the screen — the stepper, the
-/// results bar, every sheet the map opens — keeps scaling all the way (D73).
+/// so the pin stops short of that and the rest of the screen — the stepper,
+/// the results bar, every sheet the map opens — keeps scaling all the way
+/// (D73).
 const double kNearbyPinMaxTextScale = 1.6;
 
 /// The clear space kept between two pins once they have been pushed apart.
@@ -851,6 +852,47 @@ const double kNearbyPinBiteFraction = 18 / 76;
 
 /// The ember distance badge on a blob's top-right corner.
 const double kNearbyDistanceFontSize = 10;
+
+/// One place in the map's composition: where the design puts a pin, as
+/// fractions of the map area. [x] is the box's leading edge — measured from
+/// the right edge when [fromRight] — and [y] is the box's top, exactly as the
+/// prototype writes them (`left:8%;top:14%`, `right:6%;top:18%`, …). [big]
+/// slots are the two the design draws at [kNearbyPinBigSize] with the ember
+/// ring.
+class NearbyPinSlot {
+  const NearbyPinSlot({
+    required this.x,
+    required this.y,
+    this.fromRight = false,
+    this.big = false,
+  });
+
+  final double x;
+  final double y;
+  final bool fromRight;
+  final bool big;
+}
+
+/// The design's six-pin arrangement, in the prototype's own order. Pins are
+/// laid into these rather than at their raw coordinates, so the map always
+/// reads the way the design does: two big pins on the right-hand diagonal,
+/// the rest fanned around the me-dot, nothing piled on anything.
+const List<NearbyPinSlot> kNearbyPinSlots = [
+  NearbyPinSlot(x: 0.08, y: 0.14),
+  NearbyPinSlot(x: 0.38, y: 0.09, big: true),
+  NearbyPinSlot(x: 0.06, y: 0.18, fromRight: true),
+  NearbyPinSlot(x: 0.12, y: 0.44),
+  NearbyPinSlot(x: 0.08, y: 0.46, fromRight: true, big: true),
+  NearbyPinSlot(x: 0.36, y: 0.60),
+];
+
+/// The zoom the map opens at for the one frame before it is composed: a
+/// neighbourhood, not a continent.
+const double kNearbyInitialZoom = 15;
+
+/// Where the me-dot sits in the composition: dead centre, a touch below the
+/// middle so the pins above it have room to breathe.
+const Offset kNearbyMeDotFraction = Offset(0.5, 0.52);
 
 /// The radius stepper's number and its unit — a display 30 against a 14, the
 /// only place in the app where one word is set at two sizes.

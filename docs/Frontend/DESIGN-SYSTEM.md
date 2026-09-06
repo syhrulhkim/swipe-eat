@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 Cross-references: [STACK.md](STACK.md), [Redesign/NGAP-DESIGN-SYSTEM.md](../Redesign/NGAP-DESIGN-SYSTEM.md), [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md), [General/PLAN.md](../General/PLAN.md)
 
 # Design System
@@ -321,7 +321,10 @@ map speaks the same silhouette as the Bites grid (D79), and an ember distance
 badge (10 px w700 on `kOnAccent`) at the top right. The caption under the blob
 is `kNearbyPinCaptionHeight` (74) tall, and the whole box is kept
 `kNearbyPinGap` (4) clear of every other pin by `spreadPins` (D116). Only the
-nearest five are drawn.
+nearest five are drawn, and they are drawn where the design draws them: the
+six `kNearbyPinSlots` (two of them big) as fractions of the map area, the
+me-dot at `kNearbyMeDotFraction` (50%, 52%). The map opens at
+`kNearbyInitialZoom` (15) for the one frame before it is composed.
 
 The pin is the one place in the app whose type does **not** follow the system
 text size all the way: `flutter_map` is told a marker's height before its
