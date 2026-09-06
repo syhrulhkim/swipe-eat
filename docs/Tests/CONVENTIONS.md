@@ -88,7 +88,7 @@ test/
 |---|---|
 | `DeckController` | The most complex controller in the app — `_loadGeneration` sequencing, the optimistic-write/rewind race, the daily limit's unknown-count branch. `deck_ranker_test` covers the algorithm, not the orchestration |
 | `SwipeDeck` widget | Gesture thresholds (110 / −140 / `\|dx\|`), motion, the match moment |
-| `ExploreController`, `VisitPromptController` | No tests |
+| `VisitPromptController` | No tests |
 | `ProfileRepository` | A fake exists; nothing exercises the real one |
 | `TikTokPlayerCache` | The bound-at-5 eviction rule and "the watched player is never evicted" (D39) are asserted only by reasoning |
 | Edge functions | No Deno test suite for `delete-account`, `legal`, `refresh-thumbnails` |

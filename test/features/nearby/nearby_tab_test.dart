@@ -21,6 +21,9 @@ import 'fake_nearby_repository.dart';
 const _phone = Size(390, 844);
 const _narrow = Size(320, 640);
 
+/// The accessibility setting every layout has to survive intact (D73).
+const double _hugeTextScale = 2.0;
+
 const _user = AppUser(
   id: 'user-1',
   name: 'Aisyah',
@@ -73,8 +76,16 @@ void main() {
     WidgetTester tester, {
     Size viewport = _phone,
     bool realFix = true,
+    double? textScale,
   }) async {
     useViewport(tester, viewport);
+    if (textScale != null) {
+      // Set on the view, not in a MediaQuery above the app: WidgetsApp builds
+      // its own MediaQuery from the view and would overwrite one wrapped
+      // around it.
+      tester.platformDispatcher.textScaleFactorTestValue = textScale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    }
     final controller = buildController(realFix: realFix);
     await controller.load();
 
@@ -369,6 +380,24 @@ void main() {
       expect(handoff.restaurants.map((row) => row.id).toList(), [1, 2, 3]);
       expect(handoff.label, 'Nearby · 3 places');
     });
+
+    testWidgets('the button counts only what the deck has not shown yet',
+        (tester) async {
+      repository.rows = [
+        testPlace(1, name: 'Seen', distanceKm: 0.2, swiped: true),
+        testPlace(2, name: 'New', distanceKm: 0.4, latitude: 1.4670),
+      ];
+      await pumpTab(tester);
+
+      // Both pins are drawn: the map says what is there (D117).
+      expect(find.byType(NearbyPin), findsNWidgets(2));
+      expect(find.text('Swipe all 1'), findsOneWidget);
+
+      await tester.tap(find.text('Swipe all 1'));
+      await tester.pump();
+
+      expect(handoff.restaurants.map((row) => row.id).toList(), [2]);
+    });
   });
 
   group('NearbyTab layout', () {
@@ -378,6 +407,34 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Swipe all 3'), findsOneWidget);
+    });
+
+    testWidgets('a pin does not overflow its marker box at a huge text scale',
+        (tester) async {
+      seedThreePlaces();
+      await pumpTab(tester, textScale: _hugeTextScale);
+
+      // A marker's height is fixed before its caption is laid out, so the pin
+      // clamps its own text scale rather than growing past the box.
+      expect(tester.takeException(), isNull);
+      expect(find.byType(NearbyPin), findsNWidgets(3));
+      for (final pin in find.byType(NearbyPin).evaluate()) {
+        final box = pin.renderObject! as RenderBox;
+        expect(
+          box.size.height,
+          NearbyPin.heightFor(size: (pin.widget as NearbyPin).size),
+        );
+      }
+    });
+
+    testWidgets('the map\'s furniture still lays out at a huge text scale',
+        (tester) async {
+      seedThreePlaces();
+      await pumpTab(tester, viewport: _narrow, textScale: _hugeTextScale);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Swipe all 3'), findsOneWidget);
+      expect(find.text('Away from you'), findsOneWidget);
     });
 
     testWidgets('a long result count still fits the narrow bar',

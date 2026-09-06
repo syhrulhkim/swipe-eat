@@ -8,6 +8,7 @@ import '../../../core/ui/design_tokens.dart';
 import '../../auth/models/app_user.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../restaurants/domain/opening_hours.dart';
 import '../../restaurants/models/restaurant.dart';
 import '../../restaurants/state/deck_handoff.dart';
 import '../data/nearby_repository.dart';
@@ -42,7 +43,7 @@ class NearbyController extends ChangeNotifier {
         _profiles = profiles ?? ProfileRepository(),
         _handoff = handoff ?? DeckHandoff.instance,
         _resolvePosition = resolvePosition ?? resolveUserPosition,
-        _now = now ?? DateTime.now {
+        _now = now ?? OpeningHours.kualaLumpurNow {
     _radiusKm = _initialRadiusKm(authController.user);
     _appliedFilterSignature = _filterSignature(authController.user);
     authController.addListener(_onAuthChanged);
@@ -55,8 +56,11 @@ class NearbyController extends ChangeNotifier {
   final Future<Position> Function() _resolvePosition;
   final DateTime Function() _now;
 
-  /// The clock the open lines are read against. Injected so "closing within
-  /// the hour" is a one-line test rather than a wait.
+  /// The clock the open lines are read against — Kuala Lumpur time, the zone
+  /// the catalogue's hours are written in and the one the server's
+  /// `is_open_at` evaluates in, so a pin and the "Open now" count can never
+  /// disagree for a user roaming abroad. Injected so "closing within the hour"
+  /// is a one-line test rather than a wait.
   DateTime get now => _now();
 
   static double _initialRadiusKm(AppUser? user) {
@@ -67,9 +71,13 @@ class NearbyController extends ChangeNotifier {
     return nearestNearbyRadiusStep(stored.toDouble());
   }
 
-  /// Only the discovery filters. The radius is the stepper's, not the
-  /// profile's, once the screen is open — the map would jump under the user's
-  /// finger if Settings could move it.
+  /// Every server-side rule the map's query obeys except the radius. The
+  /// radius is the stepper's, not the profile's, once the user has touched it
+  /// — the map would jump under their finger if Settings could move it.
+  ///
+  /// The diet and budget answers belong here because `get_nearby` applies them
+  /// as hard rules (D105): a place the user cannot eat at is a wrong pin, not
+  /// a worse one, so turning one on has to refetch.
   static String _filterSignature(AppUser? user) {
     if (user == null) {
       return '';
@@ -78,12 +86,20 @@ class NearbyController extends ChangeNotifier {
       user.filterMinRating,
       user.filterCuisineIds.join(','),
       user.filterDietaryTagIds.join(','),
+      user.halalOnly,
+      user.vegetarian,
+      user.budgetMax,
     ].join('|');
   }
 
   String? _appliedFilterSignature;
 
   double _radiusKm = kNearbyDefaultRadiusKm;
+
+  /// True once the stepper has moved the circle. Until then the circle is only
+  /// a default the controller guessed at, and a profile that hydrates later is
+  /// allowed to replace it — see [_onAuthChanged].
+  bool _radiusTouched = false;
 
   /// How wide the circle is, in kilometres. Always one of
   /// [kNearbyRadiusSteps].
@@ -94,8 +110,9 @@ class NearbyController extends ChangeNotifier {
 
   NearbyOrigin? _origin;
 
-  /// Where the map is centred and what the query measured from: the device
-  /// fix when there is one, else the coordinates the profile stored.
+  /// Where the map is centred and what the query measured from: the passport
+  /// pin when one is set, else the device fix, else the coordinates the
+  /// profile stored.
   NearbyOrigin? get origin => _origin;
 
   List<NearbyPlace> _places = const [];
@@ -161,22 +178,58 @@ class NearbyController extends ChangeNotifier {
   /// big one.
   int _loadGeneration = 0;
 
+  bool _disposed = false;
+
+  /// True when [generation] no longer speaks for this controller: a newer load
+  /// has started, or the controller is gone. Either way the run that asks must
+  /// return without notifying — a notification after dispose throws, and a
+  /// stale one paints the wrong circle.
+  bool _isStale(int generation) =>
+      _disposed || generation != _loadGeneration;
+
   @override
   void dispose() {
+    _disposed = true;
+    // Anything still awaiting belongs to a generation that no longer exists,
+    // so it goes quiet instead of notifying a disposed notifier.
+    _loadGeneration += 1;
     authController.removeListener(_onAuthChanged);
     super.dispose();
   }
 
   void _onAuthChanged() {
-    final signature = _filterSignature(authController.user);
-    if (signature == _appliedFilterSignature) {
+    final user = authController.user;
+    var refetch = false;
+
+    // The tab can be built before the profile has hydrated, in which case the
+    // map opened on the default circle rather than the user's. Adopt theirs
+    // when it arrives — but never once the stepper has been touched: a circle
+    // the thumb set is the user's answer, and Settings must not overrule it.
+    if (!_radiusTouched) {
+      final adopted = _initialRadiusKm(user);
+      if (adopted != _radiusKm) {
+        _radiusKm = adopted;
+        refetch = true;
+      }
+    }
+
+    final signature = _filterSignature(user);
+    if (signature != _appliedFilterSignature) {
+      _appliedFilterSignature = signature;
+      refetch = true;
+    }
+
+    if (!refetch) {
       return;
     }
-    _appliedFilterSignature = signature;
+    notifyListeners();
     unawaited(load());
   }
 
   Future<void> load() async {
+    if (_disposed) {
+      return;
+    }
     final generation = ++_loadGeneration;
     _loading = true;
     _error = null;
@@ -184,7 +237,7 @@ class NearbyController extends ChangeNotifier {
 
     try {
       final origin = await _resolveOrigin();
-      if (generation != _loadGeneration) {
+      if (_isStale(generation)) {
         return;
       }
 
@@ -206,7 +259,7 @@ class NearbyController extends ChangeNotifier {
         radiusKm: _radiusKm,
         limit: kNearbyFetchLimit,
       );
-      if (generation != _loadGeneration) {
+      if (_isStale(generation)) {
         return;
       }
 
@@ -215,7 +268,7 @@ class NearbyController extends ChangeNotifier {
       notifyListeners();
     } on Object catch (error) {
       debugPrint('Nearby load failed: $error');
-      if (generation != _loadGeneration) {
+      if (_isStale(generation)) {
         return;
       }
       _places = const [];
@@ -225,10 +278,23 @@ class NearbyController extends ChangeNotifier {
     }
   }
 
-  /// The device fix, or the coordinates the profile stored for an account that
-  /// has never granted location on this device. Null means neither exists,
-  /// which is the empty state.
+  /// The passport pin, else the device fix, else the coordinates the profile
+  /// stored for an account that has never granted location on this device.
+  /// Null means none of the three exists, which is the empty state.
+  ///
+  /// The passport is resolved *here* rather than inside `get_nearby`, unlike
+  /// `deck_scored` (D12): the client draws the me-dot and fits the camera to
+  /// this origin, so an RPC that quietly swapped in a different one would
+  /// measure every distance from a place the map is not showing.
   Future<NearbyOrigin?> _resolveOrigin() async {
+    final profile = await _profileOrigins();
+
+    // A pin the user dropped on purpose beats a fix they never chose.
+    final passport = profile.passport;
+    if (passport != null) {
+      return passport;
+    }
+
     final position = await _resolvePosition();
     if (!isFallbackUserPosition(position)) {
       return NearbyOrigin(position.latitude, position.longitude);
@@ -236,11 +302,18 @@ class NearbyController extends ChangeNotifier {
 
     // A fallback is not a fix — centring on it would put the user in a town
     // they have never been to and call it "away from you".
+    return profile.stored;
+  }
+
+  /// The profile's two coordinate pairs. A read that fails is not an error the
+  /// map shows: the device fix is still worth trying, and with no fix either
+  /// the empty state already says the right thing.
+  Future<NearbyProfileOrigins> _profileOrigins() async {
     try {
-      return await _repository.storedOrigin();
+      return await _repository.profileOrigins();
     } on Object catch (error) {
-      debugPrint('Nearby stored origin failed: $error');
-      return null;
+      debugPrint('Nearby profile origins failed: $error');
+      return NearbyProfileOrigins.none;
     }
   }
 
@@ -265,6 +338,9 @@ class NearbyController extends ChangeNotifier {
   /// Sets the radius directly. Never written to the profile: the stepper is a
   /// way of looking around, not a setting — Settings owns `search_radius_km`.
   Future<void> setRadiusKm(double km) {
+    // Touched even when the circle does not move: the user has answered the
+    // question, and a profile arriving late must not overrule the answer.
+    _radiusTouched = true;
     if (km == _radiusKm) {
       return Future<void>.value();
     }
@@ -273,16 +349,31 @@ class NearbyController extends ChangeNotifier {
     return load();
   }
 
-  /// "Swipe all N": hands every result to the deck. The dashboard listens to
-  /// the same hand-off and brings the deck forward.
+  /// The results "Swipe all" would actually deal: everything in the circle the
+  /// user has not already swiped.
+  ///
+  /// The pins keep showing all of them — the map's job is to say what is
+  /// there. Not repeating itself is the deck's job, and a hand-off of cards it
+  /// has already shown would read as the app forgetting (D117).
+  List<NearbyPlace> get unswiped => [
+        for (final place in _places)
+          if (!place.swiped) place,
+      ];
+
+  /// The number the bar's button carries. Zero when everything around the user
+  /// is already swiped, which disables it rather than dealing an empty deck.
+  int get swipeAllCount => unswiped.length;
+
+  /// "Swipe all N": hands the unswiped results to the deck. The dashboard
+  /// listens to the same hand-off and brings the deck forward.
   void swipeAll() {
-    if (_places.isEmpty) {
+    final restaurants = <Restaurant>[
+      for (final place in _places)
+        if (!place.swiped) place.restaurant,
+    ];
+    if (restaurants.isEmpty) {
       return;
     }
-
-    final restaurants = <Restaurant>[
-      for (final place in _places) place.restaurant,
-    ];
     _handoff.handOff(
       restaurants,
       label: 'Nearby · ${restaurants.length} '
