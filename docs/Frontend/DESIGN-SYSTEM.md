@@ -441,6 +441,46 @@ follow, so the crossing-off reads as something the tap did rather than a state
 the row was always in. The photo desaturates and fades to 50 % on the same
 tap, and the row re-sorts to the bottom.
 
+## 7j. The restaurant screen's three shapes
+
+Added 2026-09-06 with S3 — see
+[Features/Restaurant-Detail.md](../Features/Restaurant-Detail.md).
+
+### The hero title block
+
+The bottom-left stack on any full-bleed restaurant hero: tag chips, the name,
+one meta line. It differs from the deck card's block in exactly two ways, both
+because the detail screen shows **one** restaurant rather than a stack — the
+name is `kFontSizeDetailTitle` (36 px, w700) instead of 34/w800, and the chips
+take `kFillTitleTag` (`rgba(0,0,0,.3)`) instead of `kFillTag`'s white veil,
+because they sit on the deep end of a scrim where a light fill reads as fog.
+
+`AppTitleTagChip` is that chip: 11 px, pill, 26 px **minimum** height — a
+minimum and not a fixed height, so the chip grows at a large text scale rather
+than clipping its label.
+
+### Fact tiles
+
+`kSurfaceDark`, hairline, `kRadiusPanel`, 12 pt padding, a display-face value
+(`appFactValueStyle`, 17/700) over a micro caption (`appFactCaptionStyle`).
+Laid out as equal-width `Expanded` cells inside an `IntrinsicHeight` row, so
+tiles share a height even when one caption wraps.
+
+Two rules the value carries:
+
+- It **never wraps** — the design's `white-space:nowrap`. At a large text
+  scale it shrinks inside a `FittedBox` instead, because a third of a 320 pt
+  row is not wide enough for "From RM 19" at 2×.
+- A tile with no answer is **removed, not blanked** (D111). The row re-flows
+  and the remaining tiles widen.
+
+### Dish rows
+
+A 40 px `kRadiusWishThumb` thumb, the name at body weight 600, the description
+in `kTextOnPhotoSecondary`, and the price right-aligned in `appRowTitleStyle` —
+the same display 16/700 a wishlist row's title uses, because it is the same
+object at the same size. A hairline under every row but the last.
+
 ## 8. Testing
 
 `test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the

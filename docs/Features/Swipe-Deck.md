@@ -193,7 +193,8 @@ same surface as the card in front. The tap-to-expand panel, the `details`
 paragraph and the review carousel are gone from the card — with 6 reviews across
 1,607 rows the carousel was empty on almost every card, and its pan-gesture lock
 (the carousel had to block the deck's own drag) went with it. Details live on
-the detail screen.
+the detail screen — [Restaurant-Detail.md](Restaurant-Detail.md), built
+2026-09-06.
 
 Where the facts come from: [Restaurant-Data.md §2a](Restaurant-Data.md) — the
 opening span, the lowest price, halal and the neighbourhood are parsed once

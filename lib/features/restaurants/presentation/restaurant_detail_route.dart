@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/app_spacing.dart';
@@ -88,7 +90,9 @@ class _RestaurantDetailRouteState extends State<RestaurantDetailRoute> {
   Widget build(BuildContext context) {
     final data = _data;
     if (data != null) {
-      return RestaurantDetailPage(data: data);
+      // The page reads its ngap count through the same repository the route
+      // loaded the row with, so a test wires one fake and gets both.
+      return RestaurantDetailPage(data: data, repository: _repository);
     }
 
     if (_loading) {
@@ -117,7 +121,10 @@ class _RestaurantDetailRouteState extends State<RestaurantDetailRoute> {
   }
 }
 
-/// The page's chrome without the page: the same dark ground and a way back.
+/// The page's shape without the page: the hero's block of surface where the
+/// clip will be, the message below it, and the same floating back button in
+/// the same corner — so arriving at a row that will not load does not look
+/// like arriving at a different screen.
 class _DetailPlaceholder extends StatelessWidget {
   const _DetailPlaceholder({required this.child});
 
@@ -125,14 +132,30 @@ class _DetailPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final heroHeight = math.max(
+      kDetailHeroMinHeight,
+      MediaQuery.sizeOf(context).height * kDetailHeroFraction,
+    );
+
     return Scaffold(
       backgroundColor: kBackgroundDark,
       body: Stack(
         children: [
-          Positioned.fill(child: child),
+          Column(
+            children: [
+              SizedBox(
+                height: heroHeight,
+                child: const ColoredBox(
+                  color: kSurfaceDark,
+                  child: SizedBox.expand(),
+                ),
+              ),
+              Expanded(child: child),
+            ],
+          ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
+              padding: const EdgeInsets.fromLTRB(20, AppSpacing.sm, 20, 0),
               child: Align(
                 alignment: Alignment.topLeft,
                 child: AppIconButton(

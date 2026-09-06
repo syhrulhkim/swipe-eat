@@ -1,35 +1,39 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/ui/tiktok_thumbnail_placeholder.dart';
+import 'package:swipe_eat/features/restaurants/data/tiktok_player_factory.dart';
+import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
+import 'package:swipe_eat/features/restaurants/models/dish.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant_detail_data.dart';
+import 'package:swipe_eat/features/restaurants/presentation/detail/dish_list.dart';
+import 'package:swipe_eat/features/restaurants/presentation/detail/facts_strip.dart';
+import 'package:swipe_eat/features/restaurants/presentation/detail/friends_bite_row.dart';
 import 'package:swipe_eat/features/restaurants/presentation/restaurant_detail_page.dart';
+import 'package:swipe_eat/features/restaurants/presentation/restaurant_detail_route.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
+import 'package:swipe_eat/features/wishlist/state/wishlist_controller.dart';
 
 import '../../support/widget_test_support.dart';
 import '../restaurants/fake_restaurant_repositories.dart';
-
-/// The accent used for active/selected state.
-const Color _kAccent = kAccentEmber;
-
-/// The icon colour of an unlit control — [AppIconButton]'s default. Asserted
-/// through the token rather than as a literal, so a retint does not fail a test
-/// that is really about lit-vs-unlit.
-const Color _kUnlit = kTextOnPhoto;
+import '../wishlist/fake_wishlist_repository.dart';
 
 /// Peserai, Batu Pahat — the same origin the production fallback uses, so a
-/// restaurant placed on these coordinates is "0 m away".
+/// restaurant placed on these coordinates is "0 m" away.
 const double _userLat = 1.85;
 const double _userLng = 102.933333;
 
+/// The id every [_detailData] carries, so like assertions can name it.
+const int _detailRestaurantId = 7;
+
 /// Stands in for the geolocator plugin, which is not registered under
-/// `flutter test`. Swapping the platform interface (rather than the raw method
-/// channel) keeps the fake independent of which federated implementation the
-/// host platform would pick.
+/// `flutter test`.
 class _FakeGeolocatorPlatform extends GeolocatorPlatform {
   _FakeGeolocatorPlatform(this.position);
 
@@ -47,8 +51,9 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform {
       LocationPermission.whileInUse;
 
   @override
-  Future<Position> getCurrentPosition(
-          {LocationSettings? locationSettings}) async =>
+  Future<Position> getCurrentPosition({
+    LocationSettings? locationSettings,
+  }) async =>
       position;
 
   @override
@@ -73,29 +78,33 @@ Position _fixedPosition() {
   );
 }
 
-/// The id every [_detailData] carries, so like assertions can name it.
-const int _detailRestaurantId = 7;
-
-/// The fake backend behind [LikesController.instance] for the current test.
 late FakeRestaurantRepository _restaurants;
 late FakeSwipeRepository _swipes;
+late FakeWishlistRepository _wishlistBacking;
+late WishlistController _wishlist;
 
 /// Seeds the backend as if an earlier session had liked [ids].
 void _seedLikes(List<int> ids) {
   _restaurants.likedRows = [for (final id in ids) testRestaurant(id)];
 }
 
+/// A clip that never arrives, so no test ever starts a real WebView.
+Future<TikTokPlayerHandle> _stalledPlayer() =>
+    Completer<TikTokPlayerHandle>().future;
+
 RestaurantDetailData _detailData({
   String title = 'Warung Ayam Bakar',
   String tag = 'Grilled chicken',
-  String details = 'A tiny shophouse stall with a very big charcoal grill.',
-  double rating = 0,
+  String details = '',
   double latitude = _userLat,
   double longitude = _userLng,
-  String reviewName = 'Aisyah',
-  String reviewText = 'The sambal alone is worth the drive.',
   List<String> imageUrls = const [],
   String? videoUrl,
+  OpeningHours hours = OpeningHours.unknown,
+  int? priceFrom,
+  bool? isHalal,
+  String? neighbourhood,
+  List<Dish> dishes = const [],
 }) {
   return RestaurantDetailData(
     id: _detailRestaurantId,
@@ -103,53 +112,85 @@ RestaurantDetailData _detailData({
     tag: tag,
     details: details,
     color: kBrandColorFallback,
-    rating: rating,
+    rating: 0,
     latitude: latitude,
     longitude: longitude,
-    reviewName: reviewName,
-    reviewText: reviewText,
+    reviewName: '',
+    reviewText: '',
     imageUrls: imageUrls,
     videoUrl: videoUrl,
+    hours: hours,
+    priceFrom: priceFrom,
+    isHalal: isHalal,
+    neighbourhood: neighbourhood,
+    dishes: dishes,
   );
 }
 
-List<String> _images(int count) {
-  return List<String>.generate(
-    count,
-    (index) => 'https://example.com/photo-$index.jpg',
-  );
-}
+/// Opens 17:30, closes 02:00 — the design's "open till 2 am".
+const OpeningHours _lateNight = OpeningHours(
+  opensAtMinutes: 17 * 60 + 30,
+  closesAtMinutes: 2 * 60,
+);
+
+/// Where the pushed `/plans/new` route reports what it was handed.
+Object? _lastPlansExtra;
 
 Future<void> _pumpDetailPage(
   WidgetTester tester,
-  RestaurantDetailData data,
-) async {
+  RestaurantDetailData data, {
+  DateTime Function()? clock,
+  double textScale = 1.0,
+}) async {
+  _lastPlansExtra = null;
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => RestaurantDetailPage(
+          data: data,
+          repository: _restaurants,
+          wishlist: _wishlist,
+          tiktokPlayerFuture: _stalledPlayer(),
+          clock: clock ?? OpeningHours.kualaLumpurNow,
+        ),
+      ),
+      GoRoute(
+        path: '/plans/new',
+        builder: (context, state) {
+          _lastPlansExtra = state.extra;
+          return const Scaffold(body: Center(child: Text('plans-new')));
+        },
+      ),
+    ],
+  );
+
   await tester.pumpWidget(
-    MaterialApp(home: RestaurantDetailPage(data: data)),
+    MaterialApp.router(
+      routerConfig: router,
+      // The scaler has to be applied below MaterialApp: its own
+      // MediaQuery.fromView would otherwise overwrite an ancestor's data.
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+    ),
   );
-  await tester.pumpAndSettle();
+  await _settle(tester, hasVideo: data.videoUrl != null);
 }
 
-/// The thumbnails inside the photo-switcher pill.
-Finder _stripThumbnails() {
-  return find.descendant(
-    of: find.byType(HeroThumbnailStrip),
-    matching: find.byType(Image),
-  );
-}
-
-/// The selection-ring colour of the nth strip thumbnail.
-Color _ringColor(WidgetTester tester, int index) {
-  final container = tester.widget<Container>(
-    find
-        .ancestor(
-          of: _stripThumbnails().at(index),
-          matching: find.byType(Container),
-        )
-        .first,
-  );
-  final decoration = container.decoration! as BoxDecoration;
-  return (decoration.border! as Border).top.color;
+/// Never `pumpAndSettle` with a clip on screen: the player future is the one
+/// that never completes, so its spinner turns forever. Fixed pumps instead,
+/// enough of them to let the position, the ngap count and the wishlist land.
+Future<void> _settle(WidgetTester tester, {required bool hasVideo}) async {
+  if (!hasVideo) {
+    await tester.pumpAndSettle();
+    return;
+  }
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 60));
+  }
 }
 
 void main() {
@@ -158,13 +199,12 @@ void main() {
     HttpOverrides.global = ImageHttpOverrides();
   });
 
+  tearDownAll(() => HttpOverrides.global = null);
+
   setUp(() {
     // resolveUserPosition() caches for the app session; a future cached in an
-    // earlier test belongs to that test's (dead) fake-async zone and would
-    // never deliver here.
+    // earlier test belongs to that test's (dead) fake-async zone.
     resetUserPositionCache();
-    // The like button writes through LikesController.instance, a singleton:
-    // give every test its own controller over a fresh fake backend.
     _restaurants = FakeRestaurantRepository();
     _swipes = FakeSwipeRepository();
     wireFakeBackend(_restaurants, _swipes);
@@ -173,559 +213,432 @@ void main() {
       swipes: _swipes,
       followAuthChanges: false,
     ));
+    _wishlistBacking = FakeWishlistRepository();
+    _wishlist = WishlistController(repository: _wishlistBacking);
   });
 
-  group('RestaurantDetailData.fromPayload', () {
-    test('round-trips every field', () {
-      final data = RestaurantDetailData.fromPayload({
-        'id': 12,
-        'title': 'Kopitiam Lama',
-        'tag': 'Coffee',
-        'details': 'Old-school kopi.',
-        'color': 0xFF123456,
-        'rating': 4.25,
-        'latitude': 1.5,
-        'longitude': 103.1,
-        'reviewName': 'Ben',
-        'reviewText': 'Strong kopi o.',
-        'imageUrls': ['https://example.com/a.jpg'],
-        'videoUrl': 'https://www.tiktok.com/@johorfoodie/video/12345',
-      });
+  tearDown(() => _wishlist.dispose());
 
-      expect(data.id, 12);
-      expect(data.title, 'Kopitiam Lama');
-      expect(data.tag, 'Coffee');
-      expect(data.details, 'Old-school kopi.');
-      expect(data.color, const Color(0xFF123456));
-      expect(data.rating, 4.25);
-      expect(data.latitude, 1.5);
-      expect(data.longitude, 103.1);
-      expect(data.reviewName, 'Ben');
-      expect(data.reviewText, 'Strong kopi o.');
-      expect(data.imageUrls, ['https://example.com/a.jpg']);
-      expect(data.videoUrl, 'https://www.tiktok.com/@johorfoodie/video/12345');
-    });
-
-    test('falls back to safe defaults for an empty payload', () {
-      final data = RestaurantDetailData.fromPayload(const {});
-
-      expect(data.id, 0);
-      expect(data.title, 'Restaurant');
-      expect(data.tag, isEmpty);
-      expect(data.details, isEmpty);
-      expect(data.color, kBrandColorFallback);
-      expect(data.rating, 0);
-      expect(data.latitude, 0);
-      expect(data.longitude, 0);
-      expect(data.imageUrls, isEmpty);
-      expect(data.videoUrl, isNull);
-    });
-
-    test('stringifies non-string image URL entries', () {
-      final data = RestaurantDetailData.fromPayload(const {
-        'imageUrls': ['https://example.com/a.jpg', 42],
-      });
-
-      expect(data.imageUrls, ['https://example.com/a.jpg', '42']);
-    });
-  });
-
-  group('RestaurantDetailPage title', () {
-    testWidgets('omits the rating dash when the rating is 0', (tester) async {
+  group('hero', () {
+    testWidgets('shows the TikTok placeholder when there is no media',
+        (tester) async {
       useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(rating: 0));
+      await _pumpDetailPage(tester, _detailData());
 
-      // The whole heading is one Text.rich; with no rating it is just the name.
-      expect(find.text('Warung Ayam Bakar'), findsOneWidget);
-      expect(find.textContaining('–'), findsNothing);
+      expect(find.byType(TikTokThumbnailPlaceholder), findsOneWidget);
     });
 
-    testWidgets('appends the rating when it is above 0', (tester) async {
+    testWidgets('renders the first photo as the hero', (tester) async {
       useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(rating: 4.5));
+      await _pumpDetailPage(
+        tester,
+        _detailData(imageUrls: const [
+          'https://example.com/a.jpg',
+          'https://example.com/b.jpg',
+        ]),
+      );
 
-      expect(find.text('Warung Ayam Bakar  4.5'), findsOneWidget);
-      expect(find.text('Warung Ayam Bakar'), findsNothing);
-      // ...and the rating also shows as its own column in the facts strip.
-      expect(find.text('Rating'), findsOneWidget);
-      expect(find.text('4.5'), findsOneWidget);
+      expect(find.byType(TikTokThumbnailPlaceholder), findsNothing);
+      expect(find.byType(Image), findsOneWidget);
     });
 
-    testWidgets('drops the rating stat when the rating is 0', (tester) async {
+    testWidgets('says the clip is muted and where sound lives', (tester) async {
       useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(rating: 0));
+      await _pumpDetailPage(
+        tester,
+        _detailData(videoUrl: 'https://www.tiktok.com/@kl/video/12345'),
+      );
 
-      // An empty column would read as a missing answer rather than as a place
-      // nobody has rated yet.
-      expect(find.text('Rating'), findsNothing);
-      expect(find.text('Distance'), findsOneWidget);
+      // Not "tap to unmute": the tap opens the player that can, it does not
+      // unmute in place (D4/D89).
+      expect(find.text('Tap for sound'), findsOneWidget);
+    });
+
+    testWidgets('no clip means no muted hint', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.text('Tap for sound'), findsNothing);
+    });
+
+    testWidgets('a tap on the hero opens the fullscreen player',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(
+        tester,
+        _detailData(videoUrl: 'https://www.tiktok.com/@kl/video/12345'),
+      );
+
+      await tester.tap(find.bySemanticsLabel('Watch TikTok review'));
+      await _settle(tester, hasVideo: true);
+
+      expect(find.bySemanticsLabel('Close player'), findsOneWidget);
+    });
+
+    testWidgets('a restaurant with no clip has nothing to open',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.bySemanticsLabel('Watch TikTok review'), findsNothing);
+    });
+
+    testWidgets('carries the bite only once the place is liked',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      BiteNotch notch() => tester.widget<BiteNotch>(find.byType(BiteNotch));
+      expect(notch().bitten, isFalse);
+
+      await LikesController.instance.like(_detailRestaurantId);
+      await tester.pumpAndSettle();
+
+      expect(notch().bitten, isTrue);
     });
   });
 
-  group('RestaurantDetailPage hero', () {
-    testWidgets('shows the TikTok placeholder when there are no photos',
+  group('title block', () {
+    testWidgets('shows the cuisine and the halal chip', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(isHalal: true));
+
+      expect(find.text('Grilled chicken'), findsOneWidget);
+      expect(find.text('Halal'), findsOneWidget);
+    });
+
+    testWidgets('sits the chips side by side, each only as wide as its word',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(isHalal: true));
+
+      // A chip that takes the width it is offered would stack one per line.
+      final cuisine = tester.getRect(find.text('Grilled chicken'));
+      final halal = tester.getRect(find.text('Halal'));
+      expect(cuisine.top, halal.top, reason: 'the chips share one row');
+      expect(halal.left, greaterThan(cuisine.right));
+      // Each chip is the width of its own word: two chips offered the same
+      // width would measure the same.
+      expect(halal.width, lessThan(cuisine.width));
+    });
+
+    testWidgets('omits the halal chip when the caption never said so',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(isHalal: null));
+
+      expect(find.text('Halal'), findsNothing);
+    });
+
+    testWidgets('joins neighbourhood, distance and the open state',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(
+        tester,
+        _detailData(neighbourhood: 'Kampung Baru', hours: _lateNight),
+        clock: () => DateTime(2026, 9, 7, 19, 41),
+      );
+
+      expect(find.text('Kampung Baru · 0 m · open till 2 am'), findsOneWidget);
+    });
+
+    testWidgets('lower-cases "opens" before it has opened', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(
+        tester,
+        _detailData(neighbourhood: 'Masai', hours: _lateNight),
+        clock: () => DateTime(2026, 9, 7, 9, 0),
+      );
+
+      expect(find.text('Masai · 0 m · opens 5:30 pm'), findsOneWidget);
+    });
+
+    testWidgets('lower-cases "closed today" on a closed weekday',
         (tester) async {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(
         tester,
         _detailData(
-          videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
+          hours: const OpeningHours(
+            opensAtMinutes: 8 * 60,
+            closesAtMinutes: 17 * 60,
+            closedWeekdays: {DateTime.monday},
+          ),
         ),
+        clock: () => DateTime(2026, 9, 7, 12, 0),
       );
 
-      // Only the hero: the "More photos" card is skipped with no images.
-      expect(find.byType(TikTokThumbnailPlaceholder), findsOneWidget);
-      expect(find.text('@johorfoodie'), findsOneWidget);
-      expect(find.byType(Image), findsNothing);
+      expect(find.textContaining('closed today'), findsOneWidget);
     });
 
-    testWidgets('renders the first photo as the hero', (tester) async {
+    testWidgets('drops every part it cannot answer', (tester) async {
       useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(3)));
+      // No neighbourhood, no coordinates, no hours: nothing but the name.
+      await _pumpDetailPage(
+        tester,
+        _detailData(latitude: 0, longitude: 0),
+      );
 
+      expect(find.text('Warung Ayam Bakar'), findsOneWidget);
+      expect(find.textContaining('·'), findsNothing);
+    });
+  });
+
+  group('facts strip', () {
+    testWidgets('hides the strip when nothing is known', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.byType(FactsStrip), findsNothing);
+    });
+
+    testWidgets('shows the cheapest dish as the price fact', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(priceFrom: 19));
+
+      expect(find.text('From RM 19'), findsOneWidget);
+      expect(find.text('cheapest dish'), findsOneWidget);
+    });
+
+    testWidgets('groups the ngap count in thousands', (tester) async {
+      _restaurants.ngapCounts[_detailRestaurantId] = 1204;
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.text('1,204'), findsOneWidget);
+      expect(find.text('ngaps'), findsOneWidget);
+    });
+
+    testWidgets('hides the ngap tile when nobody has bitten it yet',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(priceFrom: 12));
+
+      // "0 ngaps" is a discouragement, not a fact worth a tile (D111).
+      expect(find.text('ngaps'), findsNothing);
+      expect(find.text('From RM 12'), findsOneWidget);
+    });
+
+    testWidgets('a single known fact takes the whole row', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(priceFrom: 8));
+
+      final strip = tester.getRect(find.byType(FactsStrip));
+      final tile = tester.getRect(find.text('From RM 8'));
+      expect(tile.left, lessThan(strip.left + strip.width * 0.5));
+      expect(strip.width, greaterThan(200));
+    });
+
+    testWidgets('never shows a wait tile — we have no wait data',
+        (tester) async {
+      _restaurants.ngapCounts[_detailRestaurantId] = 40;
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData(priceFrom: 8));
+
+      expect(find.textContaining('wait'), findsNothing);
+      expect(find.textContaining('min'), findsNothing);
+    });
+  });
+
+  group('what people bite', () {
+    testWidgets('is hidden entirely when there are no dishes', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.byType(DishList), findsNothing);
+      expect(find.text('What people bite'), findsNothing);
+    });
+
+    testWidgets('renders name, description and price per dish',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(
+        tester,
+        _detailData(dishes: const [
+          Dish(
+            id: 1,
+            name: 'Nasi lemak ayam berempah',
+            description: 'Coconut rice, spiced fried chicken, sambal',
+            priceRm: 12,
+          ),
+          Dish(id: 2, name: 'Teh tarik', description: 'Pulled, frothy'),
+        ]),
+      );
+
+      expect(find.text('What people bite'), findsOneWidget);
+      expect(find.text('Nasi lemak ayam berempah'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('https://example.com/photo-0.jpg')),
+        find.text('Coconut rice, spiced fried chicken, sambal'),
         findsOneWidget,
       );
-      expect(find.byType(TikTokThumbnailPlaceholder), findsNothing);
+      expect(find.text('RM 12'), findsOneWidget);
+      // A dish with no price on file shows none rather than a made-up one.
+      expect(find.text('Teh tarik'), findsOneWidget);
     });
   });
 
-  group('RestaurantDetailPage thumbnail strip', () {
-    testWidgets('is hidden for a single photo', (tester) async {
+  group('about', () {
+    testWidgets('is hidden when the caption is empty', (tester) async {
       useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(1)));
+      await _pumpDetailPage(tester, _detailData(details: ''));
 
-      expect(_stripThumbnails(), findsNothing);
+      expect(find.text('About'), findsNothing);
     });
 
-    testWidgets('is hidden when there are no photos', (tester) async {
+    testWidgets('expands on More', (tester) async {
       useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
-
-      expect(_stripThumbnails(), findsNothing);
-    });
-
-    testWidgets('shows one thumbnail per photo for a small gallery',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(3)));
-
-      expect(_stripThumbnails(), findsNWidgets(3));
-    });
-
-    testWidgets('caps the strip at five thumbnails', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(9)));
-
-      expect(_stripThumbnails(), findsNWidgets(5));
-    });
-
-    testWidgets('tapping a thumbnail swaps the hero image', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(4)));
-
-      await tester.tap(_stripThumbnails().at(2));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('https://example.com/photo-2.jpg')),
-        findsOneWidget,
+      await _pumpDetailPage(
+        tester,
+        _detailData(details: 'A tiny shophouse stall with a big charcoal '
+            'grill, open late, and a queue that never quite ends.'),
       );
-      expect(
-        find.byKey(const ValueKey('https://example.com/photo-0.jpg')),
-        findsNothing,
-      );
-    });
 
-    testWidgets('rings only the active thumbnail with the accent',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(4)));
-
-      expect(_ringColor(tester, 0), _kAccent);
-      expect(_ringColor(tester, 1), Colors.transparent);
-      expect(_ringColor(tester, 3), Colors.transparent);
-
-      await tester.tap(_stripThumbnails().at(3));
+      expect(find.text('More'), findsOneWidget);
+      await tester.tap(find.text('More'));
       await tester.pumpAndSettle();
-
-      expect(_ringColor(tester, 0), Colors.transparent);
-      expect(_ringColor(tester, 3), _kAccent);
-    });
-
-    testWidgets('sits in the top control bar, not mid-screen', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(3)));
-
-      final viewport = logicalViewport(tester);
-      final backRect = tester.getRect(find.byIcon(Icons.arrow_back_rounded));
-      final stripRect = tester.getRect(_stripThumbnails().first);
-
-      // The controls are described as "fixed top controls"; anything past the
-      // first fifth of the screen means they were vertically centred instead.
-      expect(backRect.top, lessThan(viewport.height * 0.2));
-      expect(stripRect.top, lessThan(viewport.height * 0.2));
+      expect(find.text('Less'), findsOneWidget);
     });
   });
 
-  group('RestaurantDetailPage actions', () {
-    testWidgets('the like button toggles to the accent', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
-
-      Color? likeColor() {
-        return tester.widget<Icon>(find.byIcon(Icons.favorite_rounded)).color;
-      }
-
-      expect(likeColor(), _kUnlit);
-
-      await tester.tap(find.byIcon(Icons.favorite_rounded));
-      await tester.pumpAndSettle();
-      expect(likeColor(), _kAccent);
-
-      await tester.tap(find.byIcon(Icons.favorite_rounded));
-      await tester.pumpAndSettle();
-      expect(likeColor(), _kUnlit);
-    });
-
-    testWidgets('the reviews button scrolls the Top review card into view',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(2)));
-
-      final viewport = logicalViewport(tester);
-      expect(
-        tester.getRect(find.text('Top review')).top,
-        greaterThan(viewport.height),
-        reason: 'the review card should start below the fold',
-      );
-
-      await tester.tap(find.byIcon(Icons.chat_bubble_rounded));
-      await tester.pumpAndSettle();
-
-      final reviewRect = tester.getRect(find.text('Top review'));
-      expect(reviewRect.top, greaterThanOrEqualTo(0));
-      expect(reviewRect.bottom, lessThanOrEqualTo(viewport.height));
-      expect(find.text('The sambal alone is worth the drive.'), findsOneWidget);
-    });
-
-    testWidgets('the route button scrolls the Location card into view',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(2)));
-
-      final viewport = logicalViewport(tester);
-      expect(
-        tester.getRect(find.text('Location')).top,
-        greaterThan(viewport.height),
-      );
-
-      await tester.tap(find.byIcon(Icons.route_rounded));
-      await tester.pumpAndSettle();
-
-      final locationRect = tester.getRect(find.text('Location'));
-      expect(locationRect.top, greaterThanOrEqualTo(0));
-      expect(locationRect.bottom, lessThanOrEqualTo(viewport.height));
-    });
-
-    testWidgets('shows the empty-review copy when there is no review text',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(reviewText: ''));
-
-      await tester.tap(find.byIcon(Icons.chat_bubble_rounded));
-      await tester.pumpAndSettle();
-
-      expect(find.text('No reviews yet'), findsOneWidget);
-      expect(find.text('Aisyah'), findsNothing);
-    });
-  });
-
-  group('RestaurantDetailPage like button', () {
-    Color? heartColor(WidgetTester tester) {
-      return tester.widget<Icon>(find.byIcon(Icons.favorite_rounded)).color;
-    }
-
-    testWidgets('starts unlit when the restaurant is not liked',
+  group('friends', () {
+    testWidgets('renders nothing until the social graph exists',
         (tester) async {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      expect(heartColor(tester), _kUnlit);
+      expect(find.byType(FriendsBiteRow), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(FriendsBiteRow)),
+        Size.zero,
+        reason: 'an empty friends row occupies no space',
+      );
+    });
+  });
+
+  group('wishlist bookmark', () {
+    testWidgets('starts hollow and fills once the place is added',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Add to wishlist'));
+      await tester.pumpAndSettle();
+
+      expect(_wishlistBacking.calls, contains('addRestaurant:7'));
+      expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.bookmark_rounded)).color,
+        kAccentEmber,
+      );
     });
 
-    testWidgets('starts lit when the backend already holds the like',
+    testWidgets('starts filled for a place already on the list',
+        (tester) async {
+      _wishlistBacking.seed([
+        testWishlistItem(1, restaurantId: _detailRestaurantId),
+      ]);
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.bySemanticsLabel('Remove from wishlist'), findsOneWidget);
+    });
+
+    testWidgets('tapping a filled bookmark removes the row', (tester) async {
+      _wishlistBacking.seed([
+        testWishlistItem(1, restaurantId: _detailRestaurantId),
+      ]);
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      await tester.tap(find.bySemanticsLabel('Remove from wishlist'));
+      await tester.pumpAndSettle();
+
+      expect(_wishlistBacking.calls, contains('remove:1'));
+      expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
+    });
+
+    testWidgets('a refused write explains itself', (tester) async {
+      _wishlistBacking.failWrite = true;
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      await tester.tap(find.bySemanticsLabel('Add to wishlist'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Could not add that place.'), findsOneWidget);
+    });
+  });
+
+  group('set a date', () {
+    testWidgets('bites the place first when it is not liked yet',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      await tester.tap(find.text('Set a date'));
+      await tester.pumpAndSettle();
+
+      // A plan is always on a bitten place (D112).
+      expect(LikesController.instance.isLiked(_detailRestaurantId), isTrue);
+      expect(_swipes.calls.single.liked, isTrue);
+      expect(_swipes.calls.single.source, 'detail');
+      expect(find.text('plans-new'), findsOneWidget);
+    });
+
+    testWidgets('does not re-record a like the place already has',
         (tester) async {
       _seedLikes([_detailRestaurantId]);
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      expect(heartColor(tester), _kAccent);
+      await tester.tap(find.text('Set a date'));
+      await tester.pumpAndSettle();
+
+      expect(_swipes.calls, isEmpty);
+      expect(find.text('plans-new'), findsOneWidget);
     });
 
-    testWidgets('ignores likes belonging to other restaurants', (tester) async {
-      _seedLikes([_detailRestaurantId + 1]);
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
-
-      expect(heartColor(tester), _kUnlit);
-    });
-
-    testWidgets('tapping it records a liked swipe from the detail page',
+    testWidgets('hands the planner the restaurant it is planning',
         (tester) async {
       useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
+      await _pumpDetailPage(
+        tester,
+        _detailData(
+          neighbourhood: 'Kampung Baru',
+          imageUrls: const ['https://example.com/a.jpg'],
+        ),
+      );
 
-      await tester.tap(find.byIcon(Icons.favorite_rounded));
+      await tester.tap(find.text('Set a date'));
       await tester.pumpAndSettle();
 
-      expect(LikesController.instance.isLiked(_detailRestaurantId), isTrue);
-      expect(_swipes.calls, hasLength(1));
-      expect(_swipes.calls.single.restaurantId, _detailRestaurantId);
-      expect(_swipes.calls.single.liked, isTrue);
-      expect(_swipes.calls.single.source, 'detail');
+      expect(_lastPlansExtra, <String, dynamic>{
+        'restaurantId': _detailRestaurantId,
+        'title': 'Warung Ayam Bakar',
+        'coverUrl': 'https://example.com/a.jpg',
+        'neighbourhood': 'Kampung Baru',
+        'tag': 'Grilled chicken',
+      });
     });
 
-    testWidgets('tapping it again records the unlike', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
-
-      await tester.tap(find.byIcon(Icons.favorite_rounded));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.favorite_rounded));
-      await tester.pumpAndSettle();
-
-      expect(LikesController.instance.isLiked(_detailRestaurantId), isFalse);
-      expect(_swipes.calls, hasLength(2));
-      expect(_swipes.calls.last.liked, isFalse);
-      expect(_swipes.calls.last.source, 'detail');
-    });
-
-    testWidgets('a refused write leaves the heart unlit and explains itself',
-        (tester) async {
+    testWidgets('a refused like keeps the user here', (tester) async {
       _swipes.fail = true;
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      await tester.tap(find.byIcon(Icons.favorite_rounded));
+      await tester.tap(find.text('Set a date'));
       await tester.pumpAndSettle();
 
-      // The optimistic fill must roll back — a lit heart over a write the
-      // backend never saw would be a lie that survives until the next fetch.
-      expect(heartColor(tester), _kUnlit);
+      // Arriving at the planner having silently failed the thing the planner
+      // assumes is worse than not arriving.
+      expect(find.text('plans-new'), findsNothing);
       expect(find.text('Could not save that change.'), findsOneWidget);
     });
-
-    testWidgets('follows a like made elsewhere in the app', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
-      expect(heartColor(tester), _kUnlit);
-
-      // Liked elsewhere (e.g. a right swipe on the deck) while this page is
-      // still mounted: no pumpWidget, so only the controller listener can
-      // update it.
-      await LikesController.instance.like(_detailRestaurantId);
-      await tester.pumpAndSettle();
-      expect(heartColor(tester), _kAccent);
-
-      await LikesController.instance.unlike(_detailRestaurantId);
-      await tester.pumpAndSettle();
-      expect(heartColor(tester), _kUnlit);
-    });
-
-    testWidgets('relabels itself for screen readers when liked',
-        (tester) async {
-      final handle = tester.ensureSemantics();
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
-
-      expect(find.bySemanticsLabel('Like'), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.favorite_rounded));
-      await tester.pumpAndSettle();
-
-      expect(find.bySemanticsLabel('Liked'), findsOneWidget);
-      expect(find.bySemanticsLabel('Like'), findsNothing);
-
-      handle.dispose();
-    });
   });
 
-  group('RestaurantDetailPage navigation', () {
-    Future<GlobalKey<NavigatorState>> pushDetail(
-      WidgetTester tester,
-      RestaurantDetailData data,
-    ) async {
-      final navigatorKey = GlobalKey<NavigatorState>();
-      await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: navigatorKey,
-          home: const Scaffold(body: Center(child: Text('deck-behind'))),
-        ),
-      );
-      unawaitedPush(navigatorKey, data);
-      await tester.pumpAndSettle();
-      expect(find.text('deck-behind'), findsNothing);
-      return navigatorKey;
-    }
-
-    testWidgets('the close button pops the route', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await pushDetail(tester, _detailData());
-
-      await tester.tap(find.byIcon(Icons.close_rounded));
-      await tester.pumpAndSettle();
-
-      expect(find.text('deck-behind'), findsOneWidget);
-      expect(find.byType(RestaurantDetailPage), findsNothing);
-    });
-
-    testWidgets('the back button pops the route', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await pushDetail(tester, _detailData());
-
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
-      await tester.pumpAndSettle();
-
-      expect(find.text('deck-behind'), findsOneWidget);
-      expect(find.byType(RestaurantDetailPage), findsNothing);
-    });
-
-    testWidgets('as a root route the close button is a no-op', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData());
-
-      await tester.tap(find.byIcon(Icons.close_rounded));
-      await tester.pumpAndSettle();
-
-      // maybePop on the only route must not tear the app down.
-      expect(find.byType(RestaurantDetailPage), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  });
-
-  group('RestaurantDetailPage TikTok affordance', () {
-    testWidgets('hides the play button when there is no video', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(2)));
-
-      expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
-      expect(find.text('TikTok Review'), findsNothing);
-    });
-
-    testWidgets('hides the play button for an empty video URL', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(videoUrl: ''));
-
-      expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
-    });
-
-    testWidgets('shows the play button and chip when a video exists',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(
-        tester,
-        _detailData(
-          imageUrls: _images(2),
-          videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
-        ),
-      );
-
-      expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
-      expect(find.text('TikTok Review'), findsOneWidget);
-      expect(find.byIcon(Icons.music_note_rounded), findsOneWidget);
-    });
-
-    testWidgets('tapping play pushes a player route', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      final observer = _RouteLog();
-      await tester.pumpWidget(
-        MaterialApp(
-          navigatorObservers: [observer],
-          home: RestaurantDetailPage(
-            data: _detailData(
-              videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      observer.pushes.clear();
-
-      await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-      await tester.pumpAndSettle();
-
-      expect(observer.pushes, hasLength(1));
-    });
-  });
-
-  group('RestaurantDetailPage semantics', () {
-    testWidgets('labels the icon-only controls for screen readers',
-        (tester) async {
-      final handle = tester.ensureSemantics();
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(
-        tester,
-        _detailData(
-          imageUrls: _images(3),
-          videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
-        ),
-      );
-
-      for (final label in const [
-        'Like',
-        'Reviews',
-        'Close',
-        'Back',
-        'Watch TikTok review',
-      ]) {
-        expect(find.bySemanticsLabel(label), findsOneWidget, reason: label);
-      }
-
-      // 'Location' is also the heading of the location card further down.
-      expect(find.bySemanticsLabel('Location'), findsAtLeastNWidgets(1));
-
-      handle.dispose();
-    });
-  });
-
-  group('RestaurantDetailPage distance', () {
-    testWidgets('replaces the loading label once the position resolves',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await tester.pumpWidget(
-        MaterialApp(home: RestaurantDetailPage(data: _detailData())),
-      );
-
-      // First frame: the geolocator future has not completed yet.
-      expect(find.text('Distance loading'), findsOneWidget);
-
-      await tester.pumpAndSettle();
-
-      expect(find.text('Distance loading'), findsNothing);
-      expect(find.text('0 m away'), findsOneWidget);
-    });
-
-    testWidgets('formats a kilometre-scale distance', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      // ~0.045 degrees of latitude is roughly 5 km.
-      await _pumpDetailPage(tester, _detailData(latitude: _userLat + 0.045));
-
-      // Once in the header, once inside the Location card.
-      expect(find.text('5.0 km away'), findsOneWidget);
-      expect(find.text('5.0 km away from your location'), findsOneWidget);
-    });
-
-    testWidgets('clamps very distant restaurants', (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(latitude: _userLat + 20));
-
-      expect(find.text('100km +'), findsOneWidget);
-    });
-  });
-
-  group('RestaurantDetailPage directions', () {
+  group('directions', () {
     testWidgets('offers directions for a restaurant with a real fix',
         (tester) async {
       useViewport(tester, const Size(390, 844));
@@ -734,7 +647,7 @@ void main() {
         _detailData(latitude: 1.5078255, longitude: 103.7434649),
       );
 
-      expect(find.text('Get directions'), findsOneWidget);
+      expect(find.bySemanticsLabel('Directions'), findsOneWidget);
     });
 
     testWidgets('hides directions for a restaurant seeded without a fix',
@@ -743,123 +656,226 @@ void main() {
       // 0,0 is the "no coordinates" sentinel, not a place to route to.
       await _pumpDetailPage(tester, _detailData(latitude: 0, longitude: 0));
 
-      expect(find.text('Get directions'), findsNothing);
-    });
-
-    testWidgets('says so instead of measuring to the 0,0 sentinel',
-        (tester) async {
-      useViewport(tester, const Size(390, 844));
-      await _pumpDetailPage(tester, _detailData(latitude: 0, longitude: 0));
-
-      expect(find.text('Distance unknown'), findsOneWidget);
-      expect(find.text('No location on file for this place'), findsOneWidget);
-      expect(find.text('100km +'), findsNothing);
+      expect(find.bySemanticsLabel('Directions'), findsNothing);
+      // …and the CTA still fills the bar.
+      expect(find.text('Set a date'), findsOneWidget);
     });
   });
 
-  group('RestaurantDetailPage layout', () {
-    testWidgets('lays out without overflow on a small phone', (tester) async {
-      useViewport(tester, const Size(375, 667));
+  group('navigation', () {
+    testWidgets('the back button pops the route', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) =>
+                const Scaffold(body: Center(child: Text('deck-behind'))),
+          ),
+          GoRoute(
+            path: '/restaurant',
+            builder: (context, state) => RestaurantDetailPage(
+              data: _detailData(),
+              repository: _restaurants,
+              wishlist: _wishlist,
+              tiktokPlayerFuture: _stalledPlayer(),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+
+      // Pushed, not the initial location: a route with nothing under it has
+      // nothing to pop back to, which would test the wrong thing.
+      unawaited(router.push<void>('/restaurant'));
+      await tester.pumpAndSettle();
+      expect(find.text('deck-behind'), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('deck-behind'), findsOneWidget);
+    });
+  });
+
+  group('semantics', () {
+    testWidgets('labels every icon-only control', (tester) async {
+      final handle = tester.ensureSemantics();
+      useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(
         tester,
         _detailData(
-          rating: 4.9,
-          imageUrls: _images(5),
-          videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
+          latitude: 1.5078255,
+          longitude: 103.7434649,
+          videoUrl: 'https://www.tiktok.com/@kl/video/12345',
         ),
       );
+
+      for (final label in const [
+        'Back',
+        'Add to wishlist',
+        'Directions',
+        'Watch TikTok review',
+      ]) {
+        expect(find.bySemanticsLabel(label), findsOneWidget, reason: label);
+      }
+
+      handle.dispose();
+    });
+
+    testWidgets('every control is at least a finger wide', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(
+        tester,
+        _detailData(latitude: 1.5078255, longitude: 103.7434649),
+      );
+
+      for (final label in const ['Back', 'Add to wishlist', 'Directions']) {
+        final size = tester.getSize(find.bySemanticsLabel(label));
+        expect(size.width, greaterThanOrEqualTo(kMinTapTarget), reason: label);
+        expect(size.height, greaterThanOrEqualTo(kMinTapTarget), reason: label);
+      }
+    });
+  });
+
+  group('layout', () {
+    RestaurantDetailData full({String? title}) {
+      return _detailData(
+        title: title ?? 'Warung Ayam Bakar',
+        neighbourhood: 'Kampung Baru',
+        hours: _lateNight,
+        priceFrom: 19,
+        isHalal: true,
+        details: 'A tiny shophouse stall with a very big charcoal grill.',
+        imageUrls: const ['https://example.com/a.jpg'],
+        dishes: const [
+          Dish(
+            id: 1,
+            name: 'Nasi lemak ayam berempah',
+            description: 'Coconut rice, spiced fried chicken, sambal',
+            priceRm: 12,
+          ),
+        ],
+      );
+    }
+
+    testWidgets('lays out without overflow on a small phone', (tester) async {
+      _restaurants.ngapCounts[_detailRestaurantId] = 1204;
+      useViewport(tester, const Size(375, 667));
+      await _pumpDetailPage(tester, full());
 
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('lays out without overflow on a narrow phone', (tester) async {
+      _restaurants.ngapCounts[_detailRestaurantId] = 1204;
       useViewport(tester, const Size(320, 568));
-      await _pumpDetailPage(
-        tester,
-        _detailData(
-          rating: 4.9,
-          imageUrls: _images(5),
-          videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
-        ),
-      );
+      await _pumpDetailPage(tester, full());
 
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('lays out without overflow on a tablet', (tester) async {
+      _restaurants.ngapCounts[_detailRestaurantId] = 1204;
       useViewport(tester, const Size(1024, 1366), dpr: 2.0);
+      await _pumpDetailPage(tester, full());
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('survives a long name at 320 px and double text',
+        (tester) async {
+      _restaurants.ngapCounts[_detailRestaurantId] = 1204;
+      useViewport(tester, const Size(320, 568));
       await _pumpDetailPage(
         tester,
-        _detailData(
-          rating: 4.9,
-          imageUrls: _images(5),
-          videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
-        ),
+        full(title: 'Restoran Nasi Kandar Pelita Simpang Empat Batu Pahat'),
+        textScale: 2.0,
       );
 
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('survives a long title and a huge text scale', (tester) async {
-      useViewport(tester, const Size(375, 667));
-      await tester.pumpWidget(
-        MaterialApp(
-          // The scaler has to be applied below MaterialApp: its own
-          // MediaQuery.fromView would otherwise overwrite an ancestor's data.
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(1.6)),
-            child: child!,
-          ),
-          home: RestaurantDetailPage(
-            data: _detailData(
-              title: 'Restoran Nasi Kandar Pelita Simpang Empat Batu Pahat',
-              rating: 4.9,
-              imageUrls: _images(5),
-              videoUrl: 'https://www.tiktok.com/@johorfoodie/video/12345',
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    testWidgets('the hero takes about two fifths of the screen',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, full());
 
-      expect(tester.takeException(), isNull);
+      final hero = tester.getRect(find.byType(BiteNotch));
+      expect(hero.top, 0);
+      expect(hero.height, closeTo(844 * kDetailHeroFraction, 1));
     });
 
-    testWidgets('scrolls to reveal the detail cards', (tester) async {
-      useViewport(tester, const Size(375, 667));
-      await _pumpDetailPage(tester, _detailData(imageUrls: _images(2)));
+    testWidgets('the CTA bar stays on screen without scrolling',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, full());
 
-      await tester.drag(
-        find.byType(SingleChildScrollView),
-        const Offset(0, -1200),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('More photos'), findsOneWidget);
-      expect(find.text('Location'), findsOneWidget);
-      expect(find.text('Top review'), findsOneWidget);
-      expect(tester.takeException(), isNull);
+      final cta = tester.getRect(find.text('Set a date'));
+      expect(cta.bottom, lessThanOrEqualTo(844));
     });
   });
-}
 
-void unawaitedPush(
-  GlobalKey<NavigatorState> navigatorKey,
-  RestaurantDetailData data,
-) {
-  navigatorKey.currentState!.push(
-    MaterialPageRoute<void>(
-      builder: (_) => RestaurantDetailPage(data: data),
-    ),
-  );
-}
+  group('RestaurantDetailRoute', () {
+    Future<void> pumpRoute(
+      WidgetTester tester, {
+      int? id,
+      RestaurantDetailData? initialData,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RestaurantDetailRoute(
+            restaurantId: id,
+            initialData: initialData,
+            repository: _restaurants,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
 
-class _RouteLog extends NavigatorObserver {
-  final List<Route<dynamic>> pushes = <Route<dynamic>>[];
+    testWidgets('paints the payload without refetching', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await pumpRoute(
+        tester,
+        id: _detailRestaurantId,
+        initialData: _detailData(title: 'Kopitiam Lama'),
+      );
 
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    pushes.add(route);
-  }
+      expect(find.text('Kopitiam Lama'), findsOneWidget);
+    });
+
+    testWidgets('loads by id when it has only an id', (tester) async {
+      _restaurants.catalogRows = [testRestaurant(9, name: 'Nasi Kandar Deen')];
+      useViewport(tester, const Size(390, 844));
+      await pumpRoute(tester, id: 9);
+
+      expect(find.text('Nasi Kandar Deen'), findsOneWidget);
+    });
+
+    testWidgets('says so when the id resolves to nothing', (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await pumpRoute(tester, id: 404);
+
+      expect(find.text('Restaurant not found'), findsOneWidget);
+      expect(find.bySemanticsLabel('Back'), findsOneWidget);
+    });
+
+    testWidgets('offers a retry when the fetch fails', (tester) async {
+      _restaurants.failFetchById = true;
+      useViewport(tester, const Size(390, 844));
+      await pumpRoute(tester, id: 9);
+
+      expect(find.text('Could not open this restaurant'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+
+      _restaurants.failFetchById = false;
+      _restaurants.catalogRows = [testRestaurant(9, name: 'Nasi Kandar Deen')];
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nasi Kandar Deen'), findsOneWidget);
+    });
+  });
 }

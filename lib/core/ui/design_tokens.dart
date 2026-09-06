@@ -1019,3 +1019,105 @@ class AppFilterChip extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Restaurant detail (S3). The screen where the product argues for itself: a
+// clip filling the top two fifths, three fact tiles, the dishes, and one
+// gradient CTA pinned to the bottom.
+// ---------------------------------------------------------------------------
+
+/// The design's `.detail .hero{height:41%}`. A fraction rather than a height,
+/// because the clip is the argument and it should take the same share of a
+/// small phone and a tall one.
+const double kDetailHeroFraction = 0.41;
+
+/// …with a floor, so on a short viewport (a small phone in split screen, a
+/// tester's 320×568) the hero is still a hero and not a letterbox.
+const double kDetailHeroMinHeight = 260;
+
+/// `rgba(0,0,0,.3)` — the fill behind a tag chip sitting on the hero's own
+/// title block. Darker and flatter than [kFillTag]: those chips sit over a
+/// scrim that is already black, where a white veil reads as fog.
+const Color kFillTitleTag = Color(0x4D000000);
+
+/// The design's 36 px `.detail .hero .title .h1`. Larger than the deck's card
+/// title because the detail screen shows one restaurant, not a stack.
+const double kFontSizeDetailTitle = 36;
+
+/// `.fact b` — the big number on a fact tile.
+const double kFontSizeFactValue = 17;
+
+/// `.dish .thumb` — 40 px at [kRadiusWishThumb].
+const double kDishThumbSize = 40;
+
+/// The value line of a fact tile: display face, tight, one line.
+TextStyle appFactValueStyle(BuildContext context) {
+  return Theme.of(context).textTheme.titleMedium!.copyWith(
+        fontFamily: kDisplayFontFamily,
+        color: kTextOnPhoto,
+        fontSize: kFontSizeFactValue,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.17,
+        height: 1.1,
+      );
+}
+
+/// The caption under a fact tile's value, and the description on a dish row.
+TextStyle appFactCaptionStyle(BuildContext context) {
+  return Theme.of(context).textTheme.labelSmall!.copyWith(
+        fontFamily: kTextFontFamily,
+        color: kTextOnPhotoSecondary,
+        fontSize: kFontSizeMicro,
+        fontWeight: FontWeight.w400,
+        letterSpacing: 0,
+        height: 1.25,
+      );
+}
+
+/// A fact chip on the detail hero's title block — the design's
+/// `.chip{height:26px;font-size:11px;background:rgba(0,0,0,.3)}`.
+///
+/// Separate from [AppTagChip] rather than a flag on it: this one sits on the
+/// deep end of a scrim and takes the dark fill, and 26 px is a *minimum* here
+/// so the chip grows instead of clipping its label at a large text scale.
+class AppTitleTagChip extends StatelessWidget {
+  const AppTitleTagChip({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 26),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: kFillTitleTag,
+        borderRadius: BorderRadius.circular(kRadiusPill),
+        border: Border.all(color: kHairline),
+      ),
+      // A Row that shrink-wraps, not a Container `alignment`: an Align with no
+      // widthFactor takes the full width it is offered, which inside a Wrap
+      // would put every chip on a line of its own. Flexible for the same
+      // reason [AppTagChip] uses it — without it the ellipsis never engages.
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: kTextFontFamily,
+                fontSize: kFontSizeMicro,
+                fontWeight: FontWeight.w600,
+                color: kTextOnPhoto,
+                height: 1.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

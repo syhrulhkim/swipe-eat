@@ -339,7 +339,7 @@ Each phase is independently shippable and each unblocks the next.
 | **1** | Opening hours: schema + keep what the scraper already parses + backfill | Cheapest real win; the data is already in the captions. Unblocks 5 screens |
 | ~~**2**~~ | ~~The design system: tokens, both fonts bundled, radii, buttons, drop eyebrows~~ | ✅ **Delivered 2026-09-04.** See [Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md) |
 | **3** | Reskin the existing five tabs in place, no new features | Ships a coherent Ngap look with today's features. **Partly delivered 2026-09-04** — see below |
-| **4** | Price band + neighbourhood + dishes, and the new detail screen | The detail screen is where the product argues for itself |
+| ~~**4**~~ | ~~Price band + neighbourhood + dishes, and the new detail screen~~ | ✅ **Delivered 2026-09-06** (detail screen; dishes data still empty). See [Features/Restaurant-Detail.md](../Features/Restaurant-Detail.md) |
 | ~~**5**~~ | ~~Nearby: the map replaces the cuisine grid~~ | ✅ **Delivered 2026-09-05.** See [Features/Nearby-Map.md](../Features/Nearby-Map.md). The 474 ungeocoded rows and the missing KL catalogue are now visible rather than urgent: they simply do not pin. |
 | ~~**6**~~ | ~~Wishlist + the up-swipe rebind + retire super like~~ | ✅ **Delivered 2026-09-05.** See [Features/Wishlist.md](../Features/Wishlist.md) |
 | **7** | Plans + Calendar (solo only, no friends) | Delivers "pick a day" — the tagline's third verb — without the social graph |
