@@ -14,7 +14,8 @@ their controller are deleted, not hidden (D102) — see
 [Explore-Search.md](Explore-Search.md), now superseded.
 
 Files: `lib/features/nearby/` — `data/nearby_repository.dart`,
-`domain/nearby_format.dart`, `domain/pin_spread.dart`, `models/nearby_place.dart`,
+`domain/nearby_format.dart`, `domain/pin_slots.dart`, `domain/pin_spread.dart`,
+`models/nearby_place.dart`,
 `state/nearby_controller.dart`, and `presentation/` (`nearby_tab.dart`,
 `nearby_pin.dart`, `nearby_radius_stepper.dart`, `nearby_results_bar.dart`).
 
@@ -28,7 +29,9 @@ status bar and behind the nav.
   a pushed screen. The button opens the deck's own `showDiscoveryFilterSheet`,
   so one sheet serves both surfaces.
 - **Me-dot** — an 18 px ember circle with a 4 px `kBackgroundDark` border and a
-  12 px lava-at-22% halo (`kNearbyMeHalo`), drawn at the resolved origin.
+  12 px lava-at-22% halo (`kNearbyMeHalo`), drawn at the resolved origin. The
+  camera is moved so it sits at **50% across, 52% down** the map area
+  (`kNearbyMeDotFraction`), where the design puts it.
 - **Pins** — a blob (`kSurfaceDark`, 2 px `kHairline`) whose size says how
   far the place is: 96 px (`kNearbyPinBigSize`) at the origin, shrinking
   linearly to 52 px (`kNearbyPinSmallSize`) at the edge of the radius, so the
@@ -38,15 +41,27 @@ status bar and behind the nav.
   at the top right, then the name (13/w600, one line), the cuisine (micro,
   cream-70), and the open line. Only the **nearest 5** are drawn (D116); the
   query fetches 60 so the results bar can still count the rest and "Swipe all"
-  can deal them. The camera **fits those five** plus the me-dot rather than the
-  whole circle, so five places 400 m away fill the screen instead of huddling
-  under one another in the middle.
-- **No two pins overlap.** After each camera change the tab projects the pins
-  to screen space and runs `spreadPins` (`domain/pin_spread.dart`): the nearest
-  pin stays on its true position, every later pin is nudged along whichever
-  axis needs the smaller move until every box (blob + caption) clears every
-  other by `kNearbyPinGap` (4 px). The nudge is a marker offset, not a change
-  to the place's coordinate, and the pure function is unit-tested on its own.
+  can deal them.
+- **The arrangement is the design's.** The prototype draws its pins in six
+  fixed places over the map (`left:8%;top:14%`, `left:38%;top:9%` big,
+  `right:6%;top:18%`, `left:12%;top:44%`, `right:8%;top:46%` big,
+  `left:36%;top:60%`), and so does the app: `kNearbyPinSlots` holds those six
+  as fractions of the map area below the status bar. When the pins arrive the
+  camera is zoomed to hold all five plus the origin — so the tiles underneath
+  are the real neighbourhood at a real scale — then moved to put the me-dot on
+  its mark, and each pin is laid into a slot by `assignPinsToSlots`
+  (`domain/pin_slots.dart`): the two closest take the two big slots, and
+  every pin takes the slot nearest the direction it truly lies in, so a place
+  to the north-west is drawn north-west of you. The slot's coordinate is read
+  back off the composed camera, so a pan or zoom carries the pins with the
+  tiles. The distance badge, not the position, is what says how far.
+- **No two pins overlap.** The slots are drawn for a 390 px phone; on a
+  narrower one two of them can touch, so after each camera change the tab
+  projects the pins to screen space and runs `spreadPins`
+  (`domain/pin_spread.dart`): the nearest pin stays put, every later pin is
+  nudged along whichever axis needs the smaller move until every box (blob +
+  caption) clears every other by `kNearbyPinGap` (4 px). Both functions are
+  pure and unit-tested on their own.
 - **Radius stepper**, bottom right — minus, the value block ("Away from you"
   over a 30/w800 number with a 14/w600 unit), plus.
 - **Results bar**, flush with the nav, rounded at the top only — "From RM *n*"
@@ -199,10 +214,14 @@ resolver, the clock and the repository are all injected.
 - `test/features/nearby/nearby_controller_test.dart` — radius walking and its
   stops, the counts and the cheapest price, the three origin outcomes, the
   hand-off, and that Settings' radius does not move the map.
+- `test/features/nearby/pin_slots_test.dart` — the six slots never collide at
+  390 px, big pins take big slots, a pin keeps to its own side, extras are left
+  unassigned.
 - `test/features/nearby/pin_spread_test.dart` — the spreader: untouched when
   apart, pushed apart when piled, the first pin never moves, the cheaper axis.
 - `test/features/nearby/nearby_tab_test.dart` — pins, the prominent pair,
-  distance-scaled sizes, two places on one spot drawn apart, the
+  distance-scaled sizes, the me-dot on its mark and the pins in their slots,
+  two places on one spot drawn apart, the
   bite, the badge, tapping through to a detail route, the stepper, the results
   bar, the empty state, the filter count, and **no overflow at 320 px** (D73).
 - `test/features/restaurants/deck_handoff_test.dart` — the notifier and
@@ -217,4 +236,4 @@ resolver, the clock and the repository are all injected.
 | D101 | The map is `flutter_map` with a **constructor-injected** `TileProvider`; the OSM default is development only under their usage policy, and production swaps a URL template. | locked 2026-09-05 |
 | D102 | The map **replaces** the cuisine grid and the per-cuisine page, which are deleted rather than kept alongside it. The DB functions behind them (`get_cuisine_counts`, `get_top_picks`) are retained. | locked 2026-09-05 |
 | D103 | "Swipe all" hands the result **list** to the deck through `DeckHandoff` rather than re-querying; the deck deals what the map already fetched. | locked 2026-09-05 |
-| D116 | The map draws the **nearest five** places, sized by distance (96 px at the origin to 52 px at the radius edge), spread apart in screen space so no two overlap, with the camera fitted to those five. Five is what a thumb can pick between; the results bar and "Swipe all" still speak for the full fetch. | locked 2026-09-06 |
+| D116 | The map draws the **nearest five** places, sized by distance (96 px at the origin to 52 px at the radius edge), laid into the **design's six slots** with the two closest in the two big ones and each pin on its own side of the me-dot, then spread apart in screen space so no two overlap. The camera is zoomed to hold the five and moved to put the me-dot at 50%/52%. Five is what a thumb can pick between; the results bar and "Swipe all" still speak for the full fetch. The distance badge carries the truth the position no longer does. | locked 2026-09-06 |

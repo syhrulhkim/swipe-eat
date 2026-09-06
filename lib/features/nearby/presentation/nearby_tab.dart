@@ -17,6 +17,7 @@ import '../../restaurants/presentation/discovery_filter_sheet.dart';
 import '../../restaurants/state/likes_controller.dart';
 import '../data/nearby_repository.dart' show NearbyOrigin;
 import '../domain/nearby_format.dart';
+import '../domain/pin_slots.dart';
 import '../domain/pin_spread.dart';
 import '../models/nearby_place.dart';
 import '../state/nearby_controller.dart';
@@ -88,6 +89,12 @@ class _NearbyTabState extends State<NearbyTab> {
   double? _fittedLatitude;
   double? _fittedLongitude;
   List<int> _fittedPinIds = const [];
+  Size? _fittedSize;
+
+  /// Where each pin is drawn: the design's slot it was laid into, as a
+  /// coordinate, so a pan or zoom carries the pins with the tiles. Empty until
+  /// the camera has been composed once; a pin without a slot sits where it is.
+  Map<int, LatLng> _slotPoints = const {};
 
   @override
   void initState() {
@@ -130,9 +137,11 @@ class _NearbyTabState extends State<NearbyTab> {
       return;
     }
     final pinIds = [for (final place in _nearby.pins) place.id];
+    final size = _map.camera.nonRotatedSize;
     if (_fittedRadiusKm == _nearby.radiusKm &&
         _fittedLatitude == origin.latitude &&
         _fittedLongitude == origin.longitude &&
+        _fittedSize == size &&
         listEquals(_fittedPinIds, pinIds)) {
       return;
     }
@@ -141,11 +150,72 @@ class _NearbyTabState extends State<NearbyTab> {
     _fittedLatitude = origin.latitude;
     _fittedLongitude = origin.longitude;
     _fittedPinIds = pinIds;
+    _fittedSize = size;
     _map.fitCamera(_fitFor(origin, _nearby.pins, _nearby.radiusKm));
-    // The pins' screen positions changed with the camera; lay them out again.
+    _compose(origin, _nearby.pins);
     if (mounted) {
       setState(() {});
     }
+  }
+
+  /// The part of the map the design lays its pins over: everything below the
+  /// status bar. The topbar and the stepper float inside it, as they do in
+  /// the prototype.
+  Rect _compositionArea(Size mapSize) {
+    final top = MediaQuery.paddingOf(context).top;
+    return Rect.fromLTRB(0, top, mapSize.width, mapSize.height);
+  }
+
+  /// Lays the map out the way the design draws it: the me-dot at
+  /// [kNearbyMeDotFraction] of the area, and each pin in one of the design's
+  /// slots ([kNearbyPinSlots]) — the two closest in the two big slots, every
+  /// pin in the slot nearest its true bearing. The zoom is the fit's, so the
+  /// tiles underneath are the real neighbourhood at a scale that holds all
+  /// five; the pins' coordinates are then read back off the composed camera.
+  void _compose(NearbyOrigin origin, List<NearbyPlace> pins) {
+    final centre = LatLng(origin.latitude, origin.longitude);
+    var camera = _map.camera;
+    final area = _compositionArea(camera.nonRotatedSize);
+    final target = area.topLeft +
+        Offset(
+          area.width * kNearbyMeDotFraction.dx,
+          area.height * kNearbyMeDotFraction.dy,
+        );
+    final screenCentre = Offset(
+      camera.nonRotatedSize.width / 2,
+      camera.nonRotatedSize.height / 2,
+    );
+    _map.move(centre, camera.zoom, offset: target - screenCentre);
+    camera = _map.camera;
+
+    final candidates = [
+      for (final place in pins)
+        SlotCandidate(
+          id: place.id,
+          screen: camera.latLngToScreenOffset(
+            LatLng(place.restaurant.latitude, place.restaurant.longitude),
+          ),
+          big: _nearby.isProminent(place),
+        ),
+    ];
+    final tops = [
+      for (final slot in kNearbyPinSlots)
+        slotBoxTop(slot, area, boxWidth: kNearbyPinWidth),
+    ];
+    final assignment = assignPinsToSlots(
+      candidates,
+      tops,
+      [for (final slot in kNearbyPinSlots) slot.big],
+    );
+    _slotPoints = {
+      for (final place in pins)
+        if (assignment[place.id] case final slot?)
+          place.id: camera.screenOffsetToLatLng(
+            // The slot names the box's top; the marker is anchored on the
+            // blob's centre, half a blob further down.
+            tops[slot] + Offset(0, _nearby.pinSizeFor(place) / 2),
+          ),
+    };
   }
 
   static CameraFit _fitFor(
@@ -170,13 +240,16 @@ class _NearbyTabState extends State<NearbyTab> {
     );
   }
 
-  /// Where each pin is drawn: its true coordinate, nudged in screen space
-  /// until no two pins overlap. Read from the live camera, so a pan or zoom
-  /// lays them out afresh; before the map is ready every pin sits where it is.
+  /// Where each pin is drawn: its slot in the composition (or its true
+  /// coordinate, before the camera has been composed), nudged in screen space
+  /// until no two pins overlap — the slots are the design's, drawn for a 390
+  /// px phone, and a narrower screen can bring two of them together. Read from
+  /// the live camera, so a pan or zoom lays them out afresh.
   Map<int, LatLng> _displayPoints(List<NearbyPlace> pins) {
     final display = <int, LatLng>{
       for (final place in pins)
-        place.id: LatLng(place.restaurant.latitude, place.restaurant.longitude),
+        place.id: _slotPoints[place.id] ??
+            LatLng(place.restaurant.latitude, place.restaurant.longitude),
     };
     if (!_mapReady || pins.length < 2) {
       return display;
@@ -308,7 +381,11 @@ class _NearbyTabState extends State<NearbyTab> {
             mapController: _map,
             options: MapOptions(
               initialCenter: centre,
-              initialCameraFit: _fitFor(origin, pins, _nearby.radiusKm),
+              // No initialCameraFit: flutter_map applies it *after*
+              // onMapReady, which would undo the composition done there. The
+              // first frame starts here and is composed as soon as the map
+              // has a size.
+              initialZoom: kNearbyInitialZoom,
               // Rotation off: every label on this map is upright type, and a
               // tilted "Closes 10 pm" is unreadable for no gain.
               interactionOptions: const InteractionOptions(
@@ -317,14 +394,8 @@ class _NearbyTabState extends State<NearbyTab> {
               backgroundColor: kBackgroundDark,
               onMapReady: () {
                 _mapReady = true;
-                _fittedRadiusKm = _nearby.radiusKm;
-                _fittedLatitude = origin.latitude;
-                _fittedLongitude = origin.longitude;
-                _fittedPinIds = [for (final place in pins) place.id];
-                // Now there is a camera to project through: spread the pins.
-                if (mounted) {
-                  setState(() {});
-                }
+                // Now there is a camera to project through: compose the map.
+                _fitToPins();
               },
               // Every pan and zoom moves the pins' screen positions, so their
               // spread is recomputed on each one. Five boxes; it is cheap.

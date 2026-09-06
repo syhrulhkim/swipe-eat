@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
@@ -169,6 +170,38 @@ void main() {
         tester.widget<Text>(find.text('Closed today')).style?.color,
         kCreamMuted,
       );
+    });
+
+    testWidgets('the map is composed the way the design draws it', (tester) async {
+      seedThreePlaces();
+      await pumpTab(tester);
+      await tester.pump();
+
+      final area = tester.getRect(find.byType(FlutterMap));
+      final me = tester.getCenter(find.byType(NearbyMeDot));
+      expect(me.dx, closeTo(area.left + area.width * kNearbyMeDotFraction.dx, 1.5));
+      expect(me.dy, closeTo(area.top + area.height * kNearbyMeDotFraction.dy, 1.5));
+
+      // The two closest sit in the design's two big slots; the third in an
+      // ordinary one. Each box's leading edge and top are the slot's.
+      final pins = tester.widgetList<NearbyPin>(find.byType(NearbyPin)).toList();
+      final bigSlots = kNearbyPinSlots.where((slot) => slot.big).toList();
+      final ordinarySlots = kNearbyPinSlots.where((slot) => !slot.big).toList();
+      Rect boxOf(NearbyPin pin) => tester.getRect(find.byWidget(pin));
+      bool inSlot(Rect box, NearbyPinSlot slot) {
+        final left = slot.fromRight
+            ? area.right - slot.x * area.width - kNearbyPinWidth
+            : area.left + slot.x * area.width;
+        final top = area.top + slot.y * area.height;
+        return (box.left - left).abs() < 1.5 && (box.top - top).abs() < 1.5;
+      }
+
+      for (final pin in pins) {
+        final slots = pin.ringed ? bigSlots : ordinarySlots;
+        expect(slots.any((slot) => inSlot(boxOf(pin), slot)), isTrue,
+            reason: '${pin.place.restaurant.name} is not in a '
+                '${pin.ringed ? "big" : "ordinary"} slot: ${boxOf(pin)}');
+      }
     });
 
     testWidgets('two places on the same spot are drawn apart, not on top of each other',
