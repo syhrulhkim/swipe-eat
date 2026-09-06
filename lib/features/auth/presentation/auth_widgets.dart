@@ -76,17 +76,23 @@ class AuthTextButton extends StatelessWidget {
             child: Container(
               constraints: const BoxConstraints(minHeight: kMinTapTarget),
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              alignment: Alignment.center,
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: kTextFontFamily,
-                  fontSize: kFontSizeSmall,
-                  fontWeight: FontWeight.w600,
-                  color: kTextOnPhotoSecondary,
-                  height: 1.2,
+              // `widthFactor: 1` so the box hugs the label instead of
+              // swelling to whatever width a Row hands it — the label has to
+              // sit where it is drawn, not adrift in a wide tap area. Under a
+              // tight width (a stretched Column) it still fills and centres.
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: kTextFontFamily,
+                    fontSize: kFontSizeSmall,
+                    fontWeight: FontWeight.w600,
+                    color: kTextOnPhotoSecondary,
+                    height: 1.2,
+                  ),
                 ),
               ),
             ),
@@ -137,9 +143,7 @@ class AuthProviderButton extends StatelessWidget {
     final foreground = _primary ? kOnAccent : kTextOnPhoto;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(kRadiusPill),
-      side: _primary
-          ? BorderSide.none
-          : const BorderSide(color: kHairline),
+      side: _primary ? BorderSide.none : const BorderSide(color: kHairline),
     );
 
     final button = Material(

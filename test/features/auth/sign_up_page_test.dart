@@ -212,6 +212,12 @@ void main() {
       final harness = await _pumpPage(tester, guest: true);
 
       expect(find.text('Later'), findsOneWidget);
+      // It belongs against the right edge: the page pads 20 and the button
+      // pads 12 inside that, so the label stops 32 short of the viewport.
+      expect(
+        tester.getTopRight(find.text('Later')).dx,
+        closeTo(_phoneViewport.width - 32, 1),
+      );
       await tester.tap(find.text('Later'));
       await tester.pumpAndSettle();
 

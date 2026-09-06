@@ -161,11 +161,13 @@ class _SignUpPageState extends State<SignUpPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
+          // `spaceBetween` rather than a `Spacer`: a third flex child would
+          // take a third of the row and leave the label short of the edge.
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             // Both sides flex: at a large text scale the wordmark and the
             // label are each wide enough to push the other off the screen.
             const Flexible(child: AuthBrand()),
-            const Spacer(),
             // Anonymous browsing is not switched on for the project, so the
             // escape hatch only exists in a build that asked for it (D115).
             if (controller.supportsGuestBrowsing)
