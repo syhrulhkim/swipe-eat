@@ -129,8 +129,12 @@ class _FriendsPageState extends State<FriendsPage> {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Text(
-            'Nobody yet. Friends turn up here when somebody in your contacts '
-            'joins, or when a request you sent is accepted.',
+            // Not "when somebody in your contacts joins": contacts are
+            // matched once, during sign-up, and nothing re-scans them. The
+            // only two ways a name lands on this page are a request you sent
+            // and a request somebody sent you, so those are what it says.
+            'Nobody yet. Requests you send and requests you get both land '
+            'here.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kTextFontFamily,
@@ -215,11 +219,18 @@ class _FriendsPageState extends State<FriendsPage> {
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: kSurfaceDark,
+      // A default sheet is capped at nine sixteenths of the screen and cannot
+      // scroll. Two sentences and two pills fit that on a phone at the normal
+      // text size and do not fit it on a 320 px screen at twice the text size,
+      // where they want about 260 px more than the cap allows. Scroll
+      // controlled plus a scroll view means the cap is the whole screen and
+      // whatever still does not fit can be reached rather than clipped.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusSheet)),
       ),
       builder: (sheetContext) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,

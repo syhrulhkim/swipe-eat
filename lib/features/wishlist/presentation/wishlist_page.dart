@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
+import '../../friends/state/friends_controller.dart';
 import '../../plans/state/plans_controller.dart';
 import '../state/wishlist_controller.dart';
 import 'wishlist_row.dart';
@@ -22,6 +23,7 @@ class WishlistPage extends StatefulWidget {
     this.controller,
     this.onShare,
     this.plans,
+    this.friends,
   });
 
   /// Injected by tests. Left null the page owns one, backed by the real
@@ -37,6 +39,10 @@ class WishlistPage extends StatefulWidget {
   /// shared instance is used.
   final PlansController? plans;
 
+  /// The address book a sent row's `From <name>` is read out of. Injected by
+  /// tests; in the app the one shared cache every other screen reads.
+  final FriendsController? friends;
+
   @override
   State<WishlistPage> createState() => _WishlistPageState();
 }
@@ -47,6 +53,9 @@ class _WishlistPageState extends State<WishlistPage> {
   final TextEditingController _input = TextEditingController();
 
   late final PlansController _plans = widget.plans ?? PlansController.instance;
+
+  late final FriendsController _friends =
+      widget.friends ?? FriendsController.instance;
 
   /// True only when this page made the controller, so an injected one outlives
   /// the route the way its owner expects.
@@ -61,6 +70,11 @@ class _WishlistPageState extends State<WishlistPage> {
     super.initState();
     _controller.addListener(_onControllerChanged);
     unawaited(_controller.ensureLoaded());
+    // The names are wanted only by the rows somebody sent, but the list does
+    // not know whether it holds one until it has loaded, and asking after that
+    // would redraw the list a second time for a caption. One ask, up front,
+    // shared with every other screen that has already asked.
+    unawaited(_friends.ensureLoaded());
   }
 
   /// A write that failed after the list is on screen has nowhere to be seen —
@@ -147,7 +161,9 @@ class _WishlistPageState extends State<WishlistPage> {
           SafeArea(
             bottom: false,
             child: AnimatedBuilder(
-              animation: _controller,
+              // Two sources: the list itself, and the address book that turns
+              // a sender's id into the name on the right of the row.
+              animation: Listenable.merge([_controller, _friends]),
               builder: (context, _) => _buildBody(context),
             ),
           ),
@@ -284,7 +300,11 @@ class _WishlistPageState extends State<WishlistPage> {
 
         return WishlistRow(
           key: ValueKey(item.id),
-          item: item,
+          // The row draws whatever name it is handed and says "From a friend"
+          // when handed none — which is what a sender who is not (or is no
+          // longer) a friend of mine resolves to, since the friends cache is
+          // the only place a name could come from.
+          item: item.copyWith(fromUserName: _friends.nameFor(item.fromUserId)),
           // A manual row has no restaurant, so it can never carry a day.
           plannedLabel: restaurantId == null
               ? null

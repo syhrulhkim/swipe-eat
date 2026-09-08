@@ -278,8 +278,9 @@ class _Provenance extends StatelessWidget {
     } else {
       final sender = item.fromUserName;
       label = switch (item.source) {
-        // The friend graph arrives in a later phase; until it does, the row
-        // says only what it honestly knows.
+        // The name is filled in from the friends cache when the sender is
+        // still a friend. When they are not, the row says only what it
+        // honestly knows.
         WishlistSource.friend =>
           sender == null ? 'From a friend' : 'From $sender',
         WishlistSource.swiped => 'Swiped',

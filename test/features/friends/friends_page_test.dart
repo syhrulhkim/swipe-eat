@@ -270,6 +270,26 @@ void main() {
       expect(find.text('Wants to be friends'), findsOneWidget);
     });
 
+    testWidgets('the confirm sheet survives the same', (tester) async {
+      // Two pills side by side, both labelled, both unable to shrink.
+      await _pumpPage(
+        tester,
+        viewport: _narrowViewport,
+        textScaler: const TextScaler.linear(2),
+      );
+
+      // The friends section is the last of three, and the list only builds
+      // what is on screen.
+      await tester.scrollUntilVisible(find.text('Aiman Zulkifli'), 300);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Remove Aiman Zulkifli'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Keep them'), findsOneWidget);
+    });
+
     testWidgets('the empty state survives the same', (tester) async {
       await _pumpPage(
         tester,
