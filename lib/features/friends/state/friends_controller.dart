@@ -46,6 +46,7 @@ class FriendsController extends ChangeNotifier {
 
   Map<String, FriendProfile> _byId = const {};
   Map<int, List<PlanPerson>> _planPeople = const {};
+  Map<int, List<PlanVote>> _votes = const {};
   Map<int, List<FriendProfile>> _likedBy = const {};
   List<FriendProfile> _friends = const [];
   List<FriendRequest> _requests = const [];
@@ -72,6 +73,14 @@ class FriendsController extends ChangeNotifier {
   List<FriendRequest> get outgoingRequests =>
       [for (final r in _requests) if (!r.incoming) r];
 
+  /// Who the app is signed in as, or null when nothing is.
+  ///
+  /// Read off the same seam the auth subscription uses, so a test gets an
+  /// answer without a Supabase singleton. The plan page needs it for two
+  /// questions it cannot answer from the plan alone: which chip is *my* vote,
+  /// and am I the person who gets to lock the time.
+  String? get myUserId => _authEvents.currentUserId;
+
   bool get isLoaded => _loaded;
   bool get loading => _loading;
   String? get error => _error;
@@ -97,6 +106,12 @@ class FriendsController extends ChangeNotifier {
   /// carries ids and statuses and no names at all, which is what this fills in.
   List<PlanPerson> peopleFor(int planId) =>
       List.unmodifiable(_planPeople[planId] ?? const <PlanPerson>[]);
+
+  /// Every answer to "when are we going?" on one plan, or an empty list until
+  /// the tally has been read. Includes the owner's own vote, and does not
+  /// include anybody who has not voted — there is no row for silence.
+  List<PlanVote> votesFor(int planId) =>
+      List.unmodifiable(_votes[planId] ?? const <PlanVote>[]);
 
   /// Which of your friends have ngap'd a place, or an empty list until the
   /// answer is in. The detail screen's `.friends` row reads this.
@@ -154,6 +169,47 @@ class FriendsController extends ChangeNotifier {
     } on Object catch (error) {
       debugPrint('Loading plan people failed: $error');
     }
+  }
+
+  /// Reads one plan's time votes.
+  ///
+  /// One plan rather than a month of them, unlike [loadPlanPeople]: the counts
+  /// are only ever drawn on the plan's own page, and a calendar that fetched
+  /// every tally would be fetching five numbers per card that no card shows.
+  ///
+  /// Silent on failure, like [loadWhoLiked]: the page's own job is the roster
+  /// and the time, and it says "no votes yet" rather than raising an error
+  /// about a tally.
+  Future<void> loadVotes(int planId) async {
+    final generation = _generation;
+    try {
+      final votes = await _repository.votes(planId);
+      if (generation != _generation) {
+        return;
+      }
+      _votes = {..._votes, planId: votes};
+      notifyListeners();
+    } on Object catch (error) {
+      debugPrint('Loading plan votes failed: $error');
+    }
+  }
+
+  /// Casts, or moves, my own vote, then re-reads the tally.
+  ///
+  /// Re-read rather than patched in place: the server replaces my previous
+  /// vote, and a client that added a row instead would show me voting twice
+  /// the first time I changed my mind. The re-read also picks up anybody who
+  /// voted while the screen was open.
+  Future<void> vote(int planId, {String? time, String? timeLabel}) async {
+    await _repository.vote(planId, time: time, timeLabel: timeLabel);
+    await loadVotes(planId);
+  }
+
+  /// Yes or no to an invite, then a re-read of that plan's roster so my own
+  /// row on the page says what I just said.
+  Future<void> answerInvite(int planId, {required bool going}) async {
+    await _repository.answerInvite(planId, going: going);
+    await loadPlanPeople([planId]);
   }
 
   /// Loads once; concurrent callers share the request. A failed load clears its
@@ -277,6 +333,7 @@ class FriendsController extends ChangeNotifier {
     _friends = const [];
     _requests = const [];
     _planPeople = const {};
+    _votes = const {};
     _likedBy = const {};
     _loaded = false;
     _loading = false;

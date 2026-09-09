@@ -1,6 +1,7 @@
 import 'package:swipe_eat/features/friends/data/friends_repository.dart';
 import 'package:swipe_eat/features/friends/domain/phone_hash.dart';
 import 'package:swipe_eat/features/friends/models/friend.dart';
+import 'package:swipe_eat/features/plans/models/plan_slot.dart';
 
 /// `implements`, never `extends` (D69): a signature change on
 /// [FriendsRepository] must fail to compile here rather than quietly keep
@@ -49,6 +50,10 @@ class FakeFriendsRepository implements FriendsRepository {
 
   /// Set to throw from the next [friends] call.
   Object? failWith;
+
+  /// Set to throw from [votes]. The tally fails silently in the controller, so
+  /// a test that wants to prove that needs a way to make it fail.
+  Object? failVotesWith;
 
   /// Set to throw from [requests] only, leaving the friends load intact.
   Object? failRequestsWith;
@@ -207,6 +212,10 @@ class FakeFriendsRepository implements FriendsRepository {
   @override
   Future<List<PlanVote>> votes(int planId) async {
     calls.add('votes');
+    final failure = failVotesWith;
+    if (failure != null) {
+      throw failure;
+    }
     return _votes;
   }
 
@@ -248,4 +257,15 @@ PlanPerson testPlanPerson(
     profile: testFriend(id, name: name),
     status: status,
   );
+}
+
+/// A vote built the way the server sends one, so a test cannot accidentally
+/// key a vote differently from the chip it belongs to.
+PlanVote testPlanVote(PlanSlot slot, String id, {String? name}) {
+  return PlanVote.fromJson({
+    'id': id,
+    'name': name ?? 'Friend $id',
+    'plan_time': slot.wireTime,
+    'time_label': slot.wireLabel,
+  });
 }

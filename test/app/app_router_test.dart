@@ -13,6 +13,7 @@ import 'package:swipe_eat/features/friends/presentation/invite_page.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
 import 'package:swipe_eat/features/plans/presentation/plan_date_page.dart';
+import 'package:swipe_eat/features/plans/presentation/plan_page.dart';
 import 'package:swipe_eat/features/plans/state/plans_controller.dart';
 
 import '../features/auth/fake_auth_repository.dart';
@@ -157,7 +158,11 @@ void main() {
       controller = AuthController(repository);
       await controller.bootstrap();
 
-      plansRepository = FakePlansRepository();
+      // One plan on the calendar, so `/plans/:id` has something to draw and
+      // is not tested against its own empty state.
+      plansRepository = FakePlansRepository(
+        rows: [testPlan(77, date: DateTime(2026, 9, 4))],
+      );
       PlansController.debugSetInstance(
         PlansController(
           repository: plansRepository,
@@ -221,6 +226,33 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(InvitePage), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a plan id on its own opens the plan', (tester) async {
+      await pumpApp(tester, deepLink: '/plans/77');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PlanPage), findsOneWidget);
+      expect(find.text('When are we going?'), findsOneWidget);
+    });
+
+    testWidgets('"new" is still the pick-a-date screen, not a plan id',
+        (tester) async {
+      // `/plans/new` is declared above `/plans/:id`, and go_router takes the
+      // first match — so the order in the route table is load-bearing.
+      await pumpApp(tester, deepLink: '/plans/new');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PlanPage), findsNothing);
+    });
+
+    testWidgets('a plan id that is not a number gets a screen, not a crash',
+        (tester) async {
+      await pumpApp(tester, deepLink: '/plans/not-a-plan');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PlanPage), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

@@ -287,7 +287,7 @@ class _CalendarTabState extends State<CalendarTab> {
               plan: plan,
               people: _friends.peopleFor(plan.id),
               position: _position,
-              onTap: () => _openRestaurant(plan),
+              onTap: () => _openPlan(plan),
               onCancel: () => unawaited(_confirmCancel(plan)),
             ),
         ],
@@ -314,8 +314,12 @@ class _CalendarTabState extends State<CalendarTab> {
     });
   }
 
-  void _openRestaurant(Plan plan) {
-    context.push('/restaurant/${plan.restaurantId}');
+  /// The card opens the plan, not the place. It used to open the place, which
+  /// was the only thing a plan could show before it had guests — now the plan
+  /// has a time to vote on and a roster to answer, and the restaurant is one
+  /// tap further in, from the plan's own header.
+  void _openPlan(Plan plan) {
+    context.push('/plans/${plan.id}');
   }
 
   Future<void> _openMonthSheet() async {

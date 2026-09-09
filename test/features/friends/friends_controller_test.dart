@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swipe_eat/features/friends/data/friends_repository.dart';
+import 'package:swipe_eat/features/friends/domain/vote_tally.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
+import 'package:swipe_eat/features/plans/models/plan_slot.dart';
 
 import 'fake_friends_repository.dart';
 
@@ -371,6 +373,103 @@ void main() {
         () => controller.peopleFor(1).add(testPlanPerson(1, 'x')),
         throwsUnsupportedError,
       );
+    });
+  });
+
+  group('time votes', () {
+    FakeFriendsRepository repositoryWithVotes() => FakeFriendsRepository(
+          votes: [
+            testPlanVote(PlanSlot.dinner, 'a'),
+            testPlanVote(PlanSlot.supper, 'b'),
+          ],
+        );
+
+    test('loadVotes reads one plan\'s tally', () async {
+      final controller = controllerFor(repositoryWithVotes());
+
+      await controller.loadVotes(7);
+
+      expect(controller.votesFor(7), hasLength(2));
+      expect(controller.votesFor(8), isEmpty);
+    });
+
+    test('a failed read leaves the page with no votes rather than an error',
+        () async {
+      final repository = repositoryWithVotes()..failVotesWith = 'nope';
+      final controller = controllerFor(repository);
+
+      await controller.loadVotes(7);
+
+      expect(controller.votesFor(7), isEmpty);
+      expect(controller.error, isNull);
+    });
+
+    test('a reset mid-read keeps the last account\'s tally out', () async {
+      final controller = controllerFor(repositoryWithVotes());
+
+      final inFlight = controller.loadVotes(7);
+      controller.reset();
+      await inFlight;
+
+      expect(controller.votesFor(7), isEmpty);
+    });
+
+    test('voting sends the slot and then re-reads, rather than patching',
+        () async {
+      final repository = FakeFriendsRepository();
+      final controller = controllerFor(repository);
+
+      await controller.vote(7, time: '20:00:00');
+
+      expect(repository.castVotes, [(7, '20:00:00', null)]);
+      expect(repository.calls, ['vote', 'votes']);
+    });
+
+    test('changing my mind does not leave me voting twice', () async {
+      final repository = FakeFriendsRepository(
+        votes: [testPlanVote(PlanSlot.dinner, 'me')],
+      );
+      final controller = controllerFor(repository);
+      await controller.loadVotes(7);
+
+      // The server replaces the row; the fake stands in for that by handing
+      // back the new tally on the next read.
+      repository.setVotes([testPlanVote(PlanSlot.supper, 'me')]);
+      await controller.vote(7, timeLabel: 'late');
+
+      expect(controller.votesFor(7), hasLength(1));
+      expect(controller.votesFor(7).single.slotKey, slotVoteKey(PlanSlot.supper));
+    });
+
+    test('answering an invite re-reads that plan\'s roster', () async {
+      final repository = FakeFriendsRepository(
+        planPeople: [testPlanPerson(7, 'a')],
+      );
+      final controller = controllerFor(repository);
+
+      await controller.answerInvite(7, going: true);
+
+      expect(repository.calls, ['answerInvite', 'planPeople']);
+      expect(controller.peopleFor(7), hasLength(1));
+    });
+
+    test('votesFor hands back a list the caller cannot edit', () async {
+      final controller = controllerFor(repositoryWithVotes());
+      await controller.loadVotes(7);
+
+      expect(
+        () => controller.votesFor(7).add(testPlanVote(PlanSlot.noon, 'x')),
+        throwsUnsupportedError,
+      );
+    });
+
+    test('reset forgets the tallies with everything else', () async {
+      final controller = controllerFor(repositoryWithVotes());
+      await controller.loadVotes(7);
+
+      controller.reset();
+
+      expect(controller.votesFor(7), isEmpty);
     });
   });
 }

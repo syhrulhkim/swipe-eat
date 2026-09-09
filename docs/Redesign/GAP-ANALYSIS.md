@@ -1,6 +1,6 @@
 Status: DRAFT
 Owner: Swipe Eat team
-Last updated: 2026-09-04
+Last updated: 2026-09-09
 Cross-references: [README.md](README.md), [SCREENS.md](SCREENS.md), [NGAP-DESIGN-SYSTEM.md](NGAP-DESIGN-SYSTEM.md), [Features/Backend-Schema.md](../Features/Backend-Schema.md), [General/PLAN.md](../General/PLAN.md)
 
 # Gap Analysis — built vs. Ngap
@@ -452,13 +452,33 @@ which also supersedes [Features/Group-Dining.md](../Features/Group-Dining.md).
 
 Still Phase 8 and beyond:
 
-- **Every plan is a party of one.** `plan_members` and `plan_time_votes` have
-  no write path, so "Bring friends" is stored and nothing else, the summary
-  bar says "Just you", and the avatar stack on a plan row is empty.
+- ~~**Every plan is a party of one.**~~ — **done 2026-09-09** (phase 8).
+  `invite_to_plan`, `answer_plan_invite` and `set_plan_vote` are all wired;
+  a plan card draws its guests' faces and `/plans/:id` collects the votes.
+- ~~**`/plans/:id/invite` does not exist.**~~ — **done 2026-09-06** (phase 8).
 - **Other people's plans do not show as pips.** Nothing selects another user's
   plans, so every pip in the grid is your own.
-- **`/plans/:id/invite` does not exist.** Locking in with "Bring friends" on
-  lands on the Calendar and says "Invites arrive with Friends".
+
+### Phase 8 progress (2026-09-09)
+
+The friend graph, invites and time voting. See
+[Features/Plans-Calendar.md](../Features/Plans-Calendar.md) §6a for the plan
+screen and D128 for why it exists at all.
+
+- **Friends have a schema and a screen** — `friendships`, contact matching by
+  hash, `/friends`, and requests answered in place.
+- **Invites work** — `/plans/:id/invite` sends them, a guest answers Going or
+  Can't on the plan, and both the calendar card and the plan roster say who
+  said what.
+- **Time voting works** — the five chips carry tallies on `/plans/:id`, a vote
+  replaces your last one, and the owner can move the plan to the winning slot.
+
+Still open after Phase 8:
+
+- **Other people's plans do not show as pips** — a guest sees the plan on the
+  list, but the month grid still only marks days the user owns a plan on.
+- **The invite screen's context lines** ("Free Friday evening", "Lives 400 m
+  from there") need joins no query does yet.
 
 ## 7. What this is not
 

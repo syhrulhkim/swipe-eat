@@ -151,6 +151,13 @@ Future<_Harness> _pumpTab(
           return const Scaffold(body: Text('detail'));
         },
       ),
+      GoRoute(
+        path: '/plans/:id',
+        builder: (context, state) {
+          pushed.add('/plans/${state.pathParameters['id']}');
+          return const Scaffold(body: Text('plan'));
+        },
+      ),
     ],
   );
   addTearDown(router.dispose);
@@ -275,13 +282,16 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('tapping a row opens the restaurant', (tester) async {
+    testWidgets('tapping a row opens the plan, not the place', (tester) async {
+      // The place is one tap further in, from the plan's own header: a plan
+      // now has a time to vote on and a roster to answer, and the card is the
+      // only way to either of them.
       final harness = await _pumpTab(tester, rows: _designPlans());
 
       await tester.tap(find.text('Warung Kak Ros'));
       await tester.pumpAndSettle();
 
-      expect(harness.pushed, ['/restaurant/11']);
+      expect(harness.pushed, ['/plans/1']);
     });
   });
 

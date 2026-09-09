@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-06
+Last updated: 2026-09-09
 Cross-references: [Group-Dining.md](Group-Dining.md), [Likes-Visits.md](Likes-Visits.md), [Wishlist.md](Wishlist.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md), [../Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
 
 # Plans and the Calendar
@@ -9,20 +9,27 @@ Biting a place says you want to eat there. A plan says **when**. This is the
 feature that turns a like into a night out, and it is what tab 3 holds now that
 the Group Dining placeholder is gone.
 
-Two screens:
+Three screens:
 
 - **S4 · Pick a date** (`/plans/new`) — a month, five times, one switch, and a
   summary bar that reads the answer back before you commit it.
 - **S6 · Calendar** (tab index 3) — the month you are in, the days that carry
   plans, and the plans themselves listed under day headings.
+- **The plan** (`/plans/:id`) — the design draws no screen for this; it draws
+  *"they'll get a vote on the time"* on a switch and nowhere to cast one
+  (D128). The five chips carry their tallies, the roster says who answered,
+  and the owner gets the button that settles it.
 
 Files: `lib/features/plans/models/{plan.dart,plan_slot.dart}`,
 `domain/plan_labels.dart`, `data/plans_repository.dart`,
 `state/plans_controller.dart`,
-`presentation/{plan_calendar.dart,plan_date_page.dart,calendar_tab.dart}`.
+`presentation/{plan_calendar.dart,plan_date_page.dart,plan_page.dart,calendar_tab.dart}`,
+and — because a tally is a thing about friends —
+`lib/features/friends/domain/vote_tally.dart`.
 Screens S4 and S6 in `docs/Redesign/assets/ngap-app-screens.html`.
 
-Migration: `supabase/migrations/20260906090000_plans_and_plan_members.sql`.
+Migrations: `supabase/migrations/20260906090000_plans_and_plan_members.sql`
+and `20260906160100_plan_people_invites_and_votes.sql`.
 
 ## 1. What a plan is
 
@@ -241,17 +248,48 @@ dashboard only decides where to hang it.
   `mealLabel`, so the two surfaces cannot disagree about when dinner starts.
   The distance comes from `distanceLabelFrom` and is **left off** when no real
   fix has landed — a made-up distance on every row is worse than no distance.
-- Tap a row to open the restaurant; long-press to cancel.
+- Tap a row to open the plan (`/plans/:id`); long-press to cancel. The row
+  used to open the restaurant, which was the only thing a plan had to show
+  before it had guests — the restaurant is now one tap further in, from the
+  plan's own header.
 - Empty: "No plans yet / Bite something, then pick a day." with **Start
   swiping**. The month grid stays — an empty calendar is still a calendar.
 
+## 6a. The plan (`/plans/:id`)
+
+Reached by tapping a plan on the Calendar. Everything on it is read through the
+controllers the rest of the app already shares — `PlansController.planById` for
+the plan, `FriendsController` for the roster and the tally — so opening it
+costs one `get_plan_votes` and one `get_plan_people`.
+
+- **The header** is the place, its cuisine and neighbourhood, and a chevron
+  through to `/restaurant/:id`.
+- **The chips** are `PlanSlot.all`, the same five the plan was made with, each
+  carrying its own count once there is one — `20:00 · 2`, never `20:00 · 0`, on
+  the grounds that a row of five zeroes reads as a screen full of failures. A
+  screen reader hears `"20:00, 2 votes"` instead, because `·` is read as a date
+  by some of them and the plural has to be right either way.
+- **Tapping a chip** casts or moves your own vote through `set_plan_vote`, then
+  re-reads the tally. Re-read rather than patched: the server *replaces* your
+  previous row, and a client that appended would show you voting twice the
+  first time you changed your mind.
+- **The lines under the chips** say which slot leads and how many people have
+  not answered. A tie has no leader — the line says "most votes" and a tie has
+  no most, and breaking it by position would put a thumb on 12:30 for no reason
+  anybody could see. The owner is not a `plan_members` row (D107), so they are
+  counted into "still to vote" by hand.
+- **Settling it** is the owner copying the winning slot onto the plan with
+  `PlansRepository.setTime` — the vote speaks the same vocabulary as the thing
+  it votes on (D110), so locking is a copy rather than a translation. The
+  button is absent when there is nothing to settle: no votes, a tie, or a plan
+  already at the winning time.
+- **A guest** gets **Going** / **Can't** instead, through `answer_plan_invite`.
+  The screen tells owner from guest by looking for its own id in the plan's
+  members: RLS only ever hands it a plan you own or belong to, so "not a
+  member" and "owner" are the same answer.
+
 ## 7. Data-empty today
 
-- **Members.** `plan_members` has no write path until the Friends phase. Every
-  plan is a party of one, so the summary bar says "Just you" rather than
-  "3 friends" and the avatar stack on a plan row is empty.
-- **Votes.** `plan_time_votes` likewise. The "Bring friends" switch is stored
-  on the plan and does nothing else yet.
 - **Other people's pips.** The design draws cream pips for plans that are not
   yours. Nothing selects another user's plans, so every pip is ember today.
 
@@ -270,4 +308,5 @@ dashboard only decides where to hang it.
 | D107 | A plan is one owner, one restaurant, one date. The triple is a unique index and the ON CONFLICT target of `create_plan`, so locking the same place in twice on one day moves the time instead of creating a second row. | locked 2026-09-06 |
 | D108 | A past plan is a kept plan unless it was cancelled first. `mark_plan_kept()` flips it server-side on load; there is no "did you go?" prompt, because the calendar records intent and intent that survived to the day counts. | locked 2026-09-06 |
 | D109 | Membership is answered by a `security definer` helper, `public.is_plan_member(bigint)`, rather than by policies that reference each other's tables and recurse. `EXECUTE` stays granted to `authenticated` because a policy expression runs with the querying role's privileges; the advisor warning that follows is accepted and explained in the migration. | locked 2026-09-06 |
+| D128 | Voting gets a screen the design does not draw. "They'll get a vote on the time" is written on S4's switch and no S-numbered screen ever collects one, so `/plans/:id` is invented rather than derived — the smallest surface that makes the switch's promise true. It takes the Calendar card's tap and hands the restaurant back from its own header, so the plan does not need a second affordance nobody would find. | locked 2026-09-09 |
 | D110 | A plan's time is one of five fixed chips — 12:30, 18:30, 20:00, 21:30, Late — not a time picker. "Late" is a label with no hour, which is why `plan_time` is nullable, and it sorts last within a day. | locked 2026-09-06 |

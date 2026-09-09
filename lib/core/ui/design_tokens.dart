@@ -1022,16 +1022,21 @@ class AppFilterChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.semanticLabel,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
+  /// What a screen reader hears instead of [label], for a chip whose text is
+  /// shorthand — "20:00 · 2" is read out as a date by some of them.
+  final String? semanticLabel;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: label,
+      label: semanticLabel ?? label,
       button: true,
       selected: selected,
       // The Text below would merge its own node into this one; excluding it

@@ -15,6 +15,7 @@ import '../features/friends/presentation/friends_page.dart';
 import '../features/friends/presentation/invite_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
 import '../features/plans/presentation/plan_date_page.dart';
+import '../features/plans/presentation/plan_page.dart';
 import '../features/restaurants/models/restaurant_detail_data.dart';
 import '../features/restaurants/presentation/restaurant_detail_route.dart';
 import '../features/settings/presentation/settings_page.dart';
@@ -169,6 +170,18 @@ GoRouter createRouter(AuthController authController) {
               }
             },
           );
+        },
+      ),
+      // Pushed from a card on the Calendar. The id is parsed the same
+      // defensive way `/restaurant/:id` parses its own.
+      GoRoute(
+        path: '/plans/:id',
+        builder: (context, state) {
+          final planId = int.tryParse(state.pathParameters['id'] ?? '');
+          if (planId == null) {
+            return const _PlanDraftMissingPage();
+          }
+          return PlanPage(planId: planId);
         },
       ),
       // Pushed from `/plans/new` when "Bring friends" was left on, and
