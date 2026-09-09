@@ -192,6 +192,16 @@ class FakePlansRepository implements PlansRepository {
       'time': time,
       'timeLabel': timeLabel,
     });
+    // The controller re-reads after this, so the row has to have moved — a
+    // fake that only logged the call would let a screen pass a test it fails
+    // in the app, still showing the old time.
+    final parts = time?.split(':');
+    for (var i = 0; i < _rows.length; i++) {
+      if (_rows[i].id != planId) {
+        continue;
+      }
+      _rows[i] = _moved(_rows[i], parts, timeLabel);
+    }
   }
 
   @override
@@ -243,4 +253,27 @@ class FakePlansRepository implements PlansRepository {
     statsFor.add(today);
     return _stats;
   }
+}
+
+/// [Plan] has no `copyWith` — nothing in the app needs one, and one existing
+/// only for a fake is a production API paying rent for a test. This is the
+/// three fields `setTime` moves, over the rest of the row unchanged.
+Plan _moved(Plan plan, List<String>? parts, String? timeLabel) {
+  return Plan(
+    id: plan.id,
+    restaurantId: plan.restaurantId,
+    date: plan.date,
+    hour: parts == null ? null : int.tryParse(parts[0]),
+    minute: parts == null || parts.length < 2 ? null : int.tryParse(parts[1]),
+    timeLabel: timeLabel,
+    withFriends: plan.withFriends,
+    status: plan.status,
+    restaurantName: plan.restaurantName,
+    coverUrl: plan.coverUrl,
+    tag: plan.tag,
+    neighbourhood: plan.neighbourhood,
+    latitude: plan.latitude,
+    longitude: plan.longitude,
+    members: plan.members,
+  );
 }

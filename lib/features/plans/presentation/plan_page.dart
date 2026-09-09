@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
+import '../../friends/domain/friend_captions.dart';
 import '../../friends/domain/vote_tally.dart';
 import '../../friends/presentation/person_row.dart';
 import '../../friends/state/friends_controller.dart';
@@ -113,10 +114,12 @@ class _PlanPageState extends State<PlanPage> {
     final people = _friends.peopleFor(plan.id);
     // The owner is not a `plan_members` row (D107), so they are counted in by
     // hand — and their absence from the roster is also how this screen knows
-    // which of the two footers to draw.
+    // which of the two footers to draw. Everybody else is counted the way the
+    // plan card counts them: somebody who said no is not at the dinner, and
+    // waiting on their vote would leave the line up forever.
     final outstanding = votesOutstandingLine(
       voted: votes.length,
-      asked: people.length + 1,
+      asked: planHeadcount([for (final person in people) person.status]).guests + 1,
     );
     final myMembership = _myMembership(plan);
 

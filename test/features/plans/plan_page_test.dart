@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/friends/presentation/person_row.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
@@ -23,22 +24,20 @@ const Size _narrowViewport = Size(320, 568);
 
 final DateTime _now = DateTime(2026, 9, 6, 19, 41);
 
-/// Signed in as somebody, without a Supabase singleton to be signed in to.
+/// Signed in as somebody, without a Supabase singleton to be signed in to —
+/// the same seam [LikesController]'s own tests use. Nothing here follows auth
+/// changes, so the stream is never opened.
 class _FakeAuthEvents extends LikesAuthEvents {
   _FakeAuthEvents(this.userId);
 
   final String? userId;
 
   @override
-  Stream<AuthStateStub>? get changes => null;
+  Stream<AuthState>? get changes => null;
 
   @override
   String? get currentUserId => userId;
 }
-
-/// [LikesAuthEvents.changes] is typed against Supabase's own `AuthState`; the
-/// override above only ever returns null, so the element type never matters.
-typedef AuthStateStub = Never;
 
 class _Harness {
   _Harness({
@@ -256,6 +255,10 @@ void main() {
       expect(harness.plansRepository.retimed, [
         {'planId': 77, 'time': '18:30:00', 'timeLabel': null},
       ]);
+      // And the screen has moved on: the plan reads back at its new time and
+      // there is nothing left to settle.
+      expect(find.text('Fri 4 Sep · 18:30'), findsOneWidget);
+      expect(find.textContaining('Move it to'), findsNothing);
     });
 
     testWidgets('nothing to settle when the plan is already at the leader',
@@ -330,6 +333,23 @@ void main() {
       expect(find.text('Going'), findsOneWidget);
       expect(find.text("Can't"), findsOneWidget);
       expect(find.text('Asked'), findsOneWidget);
+    });
+
+    testWidgets('somebody who said no is not still to vote', (tester) async {
+      await _pumpPlan(
+        tester,
+        friendsRepository: FakeFriendsRepository(
+          votes: [testPlanVote(PlanSlot.dinner, 'a')],
+          planPeople: [
+            testPlanPerson(77, 'a', status: 'going'),
+            testPlanPerson(77, 'b', status: 'declined'),
+          ],
+        ),
+      );
+
+      // Two guests, one of whom is not coming. The owner and the one who is
+      // coming are the two being waited on, and one of them has voted.
+      expect(find.text('1 person still to vote'), findsOneWidget);
     });
 
     testWidgets('a plan with nobody on it says so', (tester) async {
