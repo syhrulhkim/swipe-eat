@@ -1,7 +1,7 @@
 Status: ACTIVE
 Owner: Swipe Eat team
 Last updated: 2026-09-05
-Cross-references: [Auth.md](Auth.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md)
+Cross-references: [Friends.md](Friends.md), [Auth.md](Auth.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md)
 
 # Onboarding & the Taste Signal
 

@@ -1,7 +1,7 @@
 Status: ACTIVE
 Owner: Swipe Eat team
 Last updated: 2026-09-05
-Cross-references: [Likes-Visits.md](Likes-Visits.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
+Cross-references: [Friends.md](Friends.md), [Likes-Visits.md](Likes-Visits.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
 # Wishlist
 

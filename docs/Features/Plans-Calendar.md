@@ -1,7 +1,7 @@
 Status: ACTIVE
 Owner: Swipe Eat team
 Last updated: 2026-09-09
-Cross-references: [Group-Dining.md](Group-Dining.md), [Likes-Visits.md](Likes-Visits.md), [Wishlist.md](Wishlist.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md), [../Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
+Cross-references: [Friends.md](Friends.md), [Group-Dining.md](Group-Dining.md), [Likes-Visits.md](Likes-Visits.md), [Wishlist.md](Wishlist.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md), [../Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
 
 # Plans and the Calendar
 

@@ -1,7 +1,7 @@
 Status: Superseded 2026-09-06 by [Plans-Calendar.md](Plans-Calendar.md)
 Owner: Swipe Eat team
 Last updated: 2026-09-06
-Cross-references: [Plans-Calendar.md](Plans-Calendar.md), [General/PLAN.md](../General/PLAN.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md)
+Cross-references: [Friends.md](Friends.md), [Plans-Calendar.md](Plans-Calendar.md), [General/PLAN.md](../General/PLAN.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md)
 
 # Group Dining
 

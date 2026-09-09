@@ -462,6 +462,7 @@ Still Phase 8 and beyond:
 ### Phase 8 progress (2026-09-09)
 
 The friend graph, invites and time voting. See
+[Features/Friends.md](../Features/Friends.md) for the graph, and
 [Features/Plans-Calendar.md](../Features/Plans-Calendar.md) §6a for the plan
 screen and D128 for why it exists at all.
 

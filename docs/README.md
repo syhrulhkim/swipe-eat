@@ -88,6 +88,7 @@ reasoning first.
 | [Restaurant-Data](Features/Restaurant-Data.md) | ACTIVE | Scrape → extract → review → geocode pipeline |
 | [Account-Deletion-Legal](Features/Account-Deletion-Legal.md) | SHIPPED | Store-mandated deletion and the public legal pages |
 | [Plans-Calendar](Features/Plans-Calendar.md) | ACTIVE | Pick a date, the Calendar tab, and the planned state everywhere |
+| [Friends](Features/Friends.md) | ACTIVE | The friend graph, contact matching, invites, blocking |
 | [Group-Dining](Features/Group-Dining.md) | SUPERSEDED | Tab 3 is the Calendar now; the shared-deck sketch survives |
 | [Quiz](Features/Quiz.md) | ORPHANED | Schema with no UI reaching it |
 
