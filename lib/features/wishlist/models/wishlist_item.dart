@@ -7,8 +7,8 @@ enum WishlistSource {
   /// Saved with the deck's Later gesture.
   swiped,
 
-  /// Someone sent it. The sender is [WishlistItem.fromUserId]; their name
-  /// arrives with the friends phase.
+  /// Someone sent it. The sender is [WishlistItem.fromUserId]; the page looks
+  /// that id up in the friends cache to fill in [WishlistItem.fromUserName].
   friend,
 
   /// Typed into the "Add a place…" bar. The only source allowed to carry no
@@ -106,8 +106,9 @@ class WishlistItem {
   /// Who sent it, when [source] is [WishlistSource.friend].
   final String? fromUserId;
 
-  /// Their display name. Always null today — the friend graph arrives in a
-  /// later phase, and until it does the row says "From a friend".
+  /// Their display name, filled in by the page from the friends cache. Null
+  /// when the sender is not a friend of mine — somebody can send a place and
+  /// then be removed — and the row says "From a friend" for those.
   final String? fromUserName;
 
   /// When the user crossed it off, or null while it is still to go.

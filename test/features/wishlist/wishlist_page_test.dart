@@ -3,12 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
+import 'package:swipe_eat/features/friends/models/friend.dart';
+import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/wishlist/models/wishlist_item.dart';
 import 'package:swipe_eat/features/wishlist/presentation/wishlist_page.dart';
 import 'package:swipe_eat/features/wishlist/presentation/wishlist_row.dart';
 import 'package:swipe_eat/features/wishlist/state/wishlist_controller.dart';
 
 import '../../support/widget_test_support.dart';
+import '../friends/fake_friends_repository.dart';
 import 'fake_wishlist_repository.dart';
 
 /// Reference phone viewport used unless a case cares about the size.
@@ -53,10 +56,19 @@ Future<WishlistController> _pumpPage(
   double dpr = 1.0,
   TextScaler textScaler = TextScaler.noScaling,
   Future<void> Function(String text)? onShare,
+  List<FriendProfile> friends = const [],
 }) async {
   useViewport(tester, viewport, dpr: dpr);
   final backing = repository ?? FakeWishlistRepository(rows: rows);
   final controller = WishlistController(repository: backing);
+
+  // Injected even when it is empty: the page reads the shared instance
+  // otherwise, and the shared instance talks to Supabase.
+  final friendsController = FriendsController(
+    repository: FakeFriendsRepository(friends: friends),
+    followAuthChanges: false,
+  );
+  addTearDown(friendsController.dispose);
 
   await tester.pumpWidget(
     MaterialApp(
@@ -64,7 +76,11 @@ Future<WishlistController> _pumpPage(
         data: MediaQuery.of(context).copyWith(textScaler: textScaler),
         child: child!,
       ),
-      home: WishlistPage(controller: controller, onShare: onShare),
+      home: WishlistPage(
+        controller: controller,
+        onShare: onShare,
+        friends: friendsController,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -144,7 +160,8 @@ void main() {
       ]);
 
       expect(find.text('Swiped'), findsOneWidget);
-      // The friend graph has not landed, so the row says only what it knows.
+      // Nobody sent it that I am still friends with, so the row says only
+      // what it knows.
       expect(find.text('From a friend'), findsOneWidget);
       expect(find.text('Added'), findsOneWidget);
       expect(find.text('Eaten'), findsOneWidget);
@@ -641,6 +658,11 @@ void main() {
         repository: FakeWishlistRepository(rows: [testWishlistItem(1)]),
       );
       addTearDown(controller.dispose);
+      final friends = FriendsController(
+        repository: FakeFriendsRepository(),
+        followAuthChanges: false,
+      );
+      addTearDown(friends.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -650,7 +672,10 @@ void main() {
                 child: TextButton(
                   onPressed: () => Navigator.of(context).push<void>(
                     MaterialPageRoute(
-                      builder: (_) => WishlistPage(controller: controller),
+                      builder: (_) => WishlistPage(
+                        controller: controller,
+                        friends: friends,
+                      ),
                     ),
                   ),
                   child: const Text('Open wishlist'),
@@ -670,6 +695,125 @@ void main() {
 
       expect(find.text('Places to\ntry'), findsNothing);
       expect(find.text('Open wishlist'), findsOneWidget);
+    });
+  });
+
+  group('WishlistPage senders', () {
+    testWidgets('a row somebody sent names them', (tester) async {
+      await _pumpPage(
+        tester,
+        rows: [
+          testWishlistItem(
+            1,
+            title: 'Roti Canai Corner',
+            source: WishlistSource.friend,
+            fromUserId: 'u1',
+          ),
+        ],
+        friends: [testFriend('u1', name: 'Aiman Zulkifli')],
+      );
+
+      expect(find.text('From Aiman Zulkifli'), findsOneWidget);
+      expect(find.text('From a friend'), findsNothing);
+    });
+
+    testWidgets('a sender I am no longer friends with keeps the old wording',
+        (tester) async {
+      // The name can only come from the friends cache, and somebody removed
+      // is not in it. The row still came from a person, so it still says so.
+      await _pumpPage(
+        tester,
+        rows: [
+          testWishlistItem(
+            1,
+            title: 'Roti Canai Corner',
+            source: WishlistSource.friend,
+            fromUserId: 'u9',
+          ),
+        ],
+        friends: [testFriend('u1', name: 'Aiman Zulkifli')],
+      );
+
+      expect(find.text('From a friend'), findsOneWidget);
+    });
+
+    testWidgets('only a sent row gets a name, however many friends there are',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        rows: [
+          testWishlistItem(1, title: 'Swiped One', fromUserId: 'u1'),
+          testWishlistItem(2, title: 'Typed One',
+              source: WishlistSource.manual, fromUserId: 'u1'),
+        ],
+        friends: [testFriend('u1', name: 'Aiman Zulkifli')],
+      );
+
+      expect(find.textContaining('From'), findsNothing);
+      expect(find.text('Swiped'), findsOneWidget);
+      expect(find.text('Added'), findsOneWidget);
+    });
+
+    testWidgets('the name arrives when the address book does', (tester) async {
+      // The two loads are independent, and the wishlist usually wins. The row
+      // has to redraw when the names land rather than keeping the placeholder
+      // until the next visit.
+      final friendsRepository = FakeFriendsRepository()
+        ..failWith = StateError('offline');
+      useViewport(tester, _phoneViewport);
+      final controller = WishlistController(
+        repository: FakeWishlistRepository(rows: [
+          testWishlistItem(
+            1,
+            title: 'Roti Canai Corner',
+            source: WishlistSource.friend,
+            fromUserId: 'u1',
+          ),
+        ]),
+      );
+      final friends = FriendsController(
+        repository: friendsRepository,
+        followAuthChanges: false,
+      );
+      addTearDown(friends.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WishlistPage(controller: controller, friends: friends),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('From a friend'), findsOneWidget);
+
+      friendsRepository.failWith = null;
+      friendsRepository.setFriends([testFriend('u1', name: 'Aiman Zulkifli')]);
+      await friends.refresh();
+      await tester.pumpAndSettle();
+
+      expect(find.text('From Aiman Zulkifli'), findsOneWidget);
+    });
+
+    testWidgets('a long sender name does not overflow the narrowest phone',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        rows: [
+          testWishlistItem(
+            1,
+            title: 'Roti Canai Corner',
+            source: WishlistSource.friend,
+            fromUserId: 'u1',
+          ),
+        ],
+        friends: [
+          testFriend('u1', name: 'Nurul Syafiqah binti Abdul Rahman'),
+        ],
+        viewport: _narrowViewport,
+        textScaler: _hugeTextScale,
+      );
+
+      expect(tester.takeException(), isNull);
     });
   });
 

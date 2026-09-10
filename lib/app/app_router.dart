@@ -11,8 +11,11 @@ import '../features/auth/presentation/welcome_page.dart';
 import '../features/auth/state/auth_controller.dart';
 import '../features/dashboard/presentation/dashboard_page.dart';
 import '../features/dashboard/state/dashboard_tab_request.dart';
+import '../features/friends/presentation/friends_page.dart';
+import '../features/friends/presentation/invite_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
 import '../features/plans/presentation/plan_date_page.dart';
+import '../features/plans/presentation/plan_page.dart';
 import '../features/restaurants/models/restaurant_detail_data.dart';
 import '../features/restaurants/presentation/restaurant_detail_route.dart';
 import '../features/settings/presentation/settings_page.dart';
@@ -129,6 +132,12 @@ GoRouter createRouter(AuthController authController) {
         builder: (context, state) =>
             SettingsPage(authController: authController),
       ),
+      // Pushed from the You tab's other ghost button. Nothing is passed: the
+      // page reads the one shared friends cache the whole app reads.
+      GoRoute(
+        path: '/friends',
+        builder: (context, state) => const FriendsPage(),
+      ),
       // Pushed from the Bites tab's "Wishlist →" chip, so it keeps the
       // platform transition and the iOS swipe-back gesture.
       GoRoute(
@@ -150,19 +159,42 @@ GoRouter createRouter(AuthController authController) {
           return PlanDatePage(
             draft: draft,
             onCreated: (context, planId, withFriends) {
-              // `/plans/:id/invite` belongs to the Friends phase. Until it
-              // exists the plan is already saved, so the honest thing is to
-              // land on the calendar showing it and say plainly what has not
-              // arrived yet — not to push a route that would 404.
+              // The plan is saved by the time this runs, so the calendar is
+              // where the screen belongs whatever happens next. Going there
+              // first also means the invite screen has somewhere to pop back
+              // to — Skip and Send both land on the plan they just made.
               context.go('/dashboard');
               DashboardTabRequest.instance.show(3);
               if (withFriends) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invites arrive with Friends')),
-                );
+                context.push('/plans/$planId/invite');
               }
             },
           );
+        },
+      ),
+      // Pushed from a card on the Calendar. The id is parsed the same
+      // defensive way `/restaurant/:id` parses its own.
+      GoRoute(
+        path: '/plans/:id',
+        builder: (context, state) {
+          final planId = int.tryParse(state.pathParameters['id'] ?? '');
+          if (planId == null) {
+            return const _PlanDraftMissingPage();
+          }
+          return PlanPage(planId: planId);
+        },
+      ),
+      // Pushed from `/plans/new` when "Bring friends" was left on, and
+      // reachable on its own from a plan. The id is parsed the same defensive
+      // way `/restaurant/:id` parses its own.
+      GoRoute(
+        path: '/plans/:id/invite',
+        builder: (context, state) {
+          final planId = int.tryParse(state.pathParameters['id'] ?? '');
+          if (planId == null) {
+            return const _PlanDraftMissingPage();
+          }
+          return InvitePage(planId: planId);
         },
       ),
       GoRoute(

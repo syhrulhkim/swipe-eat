@@ -1019,16 +1019,21 @@ class AppFilterChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.semanticLabel,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
+  /// What a screen reader hears instead of [label], for a chip whose text is
+  /// shorthand — "20:00 · 2" is read out as a date by some of them.
+  final String? semanticLabel;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: label,
+      label: semanticLabel ?? label,
       button: true,
       selected: selected,
       // The Text below would merge its own node into this one; excluding it
@@ -1357,3 +1362,94 @@ const double kPickedTitleFontSize = 14;
 /// beside it: "Lock it in" is a pill that cannot shrink, and at a doubled text
 /// scale it alone would take most of a 320 pt row.
 const double kPickedBarStackWidth = 340;
+
+// ---------------------------------------------------------------------------
+// Friends
+// ---------------------------------------------------------------------------
+
+/// `.avatar{width:32px}` — the face in a stack, on the detail screen's friends
+/// row and anywhere else people are counted rather than chosen.
+const double kAvatarSize = 32;
+
+/// `.person .avatar{width:44px}` — the face on a row you can tap. It is
+/// [kMinTapTarget] on purpose: the row's height comes from its avatar, so the
+/// target is the picture.
+const double kAvatarSizeRow = 44;
+
+/// The 20 px face on a calendar plan card. Small because a plan row is a
+/// glance, and three faces plus a line of text have one line to live on.
+const double kAvatarSizeCompact = 20;
+
+/// `.stack .avatar{margin-left:-10px}`. Overlap rather than a gap: faces that
+/// touch read as a group, faces that do not read as a list.
+const double kAvatarOverlap = 10;
+
+/// The ring that separates one face from the one behind it — `border:2px solid
+/// var(--bg)`, and 1.5 on the compact stack where 2 would swallow the picture.
+const double kAvatarBorder = 2;
+const double kAvatarBorderCompact = 1.5;
+
+/// The initials inside a face with no photo, at each of the three sizes.
+const double kAvatarInitialsFontSize = 12;
+const double kAvatarInitialsFontSizeRow = 15;
+const double kAvatarInitialsFontSizeCompact = 9;
+
+/// How many faces a stack draws before it stops and lets the caption carry the
+/// count. Three is what the design draws on both the detail row and the plan
+/// card, and a fourth face buys nothing a number does not say better.
+const int kAvatarStackMax = 3;
+
+/// The five grounds behind a face with no photo — `.avatar.a1` … `.a5`.
+///
+/// These are **not** accents and the palette rules do not reach them: an
+/// accent means something (ember is action, [kFresh] is open now), and these
+/// mean nothing at all. They are the wallpaper behind two letters, picked by
+/// hashing the person's id so one person keeps one colour everywhere they
+/// appear. Nothing but an avatar may use them, which is why they are one list
+/// rather than five named tokens.
+const List<Color> kAvatarGrounds = [
+  Color(0xFFFFD8B8),
+  Color(0xFFF9B98A),
+  Color(0xFFFFE8A3),
+  Color(0xFFE9C7FF),
+  Color(0xFFBEE7FF),
+];
+
+/// The ink on those grounds. One value for all five because every ground is a
+/// pastel: [kAccentCream] on any of them would be unreadable.
+const Color kAvatarInk = Color(0xFF140A05);
+
+/// `.person .check{width:26px}` — the tick at the end of a selectable row.
+/// Same size as the wishlist's [kCheckCircleSize] because it is the same mark
+/// doing the same job.
+const double kPersonCheckSize = 26;
+
+/// `.search{height:46px}` — the invite screen's search field.
+const double kSearchBarHeight = 46;
+
+/// `.invite-foot .count b{font-size:22px}` — the running total beside "Send
+/// invites", set in the display face because it is a figure to read at a
+/// glance, not a label.
+const double kInviteCountFontSize = 22;
+
+/// `.invite-foot .btn{max-width:220px}` — how wide "Send invites" is allowed
+/// to get. The prototype's own cap: a pill stretched across a phone reads as a
+/// banner rather than a button.
+const double kInviteButtonMaxWidth = 220;
+
+/// Below this the invite screen's foot stacks its button under the count, for
+/// the same reason [kPickedBarStackWidth] exists: a pill that cannot shrink
+/// beside a figure that grows with the text scale.
+const double kInviteFootStackWidth = 320;
+
+/// `.settings{grid-template-columns:1fr 1fr}` — the You tab's two ghost
+/// buttons sit side by side until the pair is narrower than this, and stack
+/// after. Wider than [kInviteFootStackWidth] because there are two pills here
+/// rather than one, and "Friends · 38" is the longer label of the two.
+const double kSettingsGridStackWidth = 360;
+
+/// Above this rendered size, a person row's two answer buttons stack instead
+/// of sitting side by side. Measured in scaled pixels rather than as a
+/// multiplier because the thing that runs out of room is the width the words
+/// take, and that is what [kFontSizeSmall] scaled up actually is.
+const double kRowActionsStackFontSize = 17;

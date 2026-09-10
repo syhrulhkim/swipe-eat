@@ -10,6 +10,7 @@ import '../../../core/location/user_position_state.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/page_transitions.dart';
+import '../../friends/state/friends_controller.dart';
 import '../../wishlist/state/wishlist_controller.dart';
 import '../data/restaurant_repository.dart';
 import '../data/tiktok_player_factory.dart';
@@ -38,6 +39,7 @@ class RestaurantDetailPage extends StatefulWidget {
     required this.data,
     this.repository,
     this.wishlist,
+    this.friends,
     this.tiktokPlayerFuture,
     this.clock = OpeningHours.kualaLumpurNow,
   });
@@ -51,6 +53,10 @@ class RestaurantDetailPage extends StatefulWidget {
   /// Injected by tests. The page makes one when it is not given one, and
   /// disposes only what it made.
   final WishlistController? wishlist;
+
+  /// Injected by tests; in the app the shared instance is used. Only the
+  /// `.friends` row reads it.
+  final FriendsController? friends;
 
   /// A warmed player, so a widget test never starts a real WebView. Null in
   /// the app: the page opens its own and stops it on the way out.
@@ -72,6 +78,9 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
   late final WishlistController _wishlist =
       widget.wishlist ?? WishlistController();
   late final bool _ownsWishlist = widget.wishlist == null;
+
+  late final FriendsController _friends =
+      widget.friends ?? FriendsController.instance;
 
   /// The hero's player. Owned here when the caller passed none, so it is also
   /// stopped here — there is no cache on this screen to evict it.
@@ -108,6 +117,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
 
     LikesController.instance.addListener(_onControllerChanged);
     _wishlist.addListener(_onControllerChanged);
+    _friends.addListener(_onControllerChanged);
 
     // Best-effort: an unreachable backend leaves the marks empty, and the
     // taps below surface their own errors if the user then uses them.
@@ -116,12 +126,14 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
     });
     unawaited(_wishlist.ensureLoaded());
     unawaited(_loadNgapCount());
+    unawaited(_friends.loadWhoLiked(_id));
   }
 
   @override
   void dispose() {
     LikesController.instance.removeListener(_onControllerChanged);
     _wishlist.removeListener(_onControllerChanged);
+    _friends.removeListener(_onControllerChanged);
     if (_ownsWishlist) {
       _wishlist.dispose();
     }
@@ -407,7 +419,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                       ],
                       if (data.details.trim().isNotEmpty)
                         AboutParagraph(text: data.details),
-                      const FriendsBiteRow(avatars: [], caption: null),
+                      FriendsBiteRow(people: _friends.whoLiked(_id)),
                     ],
                   ),
                 ),

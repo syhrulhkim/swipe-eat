@@ -9,10 +9,12 @@ import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
 import 'package:swipe_eat/features/onboarding/models/onboarding_draft.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
+import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_steps.dart';
 
 import '../../support/widget_test_support.dart';
 import '../auth/fake_auth_repository.dart';
+import '../friends/fake_friends_repository.dart';
 import 'fake_onboarding_repository.dart';
 
 Position _position({double latitude = 1.9, double longitude = 103.1}) {
@@ -34,6 +36,13 @@ void main() {
   late FakeAuthRepository authRepository;
   late AuthController auth;
   late FakeOnboardingRepository onboarding;
+  late FakeFriendsRepository friendsRepository;
+  late FriendsController friends;
+
+  /// The address book the wizard is given. Empty here — these tests walk past
+  /// the friends step; `onboarding_friends_step_test.dart` is the one that
+  /// stops on it.
+  late List<String> contactBook;
 
   setUp(() async {
     // The auth controller caches the profile on the device; without a fake
@@ -49,9 +58,16 @@ void main() {
     auth = AuthController(authRepository);
     await auth.bootstrap();
     onboarding = FakeOnboardingRepository();
+    friendsRepository = FakeFriendsRepository();
+    friends = FriendsController(
+      repository: friendsRepository,
+      followAuthChanges: false,
+    );
+    contactBook = <String>[];
   });
 
   tearDown(() async {
+    friends.dispose();
     auth.dispose();
     await authRepository.dispose();
   });
@@ -77,6 +93,8 @@ void main() {
               repository: onboarding,
               resolvePosition: resolvePosition ?? () async => _position(),
               resolvePlace: resolvePlace ?? (_) async => 'Peserai, Batu Pahat',
+              readContacts: () async => contactBook,
+              friends: friends,
             ),
           ),
         ),
@@ -119,6 +137,14 @@ void main() {
   /// The rules step sits between taste and habits and is skippable; most of
   /// the tests below are not about it, so they walk past it with Continue.
   Future<void> completeRulesStep(WidgetTester tester) async {
+    await tester.tap(primaryButton('Continue'));
+    await tester.pumpAndSettle();
+  }
+
+  /// The friends step sits between the rules and the habits, and is skippable.
+  /// Tests that are not about it walk past with Continue, which — with nobody
+  /// matched and so nobody ticked — is what the button says.
+  Future<void> completeFriendsStep(WidgetTester tester) async {
     await tester.tap(primaryButton('Continue'));
     await tester.pumpAndSettle();
   }
@@ -187,6 +213,7 @@ void main() {
       await completeNameStep(tester);
       await completeTasteStep(tester);
       await completeRulesStep(tester);
+      await completeFriendsStep(tester);
 
       expect(find.text('How do you eat?'), findsOneWidget);
       expect(find.text('Any distance'), findsWidgets);
@@ -206,6 +233,7 @@ void main() {
       await completeNameStep(tester);
       await completeTasteStep(tester);
       await completeRulesStep(tester);
+      await completeFriendsStep(tester);
 
       expect(find.text('How do you eat?'), findsOneWidget);
       expect(find.text('Spice bias'), findsNothing);
@@ -219,6 +247,7 @@ void main() {
       await completeNameStep(tester);
       await completeTasteStep(tester);
       await completeRulesStep(tester);
+      await completeFriendsStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -255,6 +284,7 @@ void main() {
       await completeNameStep(tester);
       await completeTasteStep(tester);
       await completeRulesStep(tester);
+      await completeFriendsStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -282,6 +312,7 @@ void main() {
       await completeNameStep(tester);
       await completeTasteStep(tester);
       await completeRulesStep(tester);
+      await completeFriendsStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -299,6 +330,7 @@ void main() {
       await completeNameStep(tester);
       await completeTasteStep(tester);
       await completeRulesStep(tester);
+      await completeFriendsStep(tester);
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
 
@@ -356,6 +388,8 @@ void main() {
 
     /// Walks the rest of the wizard so the RPC payload can be inspected.
     Future<void> finishFromRules(WidgetTester tester) async {
+      await tester.tap(primaryButton('Continue')); // friends
+      await tester.pumpAndSettle();
       await tester.tap(primaryButton('Continue')); // habits
       await tester.pumpAndSettle();
       await tester.tap(primaryButton('Continue')); // location
@@ -364,7 +398,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('sits between taste and the habits step', (tester) async {
+    testWidgets('sits between taste and the friends step', (tester) async {
       await reachRules(tester);
 
       expect(find.text('Any rules?'), findsOneWidget);
@@ -373,11 +407,11 @@ void main() {
         findsOneWidget,
         reason: 'every first-run step says why it is asking',
       );
-      expect(find.text('How do you eat?'), findsNothing);
+      expect(find.text('Eat with people'), findsNothing);
 
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('How do you eat?'), findsOneWidget);
+      expect(find.text('Eat with people'), findsOneWidget);
     });
 
     testWidgets('opens on the range the prototype shows, spice unset',
@@ -422,6 +456,9 @@ void main() {
       await tester.tap(find.text('Skip'));
       await tester.pumpAndSettle();
 
+      expect(find.text('Eat with people'), findsOneWidget);
+
+      await completeFriendsStep(tester);
       expect(find.text('How do you eat?'), findsOneWidget);
 
       await tester.tap(primaryButton('Continue'));
@@ -435,7 +472,11 @@ void main() {
       expect(onboarding.sentParams!['p_clear_budget'], isTrue);
     });
 
-    testWidgets('Skip is offered on this step and no other', (tester) async {
+    testWidgets('Skip is offered here and on the friends step', (tester) async {
+      // Two of the seven steps are optional, and they are next to each other:
+      // the rules, whose answers hide restaurants, and the friends step, which
+      // asks for the address book. Everywhere else the slot is empty so the
+      // topbar never shifts.
       await pumpWizard(tester);
       expect(find.text('Skip'), findsNothing);
 
@@ -443,11 +484,15 @@ void main() {
       expect(find.text('Skip'), findsNothing);
 
       await completeTasteStep(tester);
-      expect(find.text('Skip'), findsOneWidget);
+      expect(find.text('Skip'), findsOneWidget, reason: 'the rules step');
 
       await tester.tap(primaryButton('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Skip'), findsNothing);
+      expect(find.text('Skip'), findsOneWidget, reason: 'the friends step');
+
+      await tester.tap(primaryButton('Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Skip'), findsNothing, reason: 'the habits step');
     });
 
     testWidgets('reads each switch and segment out as one control',
@@ -468,32 +513,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('is step 3 of 6', (tester) async {
-      // The wizard is six steps, and the bar is the only thing that says how
+    testWidgets('is step 3 of 7', (tester) async {
+      // The wizard is seven steps, and the bar is the only thing that says how
       // many are left. A screen reader gets the same count in words.
       final handle = tester.ensureSemantics();
       await reachRules(tester);
 
-      expect(find.bySemanticsLabel('Step 3 of 6'), findsOneWidget);
+      expect(find.bySemanticsLabel('Step 3 of 7'), findsOneWidget);
 
       handle.dispose();
     });
 
-    testWidgets('draws two steps done, this one on, and three ahead',
+    testWidgets('draws two steps done, this one on, and four ahead',
         (tester) async {
       // The bar has three states, not two (§7e): a bar that only fills says
-      // "this much is done"; this one says "you are here, and there are three
+      // "this much is done"; this one says "you are here, and there are four
       // more", which is the question a first run actually raises.
       await reachRules(tester);
 
       final colours = _stepBarColours(tester);
 
-      expect(colours, hasLength(6));
+      expect(colours, hasLength(7));
       expect(colours.sublist(0, 2), everyElement(kCreamMuted),
           reason: 'name and taste are behind us');
       expect(colours[2], kAccentEmber, reason: 'the rules step is current');
       expect(colours.sublist(3), everyElement(kHairline),
-          reason: 'habits, location and the primer are ahead');
+          reason: 'friends, habits, location and the primer are ahead');
     });
 
     testWidgets('the spice segment starts with nothing chosen', (tester) async {
@@ -577,6 +622,8 @@ void main() {
       await reachRules(tester);
 
       await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+      await tester.tap(primaryButton('Continue')); // friends
       await tester.pumpAndSettle();
       await tester.tap(primaryButton('Continue')); // location
       await tester.pumpAndSettle();

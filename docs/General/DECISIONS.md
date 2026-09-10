@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-09
 Cross-references: [PLAN.md](PLAN.md), [../README.md](../README.md)
 
 # Decision Log
@@ -46,6 +46,11 @@ not the row number.
 | D94 | `wishlist_items` replaces `swipes.super_like` as the store behind Later. A wishlist is a list you added to — not a property of your last swipe, which `record_swipe` overwrote — and it has to be able to hold a place that is not in the catalogue at all. The column and `get_super_liked_ids` stay for data safety; the client stops reading them. | [Wishlist](../Features/Wishlist.md) | locked 2026-09-05 |
 | D107 | A plan is **one owner, one restaurant, one date**. The triple is a unique index and the ON CONFLICT target of `create_plan`, so locking the same place in twice on one day moves the time instead of writing a second row. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
 | D109 | Plan membership is answered by a `security definer` helper, `public.is_plan_member(bigint)`, rather than by policies on `plans` and `plan_members` that reference each other's tables and recurse. `EXECUTE` stays granted to `authenticated` because a policy expression runs with the querying role's privileges; the advisor warning that follows is accepted and explained in the migration. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
+| D127 | Onboarding says what contact matching actually does. The copy claims a hashed, peppered comparison on the server rather than on-device matching — no scheme that finds strangers can do the latter honestly, and a promise the code cannot keep is worse than the plainer truth. | [Friends](../Features/Friends.md) | locked 2026-09-06 |
+| D128 | The matching path never sees a phone number, and the hash it does see lives in `phone_hashes`, not on `profiles`. The client normalises to E.164 and SHA-256s it; the server peppers from the vault and hashes again; `match_contacts` writes nothing and keeps nothing. The side table is keyed to `auth.users` because two `after insert` triggers on one event fire in name order, so a `profiles` column could be written before the profile row exists. | [Friends](../Features/Friends.md) | locked 2026-09-06 |
+| D129 | Every cross-user read returns exactly three columns — id, name, avatar url — through a `security definer` function. `profiles` is owner-only under RLS and stays that way, so no policy is ever opened to make a name visible. The phone hash and the email appear in no return type anywhere. | [Friends](../Features/Friends.md) | locked 2026-09-06 |
+| D130 | A friendship pair is one row in one direction, keyed `(user_lo, user_hi)` with `user_lo < user_hi`, and `requester_id` records who asked — the *other* party accepts. A blocked row is the blocker's alone to update or delete, and `friend_request('send')` into a block returns the same neutral error a genuine failure gives: a block the blocked person can detect or lift is not a block. | [Friends](../Features/Friends.md) | locked 2026-09-06 |
+| D131 | One `friend_request(user_id, action)` RPC rather than four functions. Send, accept, decline, remove and block are the same statement against the same primary key with a different verb, and four functions would be four places to get the pair ordering wrong. Security invoker, so RLS stays the boundary. | [Friends](../Features/Friends.md) | locked 2026-09-06 |
 
 ## Deck & ranking
 
@@ -98,6 +103,9 @@ not the row number.
 | D95 | A Later is a **like** — the swipe is unchanged (`p_liked: true`, no `p_super_like`) and a `wishlist_items` row is written on top. The wishlist follows the like on removal only: unliking clears the row, re-liking never does. The old flag failed the second half, because `record_swipe` overwrote it on every swipe. | [Wishlist](../Features/Wishlist.md) | locked 2026-09-05 |
 | D108 | A past plan is a **kept** plan unless it was cancelled first. `mark_plan_kept()` flips it server-side on load, and there is no "did you go?" prompt anywhere: the calendar records intent, and intent that survived to the day counts. Asking a day later gets a worse answer than not asking. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
 | D110 | A plan's time is one of **five fixed chips** — 12:30, 18:30, 20:00, 21:30, Late — not a time picker. A time is a thing to agree on with other people, and four options are agreed on faster than 1 440. "Late" is a label with no hour, which is why `plans.plan_time` is nullable, and it sorts last within a day. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
+| D132 | A plan member may see the other members. Phase 7 gave a guest "own membership select" only, so a guest opening the calendar saw an avatar stack of exactly one face — their own — on a dinner with five people at it. The new policy is scoped by `is_plan_member`, the same definer helper the rest of the plan policies lean on, so it adds no recursion. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
+| D133 | Time voting needs no new schema. A member upserts their own `plan_time_votes` row under the policies Phase 7 already wrote, the tally is a group-by the client does over rows it may read, and locking a time is the owner updating `plans.plan_time` through `PlansRepository.setTime`. The only thing missing was a read that could put a name next to a vote, which is what `get_plan_votes` is. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
+| D134 | Time voting gets a screen the design does not draw. "They'll get a vote on the time" is written on S4's switch and no S-numbered screen ever collects one, so `/plans/:id` is invented rather than derived — the five chips with their tallies, the roster, and the owner's button that moves the plan to the winning slot. It takes the Calendar card's tap; the restaurant is a chevron away in the plan's header. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-09 |
 
 ## TikTok player
 
@@ -199,4 +207,4 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D126**.
+   ID must keep meaning the same thing. The highest ID in use is **D134**.

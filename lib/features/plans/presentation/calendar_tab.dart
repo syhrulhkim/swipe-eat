@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -14,6 +15,10 @@ import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../dashboard/presentation/dashboard_widgets.dart';
 import '../../dashboard/state/dashboard_tab_request.dart';
+import '../../friends/domain/friend_captions.dart';
+import '../../friends/models/friend.dart';
+import '../../friends/presentation/friend_avatar.dart';
+import '../../friends/state/friends_controller.dart';
 import '../domain/plan_labels.dart';
 import '../models/plan.dart';
 import '../state/plans_controller.dart';
@@ -28,12 +33,17 @@ class CalendarTab extends StatefulWidget {
   const CalendarTab({
     super.key,
     this.controller,
+    this.friends,
     this.tabRequests,
     this.resolvePosition,
   });
 
   /// Injected by tests; in the app the shared instances are used.
   final PlansController? controller;
+
+  /// Where the faces on each card come from. `Plan.members` carries ids and
+  /// statuses, which is enough to count people but not enough to draw them.
+  final FriendsController? friends;
   final DashboardTabRequest? tabRequests;
 
   /// How the tab learns where the phone is, for the "· 6 km" on each row.
@@ -47,6 +57,8 @@ class CalendarTab extends StatefulWidget {
 class _CalendarTabState extends State<CalendarTab> {
   late final PlansController _plans =
       widget.controller ?? PlansController.instance;
+  late final FriendsController _friends =
+      widget.friends ?? FriendsController.instance;
   late final DashboardTabRequest _tabs =
       widget.tabRequests ?? DashboardTabRequest.instance;
 
@@ -60,24 +72,57 @@ class _CalendarTabState extends State<CalendarTab> {
   bool _searching = false;
   String _query = '';
 
+  /// The plan ids the rosters were last asked for. Guards against the loop
+  /// that would otherwise form: `loadPlanPeople` notifies, the notification
+  /// rebuilds this tab, and a rebuild that asked again would notify again.
+  /// Asking is driven by the plan list changing, never by a build.
+  Set<int> _rosterAskedFor = const {};
+
   @override
   void initState() {
     super.initState();
     _plans.addListener(_onPlansChanged);
+    _friends.addListener(_onFriendsChanged);
     unawaited(_plans.ensureLoaded());
     unawaited(_resolvePosition());
+    // The shared controller may already hold this month, in which case the
+    // load below never notifies and the rosters would never be asked for.
+    _syncRosters();
   }
 
   @override
   void dispose() {
     _plans.removeListener(_onPlansChanged);
+    _friends.removeListener(_onFriendsChanged);
     super.dispose();
   }
 
   void _onPlansChanged() {
     if (mounted) {
       setState(() {});
+      _syncRosters();
     }
+  }
+
+  void _onFriendsChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Asks for the rosters of every plan the controller holds, once per set.
+  ///
+  /// Every plan rather than only the month on screen: the controller holds
+  /// this month onward and nothing else, stepping to another month does not
+  /// reload anything, and one call for the lot is cheaper than one per month
+  /// the user flicks past.
+  void _syncRosters() {
+    final ids = {for (final plan in _plans.plans) plan.id};
+    if (ids.isEmpty || setEquals(ids, _rosterAskedFor)) {
+      return;
+    }
+    _rosterAskedFor = ids;
+    unawaited(_friends.loadPlanPeople(ids));
   }
 
   Future<void> _resolvePosition() async {
@@ -264,8 +309,9 @@ class _CalendarTabState extends State<CalendarTab> {
           for (final plan in section.value)
             _PlanRow(
               plan: plan,
+              people: _friends.peopleFor(plan.id),
               position: _position,
-              onTap: () => _openRestaurant(plan),
+              onTap: () => _openPlan(plan),
               onCancel: () => unawaited(_confirmCancel(plan)),
             ),
         ],
@@ -292,8 +338,12 @@ class _CalendarTabState extends State<CalendarTab> {
     });
   }
 
-  void _openRestaurant(Plan plan) {
-    context.push('/restaurant/${plan.restaurantId}');
+  /// The card opens the plan, not the place. It used to open the place, which
+  /// was the only thing a plan could show before it had guests — now the plan
+  /// has a time to vote on and a roster to answer, and the restaurant is one
+  /// tap further in, from the plan's own header.
+  void _openPlan(Plan plan) {
+    context.push('/plans/${plan.id}');
   }
 
   /// Walks the grid a month at a time, the way the picker's arrows do.
@@ -502,12 +552,19 @@ class _SectionHead extends StatelessWidget {
 class _PlanRow extends StatelessWidget {
   const _PlanRow({
     required this.plan,
+    required this.people,
     required this.position,
     required this.onTap,
     required this.onCancel,
   });
 
   final Plan plan;
+
+  /// The guests, once their names have been found. Empty until the roster
+  /// lands, which is why the count on the subtitle is read off `plan.members`
+  /// instead: the line is right the moment the plan is, and the faces appear
+  /// under it a beat later without moving anything.
+  final List<PlanPerson> people;
   final Position? position;
   final VoidCallback onTap;
   final VoidCallback onCancel;
@@ -515,11 +572,15 @@ class _PlanRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = _subtitle();
+    final faces = [
+      for (final person in people)
+        if (person.status != 'declined') person.profile,
+    ];
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Semantics(
-        label: '${plan.restaurantName}, ${subtitle.label}, ${plan.timeText}',
+        label: '${plan.restaurantName}, $subtitle, ${plan.timeText}',
         button: true,
         // Excluding the children keeps the announcement one sentence; that
         // also drops the InkWell's actions, so both are re-declared here (D83)
@@ -566,7 +627,33 @@ class _PlanRow extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        _SubtitleRow(subtitle: subtitle),
+                        // `.plan .t .sub{display:flex;align-items:center;
+                        // gap:6px}` — the faces sit on the subtitle line, not
+                        // beside the logo.
+                        Row(
+                          children: [
+                            if (faces.isNotEmpty) ...[
+                              FriendAvatarStack(
+                                people: faces,
+                                size: kAvatarSizeCompact,
+                                borderWidth: kAvatarBorderCompact,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Expanded(
+                              child: Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: kTextFontFamily,
+                                  fontSize: kFontSizeSmall,
+                                  color: kCreamSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -581,36 +668,24 @@ class _PlanRow extends StatelessWidget {
     );
   }
 
-  /// The detail line the prototype draws under a plan's name. With friends it
-  /// shows an avatar stack plus either the confirmed count or the practical
-  /// details when nobody has confirmed yet; solo plans read "Just you" followed
-  /// by the place's neighbourhood and distance.
-  _SubtitleParts _subtitle() {
-    final members = plan.members;
-    if (plan.withFriends && members.isNotEmpty) {
-      final going = members.where((m) => m.isGoing).length;
-      if (going > 0) {
-        return _SubtitleParts(
-          avatars: members,
-          label:
-              '${members.length} ${members.length == 1 ? 'friend' : 'friends'}'
-              ' · $going confirmed',
-        );
-      }
-      // Nobody confirmed yet — show when/where instead, same as a solo row.
-      final parts = <String>[planMealLabel(plan)];
-      final neighbourhood = plan.neighbourhood;
-      if (neighbourhood != null && neighbourhood.isNotEmpty) {
-        parts.add(neighbourhood);
-      }
-      final distance = _distance();
-      if (distance != null) {
-        parts.add(distance);
-      }
-      return _SubtitleParts(avatars: members, label: parts.join(' · '));
-    }
-
-    final parts = <String>['Just you'];
+  /// "3 friends · 2 confirmed · Kepong · 6 km", or "Just you · Kajang · 22 km"
+  /// on a plan nobody was invited to. Every part after the first is dropped
+  /// when it is not known, rather than filled with a guess — a distance the
+  /// app invented is worse than a line that is one item shorter.
+  ///
+  /// Who is coming leads, always. The design's three plan cards do not agree
+  /// on this — one of them draws two faces beside "Lunch · Kepong · 6 km" —
+  /// but the other two are the people line, `planPeopleLine` has a "Just you"
+  /// branch that exists for one of them, and a meal label sitting next to the
+  /// time pill that implies it is the least this line can say. One rule for
+  /// all three cards beats reproducing a disagreement.
+  String _subtitle() {
+    final counts = planHeadcount([
+      for (final member in plan.members) member.status,
+    ]);
+    final parts = <String>[
+      planPeopleLine(guests: counts.guests, confirmed: counts.confirmed),
+    ];
 
     final neighbourhood = plan.neighbourhood;
     if (neighbourhood != null && neighbourhood.isNotEmpty) {
@@ -622,7 +697,7 @@ class _PlanRow extends StatelessWidget {
       parts.add(distance);
     }
 
-    return _SubtitleParts(label: parts.join(' · '));
+    return parts.join(' · ');
   }
 
   String? _distance() {
@@ -645,104 +720,6 @@ class _PlanRow extends StatelessWidget {
       return null;
     }
     return label.replaceAll(' away', '');
-  }
-}
-
-/// The pieces that make up a plan row's subtitle line.
-class _SubtitleParts {
-  const _SubtitleParts({required this.label, this.avatars = const []});
-
-  final String label;
-  final List<PlanMember> avatars;
-}
-
-/// The subtitle as the prototype draws it: a short row that can lead with an
-/// overlapping avatar stack before the text.
-class _SubtitleRow extends StatelessWidget {
-  const _SubtitleRow({required this.subtitle});
-
-  final _SubtitleParts subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (subtitle.avatars.isNotEmpty) ...[
-          _AvatarStack(members: subtitle.avatars),
-          const SizedBox(width: 6),
-        ],
-        Flexible(
-          child: Text(
-            subtitle.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: kTextFontFamily,
-              fontSize: kFontSizeSmall,
-              color: kCreamSecondary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Up to three small overlapping circles representing friends on the plan.
-/// Profiles are not joined yet, so each circle is a neutral placeholder with a
-/// generated initial from the member id — enough to give the row the same shape
-/// as the prototype until real avatars arrive.
-class _AvatarStack extends StatelessWidget {
-  const _AvatarStack({required this.members});
-
-  final List<PlanMember> members;
-
-  @override
-  Widget build(BuildContext context) {
-    const size = 20.0;
-    const overlap = 6.0;
-    final shown = members.take(3).toList();
-
-    return SizedBox(
-      width: size + (shown.length - 1) * (size - overlap),
-      height: size,
-      child: Stack(
-        children: [
-          for (var i = 0; i < shown.length; i++)
-            Positioned(
-              left: i * (size - overlap).toDouble(),
-              child: Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  color: kSurfacePanel,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: kHairline, width: 1.5),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _initials(shown[i].userId),
-                  style: const TextStyle(
-                    fontFamily: kTextFontFamily,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    color: kTextOnPhoto,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _initials(String userId) {
-    final cleaned = userId.replaceAll(RegExp(r'[^a-zA-Z]'), '');
-    if (cleaned.length >= 2) {
-      return cleaned.substring(0, 2).toUpperCase();
-    }
-    return (cleaned.isEmpty ? '??' : cleaned).toUpperCase();
   }
 }
 

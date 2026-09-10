@@ -118,6 +118,20 @@ class PlansController extends ChangeNotifier {
     return labels;
   }
 
+  /// One plan by id, or null when the list does not hold it.
+  ///
+  /// Null is a real answer rather than a failure: the list starts at the first
+  /// of the current month, so a link to last week's plan finds nothing, and
+  /// the page that asked says so instead of spinning.
+  Plan? planById(int planId) {
+    for (final plan in _plans) {
+      if (plan.id == planId) {
+        return plan;
+      }
+    }
+    return null;
+  }
+
   /// The plans on one day, earliest first with "Late" last.
   List<Plan> plansOn(DateTime date) {
     final onDay = [

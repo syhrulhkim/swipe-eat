@@ -1,7 +1,7 @@
 Status: ACTIVE
 Owner: Swipe Eat team
 Last updated: 2026-09-10
-Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Restaurant-Data.md](Restaurant-Data.md), [Wishlist.md](Wishlist.md), [TikTok-Video.md](TikTok-Video.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
+Cross-references: [Friends.md](Friends.md), [Swipe-Deck.md](Swipe-Deck.md), [Restaurant-Data.md](Restaurant-Data.md), [Wishlist.md](Wishlist.md), [TikTok-Video.md](TikTok-Video.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
 # Restaurant detail
 

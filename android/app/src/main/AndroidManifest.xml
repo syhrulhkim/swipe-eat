@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Asked for on the onboarding friends step, which is skippable. Skipping
+         reads nothing: the permission is only requested when the user taps
+         "Find friends from contacts". -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <application
         android:label="Swipe Eat"

@@ -12,6 +12,7 @@ WishlistItem testWishlistItem(
   String? tag = 'Nasi lemak',
   String? neighbourhood = 'Kampung Baru',
   String? coverUrl,
+  String? fromUserId,
   String? fromUserName,
 }) {
   return WishlistItem(
@@ -19,6 +20,7 @@ WishlistItem testWishlistItem(
     title: title ?? 'Place $id',
     source: source,
     restaurantId: restaurantId ?? (source == WishlistSource.manual ? null : id),
+    fromUserId: fromUserId,
     fromUserName: fromUserName,
     eatenAt: eatenAt,
     // Ids ascend with time by default, so a fixture list is in a predictable

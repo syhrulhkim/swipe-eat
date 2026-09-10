@@ -40,6 +40,11 @@ dependencies:
   # Hands the wishlist to the OS share sheet as plain text, so "where should we
   # eat" can leave the app in whatever chat the group already uses.
   share_plus: ^13.3.0
+  # Reads phone numbers off the address book for the onboarding friends step.
+  # Numbers are normalised and hashed before they leave the device and the
+  # list is never held past the call — see `ContactsReader` (D122). Reached
+  # only through an injected typedef, so no test touches the platform channel.
+  flutter_contacts: ^2.3.1
 
 dev_dependencies:
   flutter_lints: ^6.0.0
