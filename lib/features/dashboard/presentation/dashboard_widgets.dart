@@ -100,7 +100,7 @@ class SimpleCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(kRadiusPanel),
       child: Container(
         decoration: BoxDecoration(
-          color: kSurfacePanel,
+          color: kGlass,
           borderRadius: BorderRadius.circular(kRadiusPanel),
           border: Border.all(color: kHairline),
         ),

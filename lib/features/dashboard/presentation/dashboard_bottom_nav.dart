@@ -36,8 +36,7 @@ class DashboardBottomNav extends StatelessWidget {
   static const double _barHeight = 64;
   static const double _barPadding = 5;
   static const double _barBorder = 1;
-  static const double _tabHeight =
-      _barHeight - (_barPadding + _barBorder) * 2;
+  static const double _tabHeight = _barHeight - (_barPadding + _barBorder) * 2;
 
   /// The smallest a tab may be along either axis. Material asks for 48 and the
   /// iOS HIG for 44; the larger of the two governs.
@@ -190,9 +189,7 @@ class _BottomNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(
-        end: isSelected
-            ? selectedFlex.toDouble()
-            : restingFlex.toDouble(),
+        end: isSelected ? selectedFlex.toDouble() : restingFlex.toDouble(),
       ),
       duration: kMotionDuration,
       curve: kMotionEase,
@@ -278,11 +275,10 @@ class _BottomNavPill extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.clip,
                         softWrap: false,
-                        style:
-                            Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  color: foreground,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                     ),
                   ),

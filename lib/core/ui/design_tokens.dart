@@ -168,6 +168,11 @@ const double kActionButtonSize = 56;
 /// before the word is read.
 const double kNgapButtonSize = 72;
 
+/// The gap between the three controls in the deck's action bar, and between
+/// a ghost's disc and the word under it.
+const double kDeckActionGap = 20;
+const double kDeckActionCaptionGap = 6;
+
 /// Side of the small utility buttons (settings, back, more).
 const double kUtilityButtonSize = 44;
 
@@ -282,7 +287,10 @@ class ScreenGlow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width * 1.3;
+    // CSS gives the ellipse radii of 130% width and 48% height; Flutter sizes
+    // a radial gradient by its *box*, so the box is twice that — 260% x 96% —
+    // or the gradient's falloff stops short of the screen edges.
+    final width = MediaQuery.sizeOf(context).width * 2.6;
 
     return Positioned(
       // Centres the over-wide ellipse: the overhang is split between sides.
@@ -905,12 +913,6 @@ const double kNearbyRadiusUnitFontSize = 14;
 const double kNearbyResultFigureFontSize = 18;
 const double kNearbyResultButtonHeight = 46;
 
-/// The wash over the map tiles. The tile server serves a light street map and
-/// the app is near-black; without this the one screen that is not ours would
-/// be the brightest thing in the product. Dark enough that cream pins read
-/// against it, light enough that the streets still say where you are.
-const Color kNearbyMapScrim = Color(0xAD0B0605);
-
 // ---------------------------------------------------------------------------
 // Diet & budget controls (first-run step 01e, Settings) and the You tab (S10).
 //
@@ -974,11 +976,6 @@ const double kInputBarHeight = 50;
 const double kCheckCircleSize = 26;
 const double kWishThumbSize = 40;
 const double kRadiusWishThumb = 12;
-
-/// The bookmark badge on a Bites tile that is also on the wishlist —
-/// `.tile .wish`, a 28 px circle of near-opaque background over the photo.
-const double kWishBadgeSize = 28;
-const Color kFillWishBadge = Color(0x8C0B0605);
 
 /// How long the eaten strike-through takes to draw itself across a title.
 ///

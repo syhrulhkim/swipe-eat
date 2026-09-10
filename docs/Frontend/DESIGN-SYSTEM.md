@@ -186,20 +186,12 @@ button — which every badge, heart and star it replaces could be (D79).
 `bitten: false` returns a plain `ClipRRect`, so a caller hands it a saved or
 unsaved restaurant without branching.
 
-**Where it is:** every tile in the **Liked** segment of Bites, at the
-prototype's full 30 px.
+**Where it is:** the detail hero's media and the auth cover's blob.
 
-**Not the whole Bites grid.** Bites has three segments and they share one grid
-builder. Visited is keyed on `visited_at` and Reviewed on the existence of a
-review — *neither predicate mentions `liked`*. A place swiped left and later
-marked visited belongs in Visited and is not saved, so it must not carry the
-bite. The flag is per-segment, not per-grid.
-
-The tile bite was briefly two thirds size, to clear the super-like star. The
-star is retired (D84), so the corner is free and the scale factor is gone. A
-test asserts the clearance the full notch has over the two remaining row
-buttons, and a second asserts that a *third* badge would collide — which is
-why the star could not simply have stayed.
+**Where it was:** every Bites tile, until D125. The tile is now a photo over
+a caption strip, and its saved mark is the ember check of §7g — a full circle
+drawn inside the photo, which a notch at inset 6 / radius 30 (a quarter-disc
+hanging off the corner) cannot be. D79 still governs the hero and the blob.
 
 **Where it is not, yet:**
 
@@ -294,68 +286,10 @@ the two, and Pass/Like as wide pills. All three of those features are retired
 
 ## 7d. The map's furniture
 
-Three pieces, all floating over the tiles
-([Features/Nearby-Map.md](../Features/Nearby-Map.md)).
-
-**The me-dot** — an 18 px ember circle (`kNearbyMeDotSize`) with a 4 px
-`kBackgroundDark` border (`kNearbyMeDotBorder`) and a 12 px halo
-(`kNearbyMeHaloSpread`) of `kNearbyMeHalo`, which is lava at 22%. The border is
-the map's own background colour, so the dot punches a hole in the tiles rather
-than sitting on them.
-
-**The pins**
-
-| Pin | Blob | Border |
-|---|---|---|
-| At the origin | 96 (`kNearbyPinBigSize`) | 2 px `kHairline` |
-| At the radius edge | 52 (`kNearbyPinSmallSize`) | 2 px `kHairline` |
-| The two closest | as above | 2 px `kAccentEmber` |
-
-The blob's size is a linear lerp of distance over radius between the two
-tokens (`NearbyController.pinSizeFor`), so nearness is drawn, not just
-labelled. Ember on the two closest is not decoration — they are the two the
-user is most likely to act on, and orange marks what is actionable (D78's rule,
-not its exception). The blob carries a `BiteNotch` at
-`kNearbyPinBiteFraction` (18/76) of its size when the place is saved, so the
-map speaks the same silhouette as the Bites grid (D79), and an ember distance
-badge (10 px w700 on `kOnAccent`) at the top right. The caption under the blob
-is `kNearbyPinCaptionHeight` (74) tall, and the whole box is kept
-`kNearbyPinGap` (4) clear of every other pin by `spreadPins` (D116). Only the
-nearest five are drawn, and they are drawn where the design draws them: the
-six `kNearbyPinSlots` (two of them big) as fractions of the map area, the
-me-dot at `kNearbyMeDotFraction` (50%, 52%). The map opens at
-`kNearbyInitialZoom` (15) for the one frame before it is composed.
-
-The pin is the one place in the app whose type does **not** follow the system
-text size all the way: `flutter_map` is told a marker's height before its
-caption is laid out, so the caption is wrapped in
-`MediaQuery.withClampedTextScaling` at `kNearbyPinMaxTextScale` (1.6) and the
-box stays the size the map was promised. The clamp covers the distance badge
-too, so the badge cannot outgrow the blob it hangs off. Everything else on the
-screen — the stepper, the results bar, every sheet the map opens — scales
-without a ceiling (D73).
-
-**The scrim** — `kNearbyMapScrim` between the tiles and the markers. OSM's
-raster tiles are a daylight map, and cream text over them is unreadable without
-it. It is a flat overlay rather than a colour matrix on the tile layer, because
-a matrix cannot be verified by a widget test.
-
-**The radius stepper**, bottom right — a 44 px minus (`kUtilityButtonSize`,
-`kSurfaceDark` + hairline), the value block, a 44 px ember plus. The value is
-micro "Away from you" over a `kNearbyRadiusValueFontSize` (30) w800 number with
-a `kNearbyRadiusUnitFontSize` (14) w600 unit, so the number is legible at a
-glance and the unit does not compete with it. Only the plus is ember: widening
-is the move that finds more food.
-
-**The results bar** — `kSurfaceDark`, hairline, `kRadiusPanel` (18) on the top
-corners only, flush with the nav, so it reads as the map resting on the nav
-rather than a card floating over both. Figures are micro labels over
-`kNearbyResultFigureFontSize` (18) w700 values; the action is a
-`kNearbyResultButtonHeight` (46) **flat** ember pill, not `kCtaGradient` — the
-gradient is the deck's Ngap button alone (D75), and a second gradient on the
-same journey would make neither primary. Under width pressure the gap between
-the figures collapses and the figures ellipsize before the button gives up a
-pixel: the action must never be the thing that gets cut.
+Three pieces, all floating over the map area
+([Features/Nearby-Map.md](../Features/Nearby-Map.md)). There are **no tiles** under them
+since D126 — the pins sit on `kBackgroundDark`, and `kNearbyMapScrim` went
+with the raster it existed to darken.
 
 ## 7e. Preference controls
 
@@ -424,28 +358,31 @@ reads as continuing past them rather than as five things that happened to fit.
 Semantics: `label` + `isButton` + `hasSelectedState`, with the tap action
 re-declared beside `excludeSemantics` (D83).
 
-## 7g. Two marks on a tile
+## 7g. The Bites tile
 
-`RestaurantGridCard` can carry three signals at once, and they do not share
-corners:
+`RestaurantGridCard` is a photo over a solid caption strip, not a photo with
+text laid over it (D125):
+
+- The **photo** fills the top of the tile; it is `Expanded` into whatever the
+  caption leaves, so a large text scale shrinks the picture rather than
+  overflowing the tile. No scrim: nothing is read over it.
+- The **caption strip** is `kSurfaceDark` under a `kHairline` border, 12 pt
+  padding, the name in `appPanelTitleStyle` on one line and
+  "Cuisine · Neighbourhood" in `kCreamMuted` `labelSmall` w600 under it.
+- The grid's `childAspectRatio` is **0.9**, which lands the photo at roughly
+  two thirds of the tile on a phone at the default text size.
+
+Two marks sit on the photo, in different corners:
 
 | Mark | Corner | Says |
 |---|---|---|
-| The **bite** (§7a) | top right, clipped | saved |
-| The **wish badge** — `kWishBadgeSize` 28, `kFillWishBadge`, hairline, 14 px bookmark | top right, drawn | still on the wishlist |
+| The **saved check** — `kCheckCircleSize` 26, `kAccentEmber`, 14 px `check_rounded` in `kTextOnPhoto` | top right | in your bites |
 | The **planned pill** — ember, `kFontSizeMicro` w700 on `kOnAccent` | top left | a day is set |
 
-The first two collide by design: the notch is a 30 px circle centred 6 px
-inside the corner, and a 28 px badge inset 8 px falls almost wholly within it.
-The prototype's own mask erases its `.wish` for exactly this reason. The badge
-is therefore painted **outside** the clip — an outer `Stack` around the
-`BiteNotch` — so it reads as the bookmark sitting in the bite rather than
-disappearing into it. `restaurant_grid_card_test.dart` asserts the overlap, so
-the day the geometry changes the test stops being vacuous rather than silently
-passing.
-
-The tile's second line is **"Cuisine · Neighbourhood"**, and drops the
-neighbourhood rather than leaving a dangling separator when the row has none.
+The check is the wishlist row's tick at the same size and glyph, so "saved"
+and "done" read as one family. It is a mark, not a control — `IgnorePointer`
+under an opaque `GestureDetector`, so the tile stays one tap target. The
+wishlist bookmark that used to share the corner is removed (D84, D125).
 
 ## 7h. The strike-through
 
@@ -703,7 +640,7 @@ instances and their licences already existed. Lexend was removed in turn.
 | D76 | The palette is asserted in tests — warm blacks, stacking order, one non-orange accent — so a retint cannot quietly break the rule that governs it. | locked 2026-09-04 |
 | D77 | All-caps is forbidden, and the rule lives in `AppEyebrow` because that was the app's only uppercasing call site. | locked 2026-09-04 |
 | D78 | `ScreenGlow` is the single exception to "nothing decorative is orange", granted only because it is `IgnorePointer` and never touches a control. | locked 2026-09-04 |
-| D79 | The saved-marker is a notch **clipped out of** the surface, not a badge drawn on it. A mark that is part of the silhouette cannot be mistaken for a button; the heart, star and badge it replaces all could. | locked 2026-09-04 |
+| D79 | The saved-marker is a notch **clipped out of** the surface, not a badge drawn on it. A mark that is part of the silhouette cannot be mistaken for a button; the heart, star and badge it replaces all could. **Superseded on the Bites tile by D125** ([Likes-Visits](../Features/Likes-Visits.md)); stands on the detail hero and the auth blob. | locked 2026-09-04 |
 | D80 | Only the current tab is labelled. The bar spends its width on the one question the user is asking, and three independent signals — fill, ink, filled-vs-outline glyph — say which tab is current without relying on colour. | locked 2026-09-04 |
 | D96 | The design's chip row replaces the Bites segments. `AppFilterChip` is drawn at 36 and tapped at 44, and only a *selected* chip is ember — a chip that navigates never lights. | locked 2026-09-05 |
 | D81 | The bite is not wired to the swipe card. The deck deals only unswiped places, so the flag would be false everywhere — an always-false switch is dead code, not a reskin. | locked 2026-09-04 |

@@ -449,8 +449,7 @@ void main() {
       expect(find.text('What people bite'), findsNothing);
     });
 
-    testWidgets('renders name, description and price per dish',
-        (tester) async {
+    testWidgets('renders name, description and price per dish', (tester) async {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(
         tester,
@@ -489,8 +488,9 @@ void main() {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(
         tester,
-        _detailData(details: 'A tiny shophouse stall with a big charcoal '
-            'grill, open late, and a queue that never quite ends.'),
+        _detailData(
+            details: 'A tiny shophouse stall with a big charcoal '
+                'grill, open late, and a queue that never quite ends.'),
       );
 
       expect(find.text('More'), findsOneWidget);

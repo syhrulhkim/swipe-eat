@@ -32,7 +32,6 @@ AppUser _user({
       budgetMax: budgetMax,
     );
 
-
 /// The page carries two sliders — the radius above and the budget below — so
 /// each finder names the row it belongs to rather than trusting the order.
 Finder get _radiusSlider => find.byWidgetPredicate(
@@ -316,9 +315,7 @@ void main() {
       expect(find.text('RM 10\u201360'), findsOneWidget,
           reason: 'the read-out still tracks the finger');
 
-      tester
-          .widget<Slider>(_budgetSlider)
-          .onChangeEnd!(60);
+      tester.widget<Slider>(_budgetSlider).onChangeEnd!(60);
       await tester.pumpAndSettle();
 
       expect(profile.preferenceCalls, hasLength(1));
@@ -336,9 +333,7 @@ void main() {
       // still held at the top stop.
       await pumpSettings(tester, user: _user(budgetMin: 10, budgetMax: 40));
 
-      tester
-          .widget<Slider>(_budgetSlider)
-          .onChanged!(100);
+      tester.widget<Slider>(_budgetSlider).onChanged!(100);
       await tester.pump();
 
       expect(find.text('RM 10+'), findsOneWidget);
@@ -353,13 +348,9 @@ void main() {
     testWidgets('the top stop releases the cap here too', (tester) async {
       await pumpSettings(tester, user: _user(budgetMin: 10, budgetMax: 40));
 
-      tester
-          .widget<Slider>(_budgetSlider)
-          .onChanged!(100);
+      tester.widget<Slider>(_budgetSlider).onChanged!(100);
       await tester.pump();
-      tester
-          .widget<Slider>(_budgetSlider)
-          .onChangeEnd!(100);
+      tester.widget<Slider>(_budgetSlider).onChangeEnd!(100);
       await tester.pumpAndSettle();
 
       expect(profile.preferenceCalls.single.budgetMin, 10);
@@ -373,13 +364,9 @@ void main() {
       await pumpSettings(tester, user: _user(budgetMin: 10, budgetMax: 60));
       profile.fail = true;
 
-      tester
-          .widget<Slider>(_budgetSlider)
-          .onChanged!(80);
+      tester.widget<Slider>(_budgetSlider).onChanged!(80);
       await tester.pump();
-      tester
-          .widget<Slider>(_budgetSlider)
-          .onChangeEnd!(80);
+      tester.widget<Slider>(_budgetSlider).onChangeEnd!(80);
       await tester.pumpAndSettle();
 
       expect(find.text('Could not save that preference.'), findsOneWidget);

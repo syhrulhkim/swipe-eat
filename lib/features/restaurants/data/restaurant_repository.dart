@@ -93,8 +93,7 @@ class RestaurantRepository {
   }) async {
     final rows = await _client
         .rpc<dynamic>('search_restaurants', params: {
-          if (query != null && query.trim().isNotEmpty)
-            'p_query': query.trim(),
+          if (query != null && query.trim().isNotEmpty) 'p_query': query.trim(),
           'p_limit': limit,
           if (latitude != null) 'p_latitude': latitude,
           if (longitude != null) 'p_longitude': longitude,
@@ -129,9 +128,8 @@ class RestaurantRepository {
   /// How many people have bitten this place, across every account. Backed by
   /// a definer RPC because `swipes` only ever shows a user their own rows.
   Future<int> ngapCount(int restaurantId) async {
-    final result = await _client
-        .rpc<dynamic>('get_ngap_count', params: {'p_restaurant_id': restaurantId})
-        .timeout(_timeout);
+    final result = await _client.rpc<dynamic>('get_ngap_count',
+        params: {'p_restaurant_id': restaurantId}).timeout(_timeout);
     return (result as num?)?.toInt() ?? 0;
   }
 }

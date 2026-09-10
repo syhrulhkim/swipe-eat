@@ -151,8 +151,8 @@ void main() {
       await cache.save(_user());
 
       final prefs = await SharedPreferences.getInstance();
-      final payload =
-          jsonDecode(prefs.getString('profile_cache_v1')!) as Map<String, dynamic>;
+      final payload = jsonDecode(prefs.getString('profile_cache_v1')!)
+          as Map<String, dynamic>;
 
       expect(payload['halal_only'], isTrue);
       expect(payload['vegetarian'], isTrue);

@@ -51,6 +51,7 @@ class FakeProfileRepository implements ProfileRepository {
     int? searchRadiusKm,
     bool setRadius = false,
     String? lastPlaceName,
+    bool setPlaceName = false,
     List<int>? filterCuisineIds,
     List<int>? filterDietaryTagIds,
     double? filterMinRating,
@@ -69,11 +70,10 @@ class FakeProfileRepository implements ProfileRepository {
       avatarUrl: user.avatarUrl,
       onboardedAt: user.onboardedAt,
       searchRadiusKm: setRadius ? searchRadiusKm : user.searchRadiusKm,
-      lastPlaceName: lastPlaceName ?? user.lastPlaceName,
+      lastPlaceName: setPlaceName ? lastPlaceName : user.lastPlaceName,
       filterCuisineIds: filterCuisineIds ?? user.filterCuisineIds,
       filterDietaryTagIds: filterDietaryTagIds ?? user.filterDietaryTagIds,
-      filterMinRating:
-          setMinRating ? filterMinRating : user.filterMinRating,
+      filterMinRating: setMinRating ? filterMinRating : user.filterMinRating,
       createdAt: user.createdAt,
       halalOnly: halalOnly ?? user.halalOnly,
       vegetarian: vegetarian ?? user.vegetarian,
@@ -138,10 +138,13 @@ class FakeProfileRepository implements ProfileRepository {
     if (fail) {
       throw Exception('write refused');
     }
-    return user = user.copyWith(lastPlaceName: placeName);
+    // The real RPC now writes the name with the fix, null included, so a
+    // failed geocode cannot leave the old town's name on new coordinates.
+    return user = _with(lastPlaceName: placeName, setPlaceName: true);
   }
 
-  final List<({List<int> cuisineIds, List<int> dietaryTagIds, double? minRating})>
+  final List<
+          ({List<int> cuisineIds, List<int> dietaryTagIds, double? minRating})>
       filterCalls = [];
 
   @override

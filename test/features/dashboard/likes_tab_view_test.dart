@@ -66,7 +66,6 @@ List<Restaurant> _restaurants(int count) {
 Future<void> _pumpLikesTab(
   WidgetTester tester, {
   required List<Restaurant> liked,
-  Set<int> wishlistedIds = const {},
   Set<int> plannedIds = const {},
   Map<int, String> plannedLabels = const {},
   Size viewport = _phoneViewport,
@@ -74,6 +73,7 @@ Future<void> _pumpLikesTab(
   TextScaler textScaler = TextScaler.noScaling,
   void Function(Restaurant restaurant)? onOpenRestaurant,
   VoidCallback? onOpenWishlist,
+  Future<void> Function()? onRefresh,
 }) async {
   useViewport(tester, viewport, dpr: dpr);
   await tester.pumpWidget(
@@ -88,11 +88,11 @@ Future<void> _pumpLikesTab(
         backgroundColor: kBackgroundDark,
         body: LikesTabView(
           liked: liked,
-          wishlistedIds: wishlistedIds,
           plannedIds: plannedIds,
           plannedLabels: plannedLabels,
           onOpenRestaurant: onOpenRestaurant ?? (_) {},
           onOpenWishlist: onOpenWishlist ?? () {},
+          onRefresh: onRefresh,
         ),
       ),
     ),
@@ -112,6 +112,20 @@ Future<void> _tapChip(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+/// Drags [target] down far enough to arm the RefreshIndicator, then lets it
+/// run.
+///
+/// Not `pumpAndSettle`: the indicator's own animation and the callback are
+/// scheduled across several frames, and settling in one go can outrun the
+/// arming.
+Future<void> _pullDown(WidgetTester tester, Finder target) async {
+  await tester.drag(target, const Offset(0, 320), touchSlopY: 0);
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pumpAndSettle();
+}
+
 /// The names of the tiles currently on screen, in grid order.
 List<String> _tileNames(WidgetTester tester) {
   return tester
@@ -123,6 +137,37 @@ List<String> _tileNames(WidgetTester tester) {
 void main() {
   setUpAll(() {
     HttpOverrides.global = ImageHttpOverrides();
+  });
+
+  group('LikesTabView pull to refresh', () {
+    testWidgets('a pull on the grid refreshes', (tester) async {
+      var pulls = 0;
+      await _pumpLikesTab(
+        tester,
+        liked: _restaurants(6),
+        onRefresh: () async => pulls++,
+      );
+
+      await _pullDown(tester, find.byType(GridView));
+
+      expect(pulls, 1);
+    });
+
+    testWidgets('a pull works with nothing saved yet', (tester) async {
+      // The state a user pulls in: they saved something on another device and
+      // want it here. An empty state that cannot be pulled is the one place
+      // the gesture is most needed and least likely to have been wired.
+      var pulls = 0;
+      await _pumpLikesTab(
+        tester,
+        liked: const [],
+        onRefresh: () async => pulls++,
+      );
+
+      await _pullDown(tester, find.text('No bites yet'));
+
+      expect(pulls, 1);
+    });
   });
 
   group('LikesTabView empty state', () {
@@ -152,26 +197,17 @@ void main() {
       expect(_tileNames(tester), ['Newest Warung', 'Older Kopitiam']);
     });
 
-    testWidgets('every tile is bitten', (tester) async {
-      // Bites only holds saved places, so the notch is on all of them.
+    testWidgets('every tile carries the saved check, and no bookmark',
+        (tester) async {
+      // Bites only holds saved places, so the check is on all of them. The
+      // wishlist bookmark that used to share the corner is gone (D125).
       await _pumpLikesTab(tester, liked: _restaurants(2));
 
       final cards =
           tester.widgetList<RestaurantGridCard>(find.byType(RestaurantGridCard));
       expect(cards.every((card) => card.isSaved), isTrue);
-    });
-
-    testWidgets('the wishlist badge follows the passed ids', (tester) async {
-      await _pumpLikesTab(
-        tester,
-        liked: [
-          _restaurant(id: 1, name: 'On The List'),
-          _restaurant(id: 2, name: 'Not On It'),
-        ],
-        wishlistedIds: const {1},
-      );
-
-      expect(find.byIcon(Icons.bookmark_outline_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.check_rounded), findsNWidgets(2));
+      expect(find.byIcon(Icons.bookmark_outline_rounded), findsNothing);
     });
 
     testWidgets('the tile subtitle is cuisine and neighbourhood',
@@ -209,11 +245,10 @@ void main() {
 
     testWidgets('carries none of the retired per-tile controls',
         (tester) async {
-      // The design's tile is one tap target. The star, the heart and the
-      // mark-visited check all went with the segments (D96).
+      // The design's tile is one tap target. The heart and the
+      // mark-visited check went with the segments (D96).
       await _pumpLikesTab(tester, liked: _restaurants(2));
 
-      expect(find.byIcon(Icons.star_rounded), findsNothing);
       expect(find.bySemanticsLabel('Remove from likes'), findsNothing);
       expect(find.bySemanticsLabel('Mark visited'), findsNothing);
       expect(find.bySemanticsLabel('Filters'), findsNothing);
@@ -540,7 +575,6 @@ void main() {
         viewport: viewport,
         dpr: dpr,
         textScaler: textScaler,
-        wishlistedIds: const {1, 3},
         plannedIds: const {1},
         plannedLabels: const {1: 'Fri 4'},
         liked: [

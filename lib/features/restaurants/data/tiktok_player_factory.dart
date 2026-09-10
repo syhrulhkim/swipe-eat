@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -24,13 +26,22 @@ enum TikTokPlayerStatus {
 class TikTokPlayerHandle {
   TikTokPlayerHandle({
     required this.controller,
-    required this.playerUrl,
-  });
+    required this.videoUrl,
+    required bool muted,
+  })  : muted = ValueNotifier(muted),
+        playerUrl = tikTokPlayerUrl(videoUrl);
 
   final WebViewController controller;
 
-  /// The document to load, kept so [reload] can retry without recomputing it.
-  final Uri playerUrl;
+  /// The clip this player was built for.
+  final String videoUrl;
+
+  /// The document to load, kept so [load] can retry without recomputing it.
+  Uri playerUrl;
+
+  /// Whether the clip is playing silent. Starts true (D89); the card's "Tap
+  /// for sound" hint flips it and follows it.
+  final ValueNotifier<bool> muted;
 
   final ValueNotifier<TikTokPlayerStatus> status =
       ValueNotifier(TikTokPlayerStatus.loading);
@@ -49,6 +60,47 @@ class TikTokPlayerHandle {
     await controller.loadRequest(playerUrl);
   }
 
+  /// Turns the sound on or off through TikTok's own embed-player API (D122).
+  ///
+  /// The URL's `muted` parameter cannot do this. Their docs define `muted=1`
+  /// as "set the default volume to 0 **and prevent the user from changing
+  /// the volume**" and `muted=0` as merely enabling the volume control — so
+  /// reloading with `muted=0` produced a clip that was still silent, which is
+  /// exactly what "Tap for sound" was doing before. Verified against the live
+  /// player: under `muted=1` an `unMute` message is refused outright.
+  ///
+  /// D4 still holds. This is the documented `x-tiktok-player` message their
+  /// player listens for, not a reach into their DOM — and driving a clip that
+  /// is already on screen is what it is for. It costs no reload, so the clip
+  /// no longer restarts from the top when the sound comes on.
+  Future<void> setMuted(bool value) async {
+    if (muted.value == value) {
+      return;
+    }
+
+    muted.value = value;
+    await _postMuteState();
+  }
+
+  /// Tells the loaded page what [muted] currently says.
+  ///
+  /// Also the re-apply after every page load: `loadRequest` returns when the
+  /// navigation *starts*, so the handle — and the pill reading it — go live
+  /// while the document is still coming. A tap that lands in that window would
+  /// otherwise be swallowed by the page that arrives afterwards.
+  Future<void> _postMuteState() async {
+    final type = muted.value ? 'mute' : 'unMute';
+    try {
+      await controller.runJavaScript(
+        "window.postMessage({'x-tiktok-player':true,type:'$type'},'*')",
+      );
+      // ignore: avoid_catches_without_on_clauses
+    } catch (_) {
+      // The page can be gone, blank or mid-navigation. Losing the sound is not
+      // worth an error on a card the user is only looking at.
+    }
+  }
+
   /// Stops the player without destroying it.
   ///
   /// `WebViewController` has no dispose in webview_flutter 4.x — the native
@@ -57,6 +109,10 @@ class TikTokPlayerHandle {
   /// network going, so send it to a blank page first.
   Future<void> release() async {
     _released = true;
+    // Back to silent: a released handle can be warmed again later, and D89
+    // says a clip starts muted however it got here. onPageFinished re-applies
+    // that to whatever page comes next.
+    muted.value = true;
     await controller.loadRequest(Uri.parse('about:blank'));
   }
 }
@@ -88,10 +144,10 @@ Future<TikTokPlayerHandle> createTikTokPlayer(String videoUrl) async {
     'Mobile/15E148 Safari/604.1',
   );
 
-  final playerUrl = tikTokPlayerUrl(videoUrl);
   final handle = TikTokPlayerHandle(
     controller: controller,
-    playerUrl: playerUrl,
+    videoUrl: videoUrl,
+    muted: true,
   );
 
   await controller.setNavigationDelegate(
@@ -100,6 +156,11 @@ Future<TikTokPlayerHandle> createTikTokPlayer(String videoUrl) async {
         if (handle.status.value == TikTokPlayerStatus.loading) {
           handle.status.value = TikTokPlayerStatus.ready;
         }
+        // The player is loaded with the volume control unlocked, so on a
+        // WebView with the autoplay gesture requirement switched off it could
+        // come up with sound. D89 says a clip starts silent, and this is where
+        // that is enforced — and where a tap that beat the page gets applied.
+        unawaited(handle._postMuteState());
       },
       onWebResourceError: (error) {
         // Subresources fail all the time inside the player — a tracking pixel,
@@ -144,18 +205,16 @@ Uri tikTokPlayerUrl(String videoUrl) {
     return Uri.parse(videoUrl);
   }
 
-  // muted=1 is the design's call: a clip that starts silent and says "tap to
-  // unmute" (D89). It is also the only autoplay a browser engine will honour
-  // without a gesture, so the first frame no longer depends on
-  // setMediaPlaybackRequiresUserGesture winning on every device.
-  //
-  // `controls=1` with `volume_control=1` is what makes the promise keepable:
-  // the sound is turned on through TikTok's own control, because D4 forbids
-  // this app from driving their player.
+  // Always `muted=0`, which does not mean "start with sound". In TikTok's
+  // player it means "leave the volume control usable"; `muted=1` pins the
+  // volume at 0 and refuses every unmute for the life of the page, which is
+  // what made "Tap for sound" a no-op. A clip still *starts* silent (D89) —
+  // browsers mute an autoplay that had no gesture, and onPageFinished re-posts
+  // `mute` for the WebViews where that requirement is switched off.
   return Uri.parse(
     'https://www.tiktok.com/player/v1/$videoId?autoplay=1&controls=1'
-    '&volume_control=1&muted=1&music_info=1&description=1&timestamp=1'
-    '&rel=0&loop=1',
+    '&volume_control=1&muted=0'
+    '&music_info=1&description=1&timestamp=1&rel=0&loop=1',
   );
 }
 

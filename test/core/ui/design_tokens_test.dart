@@ -473,7 +473,8 @@ void main() {
         find.text(_longLabel),
       );
       expect(paragraph.didExceedMaxLines, isTrue);
-      expect(paragraph.size.height, lessThan(2 * paragraph.preferredLineHeight));
+      expect(
+          paragraph.size.height, lessThan(2 * paragraph.preferredLineHeight));
       expect(tester.takeException(), isNull);
       expect(
         tester.getSize(find.byType(AppTagChip)).width,
@@ -727,9 +728,9 @@ void main() {
       final stackRect = tester.getRect(find.byKey(_hostStackKey));
       final glowRect = tester.getRect(find.byType(ScreenGlow));
 
-      // 130% of the screen width, centred, so the ellipse's flanks fall off
-      // both sides rather than tapering inside them.
-      expect(glowRect.width, closeTo(stackRect.width * 1.3, 0.01));
+      // CSS radii are 130% of width and 48% of height, so Flutter's box has to
+      // be twice that (260% x 96%) for the gradient radius to reach the edges.
+      expect(glowRect.width, closeTo(stackRect.width * 2.6, 0.01));
       expect(glowRect.left, lessThan(stackRect.left));
       expect(glowRect.right, greaterThan(stackRect.right));
 

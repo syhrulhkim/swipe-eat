@@ -52,7 +52,8 @@ class RestaurantDetailData {
           .map((value) => value.toString())
           .toList(),
       videoUrl: jsonString(payload['videoUrl']),
-      hours: hours == null ? OpeningHours.unknown : OpeningHours.fromJson(hours),
+      hours:
+          hours == null ? OpeningHours.unknown : OpeningHours.fromJson(hours),
       priceFrom: jsonInt(payload['priceFrom']),
       isHalal: jsonBool(payload['isHalal']),
       neighbourhood: jsonString(payload['neighbourhood']),

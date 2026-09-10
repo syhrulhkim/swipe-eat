@@ -209,7 +209,10 @@ class _PhoneSignInPageState extends State<PhoneSignInPage> {
                         const SizedBox(height: AppSpacing.lg),
                         _title(context),
                         const SizedBox(height: AppSpacing.lg),
-                        if (_codeSent) ..._codeStep(context) else ..._numberStep(),
+                        if (_codeSent)
+                          ..._codeStep(context)
+                        else
+                          ..._numberStep(),
                       ],
                     ),
                   ),

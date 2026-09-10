@@ -4,17 +4,30 @@ import 'package:flutter/services.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../domain/plan_labels.dart';
 
-/// What a day already has on it: the cover of the plan the ring shows, and one
-/// pip per plan booked that day.
+/// What a day already has on it: the cover of the plan the ring shows, and a
+/// pip for every person involved.
+///
+/// Ember pips are plans created by the current user; cream pips are friends
+/// invited to those plans. The prototype draws them in two colours so a day
+/// reads at a glance as "mine", "theirs" or "both".
 class PlanDayMark {
-  const PlanDayMark({this.coverUrl, this.planCount = 1, this.initials = ''});
+  const PlanDayMark({
+    this.coverUrl,
+    this.planCount = 1,
+    this.friendCount = 0,
+    this.initials = '',
+  });
 
   final String? coverUrl;
 
-  /// How many plans fall on the day. One pip each, capped at three — past that
-  /// the pips stop being countable and the row below the grid is the honest
+  /// How many plans fall on the day. One ember pip each, capped at three — past
+  /// that the pips stop being countable and the row below the grid is the honest
   /// place to read the list.
   final int planCount;
+
+  /// How many friends are involved in plans on this day. One cream pip each,
+  /// sharing the same three-pip cap.
+  final int friendCount;
 
   /// Drawn inside the ring when there is no cover photo, so a planned day
   /// still says *which* place rather than showing an empty hole.
@@ -253,7 +266,9 @@ class _DayCell extends StatelessWidget {
             ),
     );
 
-    final pips = mark?.planCount ?? 0;
+    final mePips = mark?.planCount ?? 0;
+    final friendPips = mark?.friendCount ?? 0;
+    final totalPips = mePips + friendPips;
 
     Widget cell = SizedBox(
       height: _cellHeight,
@@ -264,19 +279,21 @@ class _DayCell extends StatelessWidget {
           const SizedBox(height: kCalendarRowGap),
           SizedBox(
             height: kCalendarDotSize,
-            child: isToday && !selected
-                ? const _Dot(color: kAccentEmber)
-                : (pips > 0
-                    ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (var i = 0; i < (pips > 3 ? 3 : pips); i++) ...[
-                            if (i > 0) const SizedBox(width: 2),
-                            const _Dot(color: kAccentEmber),
-                          ],
-                        ],
-                      )
+            child: totalPips > 0
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0;
+                          i < (totalPips > 3 ? 3 : totalPips);
+                          i++) ...[
+                        if (i > 0) const SizedBox(width: 2),
+                        _Dot(color: i < mePips ? kAccentEmber : kCreamMuted),
+                      ],
+                    ],
+                  )
+                : (isToday && !selected
+                    ? const _Dot(color: kAccentEmber)
                     : null),
           ),
         ],
@@ -411,45 +428,45 @@ class PlanCalendarHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) => Row(
-      children: [
-        Expanded(
-          child: Text(
-            monthTitle(month),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: kTextFontFamily,
-              fontSize: kFontSizeBody,
-              fontWeight: FontWeight.w600,
-              color: kTextOnPhoto,
+        children: [
+          Expanded(
+            child: Text(
+              monthTitle(month),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: kTextFontFamily,
+                fontSize: kFontSizeBody,
+                fontWeight: FontWeight.w600,
+                color: kTextOnPhoto,
+              ),
             ),
           ),
-        ),
-        if (trailing != null)
-          // A chip fills whatever width it is handed, so it is given its own
-          // natural width up to half the row: flush right and unstretched at
-          // any ordinary size, and at a doubled text scale it gives ground to
-          // the month rather than pushing it off the screen.
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: constraints.maxWidth / 2),
-            child: IntrinsicWidth(child: trailing!),
-          )
-        else ...[
-          if (onPrevious != null) ...[
+          if (trailing != null)
+            // A chip fills whatever width it is handed, so it is given its own
+            // natural width up to half the row: flush right and unstretched at
+            // any ordinary size, and at a doubled text scale it gives ground to
+            // the month rather than pushing it off the screen.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth / 2),
+              child: IntrinsicWidth(child: trailing!),
+            )
+          else ...[
+            if (onPrevious != null) ...[
+              _MonthArrow(
+                icon: Icons.chevron_left_rounded,
+                semanticLabel: 'Previous month',
+                onTap: onPrevious,
+              ),
+              const SizedBox(width: 8),
+            ],
             _MonthArrow(
-              icon: Icons.chevron_left_rounded,
-              semanticLabel: 'Previous month',
-              onTap: onPrevious,
+              icon: Icons.chevron_right_rounded,
+              semanticLabel: 'Next month',
+              onTap: onNext,
             ),
-            const SizedBox(width: 8),
           ],
-          _MonthArrow(
-            icon: Icons.chevron_right_rounded,
-            semanticLabel: 'Next month',
-            onTap: onNext,
-          ),
         ],
-      ],
       ),
     );
   }
@@ -471,6 +488,11 @@ class _MonthArrow extends StatelessWidget {
     final enabled = onTap != null;
 
     return Semantics(
+      // Its own node, not an annotation on whatever encloses it: in a list
+      // item the whole row collapses into one node, and the arrow's label
+      // merged into the month's — a screen reader met one button called
+      // "September 2026 Next month".
+      container: true,
       label: semanticLabel,
       button: true,
       enabled: enabled,

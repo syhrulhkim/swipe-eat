@@ -15,6 +15,8 @@ class AppUser {
     this.onboardedAt,
     this.searchRadiusKm,
     this.lastPlaceName,
+    this.lastLatitude,
+    this.lastLongitude,
     this.filterCuisineIds = const [],
     this.filterDietaryTagIds = const [],
     this.filterMinRating,
@@ -44,6 +46,15 @@ class AppUser {
   /// Reverse-geocoded name of the last stored fix ("Peserai, Batu Pahat"),
   /// shown in the deck's header chip. Null until a real fix has been synced.
   final String? lastPlaceName;
+
+  /// The stored fix itself — `profiles.last_latitude/longitude`, the point
+  /// `deck_scored` falls back to when the device has no fix of its own.
+  ///
+  /// Carried on the model so the card's distance label can measure from the
+  /// same origin the deck was dealt around. Measuring from anywhere else puts
+  /// "78 km" on a card the server picked as being within 15.
+  final double? lastLatitude;
+  final double? lastLongitude;
 
   /// Discovery filters — hard limits the deck applies server-side. Empty
   /// lists and a null rating mean "filter off".
@@ -79,13 +90,15 @@ class AppUser {
 
   bool get needsOnboarding => onboardedAt == null;
 
-
   /// How many discovery constraints are switched on — the filter button's
-  /// badge.
+  /// badge. Counted by kind, not by chip: five cuisines are one constraint.
+  /// The radius is in here because the sheet that sets the others sets it too,
+  /// and a badge that ignored it would call a 1 km deck unfiltered.
   int get activeFilterCount =>
       (filterCuisineIds.isEmpty ? 0 : 1) +
       (filterDietaryTagIds.isEmpty ? 0 : 1) +
-      (filterMinRating == null ? 0 : 1);
+      (filterMinRating == null ? 0 : 1) +
+      (searchRadiusKm == null ? 0 : 1);
 
   /// The rules the user set that can empty a deck, named the way the screens
   /// name them. An empty deck under one of these is a consequence of an
@@ -125,6 +138,8 @@ class AppUser {
       onboardedAt: _dateTime(row['onboarded_at']),
       searchRadiusKm: _int(row['search_radius_km']),
       lastPlaceName: _string(row['last_place_name']),
+      lastLatitude: _double(row['last_latitude']),
+      lastLongitude: _double(row['last_longitude']),
       filterCuisineIds: _intList(row['filter_cuisine_ids']),
       filterDietaryTagIds: _intList(row['filter_dietary_tag_ids']),
       filterMinRating: _double(row['filter_min_rating']),
@@ -149,6 +164,8 @@ class AppUser {
       onboardedAt: _dateTime(json['onboarded_at']),
       searchRadiusKm: _int(json['search_radius_km']),
       lastPlaceName: _string(json['last_place_name']),
+      lastLatitude: _double(json['last_latitude']),
+      lastLongitude: _double(json['last_longitude']),
       filterCuisineIds: _intList(json['filter_cuisine_ids']),
       filterDietaryTagIds: _intList(json['filter_dietary_tag_ids']),
       filterMinRating: _double(json['filter_min_rating']),
@@ -170,6 +187,8 @@ class AppUser {
       'onboarded_at': onboardedAt?.toIso8601String(),
       'search_radius_km': searchRadiusKm,
       'last_place_name': lastPlaceName,
+      'last_latitude': lastLatitude,
+      'last_longitude': lastLongitude,
       'filter_cuisine_ids': filterCuisineIds,
       'filter_dietary_tag_ids': filterDietaryTagIds,
       'filter_min_rating': filterMinRating,
@@ -215,6 +234,10 @@ class AppUser {
       searchRadiusKm:
           clearRadius ? null : (searchRadiusKm ?? this.searchRadiusKm),
       lastPlaceName: lastPlaceName ?? this.lastPlaceName,
+      // The stored fix moves only through `update_location`, which returns
+      // the whole row, so it rides through untouched like the filters below.
+      lastLatitude: lastLatitude,
+      lastLongitude: lastLongitude,
       // Filters only change through RPCs that return the whole
       // profile row, so copyWith always carries them through unchanged.
       filterCuisineIds: filterCuisineIds,

@@ -57,8 +57,9 @@ class FakeWishlistRepository implements WishlistRepository {
   /// controller is already holding.
   void seed(List<WishlistItem> rows) => _rows = List.of(rows);
 
-  /// The ids a Bites tile would show a bookmark for: still to go, and backed by
-  /// a real restaurant. Matches `RestaurantRepository.laterIds`'s query.
+  /// The ids still to go and backed by a real restaurant — what
+  /// `LikesController.isSavedForLater` answers. Matches
+  /// `RestaurantRepository.laterIds`'s query.
   Set<int> pendingRestaurantIds() {
     return {
       for (final row in _rows)
@@ -113,7 +114,8 @@ class FakeWishlistRepository implements WishlistRepository {
       }
       final revived = existing.copyWith(clearEatenAt: true);
       _rows = [
-        for (final row in _rows) if (row.id == existing.id) revived else row,
+        for (final row in _rows)
+          if (row.id == existing.id) revived else row,
       ];
       return revived;
     }

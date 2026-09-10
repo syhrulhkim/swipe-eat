@@ -298,8 +298,8 @@ void main() {
       final backend = _GatedRestaurantRepository()
         ..likedRows = [testRestaurant(7)];
       final auth = _FakeAuthEvents(userId: 'user-a');
-      final scoped = LikesController(restaurants: backend, swipes: swipes,
-          authEvents: auth);
+      final scoped = LikesController(
+          restaurants: backend, swipes: swipes, authEvents: auth);
       addTearDown(() {
         scoped.dispose();
         auth.events.close();
@@ -318,8 +318,8 @@ void main() {
     test('an actual account change dumps the cache', () async {
       final auth = _FakeAuthEvents(userId: 'user-a');
       restaurants.likedRows = [testRestaurant(7)];
-      final scoped = LikesController(restaurants: restaurants, swipes: swipes,
-          authEvents: auth);
+      final scoped = LikesController(
+          restaurants: restaurants, swipes: swipes, authEvents: auth);
       addTearDown(() {
         scoped.dispose();
         auth.events.close();
@@ -339,8 +339,8 @@ void main() {
     test('signing out clears the cache', () async {
       final auth = _FakeAuthEvents(userId: 'user-a');
       restaurants.likedRows = [testRestaurant(7)];
-      final scoped = LikesController(restaurants: restaurants, swipes: swipes,
-          authEvents: auth);
+      final scoped = LikesController(
+          restaurants: restaurants, swipes: swipes, authEvents: auth);
       addTearDown(() {
         scoped.dispose();
         auth.events.close();
@@ -354,8 +354,7 @@ void main() {
       expect(scoped.liked, isEmpty);
     });
 
-    test('a stale load settling cannot clear a newer load\'s handle',
-        () async {
+    test('a stale load settling cannot clear a newer load\'s handle', () async {
       // reset() nulls the shared _loading handle; when the discarded load
       // finally settles it must recognise the handle now belongs to a newer
       // request, or "only fetches once" silently breaks after every account

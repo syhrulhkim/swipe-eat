@@ -138,7 +138,7 @@ void main() {
       await _pumpPage(tester);
 
       expect(find.text('Pick a day'), findsOneWidget);
-      expect(find.text('Kak Ros · Just you'), findsOneWidget);
+      expect(find.text('Kak Ros · With friends'), findsOneWidget);
 
       await _tapDay(tester, 4);
 
@@ -153,6 +153,19 @@ void main() {
       await _tapSlot(tester, 'Late');
 
       expect(find.text('Fri 4 Sep · Late'), findsOneWidget);
+    });
+
+    testWidgets('the summary reads "Just you" when the friend switch is off',
+        (tester) async {
+      await _pumpPage(tester);
+      await _tapDay(tester, 4);
+
+      await tester.ensureVisible(find.byType(PrefSwitch));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(PrefSwitch));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kak Ros · Just you'), findsOneWidget);
     });
   });
 
@@ -303,7 +316,8 @@ void main() {
       expect(created.planId, isNotNull);
     });
 
-    testWidgets('Late posts a label rather than a time, and the switch can be '
+    testWidgets(
+        'Late posts a label rather than a time, and the switch can be '
         'turned off', (tester) async {
       final (repository, created) = await _pumpPage(tester);
       await _tapDay(tester, 12);
@@ -375,7 +389,8 @@ void main() {
   });
 
   group('PlanDatePage layout', () {
-    testWidgets('does not overflow on the narrowest phone at a doubled text '
+    testWidgets(
+        'does not overflow on the narrowest phone at a doubled text '
         'scale', (tester) async {
       await _pumpPage(
         tester,

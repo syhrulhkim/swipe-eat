@@ -39,7 +39,8 @@ Future<(DashboardTabRequest, PlansController)> _pumpDashboard(
   await tester.pumpWidget(
     MaterialApp(
       home: DashboardPage(
-        authController: AuthController(FakeAuthRepository(sessionPresent: true)),
+        authController:
+            AuthController(FakeAuthRepository(sessionPresent: true)),
         tabRequests: tabs,
         plans: plans,
       ),

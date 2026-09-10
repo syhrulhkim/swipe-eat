@@ -87,9 +87,8 @@ class SpotlightCard extends StatelessWidget {
           key: const ValueKey('spotlight-card-highlight'),
           painter: SpotlightPainter(
             pointer: pointer,
-            borderRadius: mode == SpotlightCardMode.border
-                ? borderRadius
-                : innerRadius,
+            borderRadius:
+                mode == SpotlightCardMode.border ? borderRadius : innerRadius,
             from: from,
             via: via,
             to: to,
@@ -111,7 +110,8 @@ class SpotlightCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (mode == SpotlightCardMode.border) Positioned.fill(child: spotlight),
+            if (mode == SpotlightCardMode.border)
+              Positioned.fill(child: spotlight),
             Padding(
               padding: EdgeInsets.all(borderWidth),
               child: DecoratedBox(

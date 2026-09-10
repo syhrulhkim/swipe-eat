@@ -158,9 +158,8 @@ class SpotlightPainter extends CustomPainter {
       if (via != null) via!.withValues(alpha: via!.a * strength),
       to.withValues(alpha: to.a * strength),
     ];
-    final stops = colors.length == 3
-        ? const <double>[0, 0.5, 1]
-        : const <double>[0, 1];
+    final stops =
+        colors.length == 3 ? const <double>[0, 0.5, 1] : const <double>[0, 1];
 
     final paint = Paint()
       ..style = style

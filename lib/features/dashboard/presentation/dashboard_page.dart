@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
-import '../../nearby/presentation/nearby_tab.dart';
 import '../../plans/presentation/calendar_tab.dart';
 import '../../plans/state/plans_controller.dart';
 import '../../profile/presentation/profile_tab.dart';
 import '../../restaurants/data/likes_migration.dart';
 import '../../restaurants/data/visit_prompt_cache.dart';
+import '../../nearby/presentation/nearby_tab.dart';
 import '../../restaurants/presentation/swipe_deck.dart';
 import '../../restaurants/presentation/visit_prompt_sheet.dart';
 import '../../restaurants/state/deck_handoff.dart';
@@ -24,21 +24,21 @@ class DashboardPage extends StatelessWidget {
   const DashboardPage({
     super.key,
     required this.authController,
-    this.visitPrompts,
     this.handoff,
+    this.visitPrompts,
     this.tabRequests,
     this.plans,
   });
 
   final AuthController authController;
 
-  /// Injected by tests; in the app the shared instance is used.
-  final VisitPromptController? visitPrompts;
-
   /// Which deck hand-off to listen to, and which the map publishes to and the
   /// deck deals from. Defaults to the shared instance; injecting one wires all
-  /// three ends of "Swipe all" together in a test.
+  /// three sides to a test's own.
   final DeckHandoff? handoff;
+
+  /// Injected by tests; in the app the shared instance is used.
+  final VisitPromptController? visitPrompts;
 
   /// Which tab-switch requests to listen to. Defaults to the shared instance.
   final DashboardTabRequest? tabRequests;
@@ -52,8 +52,8 @@ class DashboardPage extends StatelessWidget {
       animation: authController,
       builder: (context, _) => _DashboardShell(
         authController: authController,
-        visitPrompts: visitPrompts,
         handoff: handoff,
+        visitPrompts: visitPrompts,
         tabRequests: tabRequests,
         plans: plans,
       ),
@@ -64,15 +64,15 @@ class DashboardPage extends StatelessWidget {
 class _DashboardShell extends StatefulWidget {
   const _DashboardShell({
     required this.authController,
-    this.visitPrompts,
     this.handoff,
+    this.visitPrompts,
     this.tabRequests,
     this.plans,
   });
 
   final AuthController authController;
-  final VisitPromptController? visitPrompts;
   final DeckHandoff? handoff;
+  final VisitPromptController? visitPrompts;
   final DashboardTabRequest? tabRequests;
   final PlansController? plans;
 
@@ -87,7 +87,9 @@ class _DashboardShellState extends State<_DashboardShell>
   late final VisitPromptController _visitPrompts =
       widget.visitPrompts ?? VisitPromptController.instance;
 
+
   late final DeckHandoff _handoff = widget.handoff ?? DeckHandoff.instance;
+  late int _handoffRevision = _handoff.revision;
 
   late final DashboardTabRequest _tabRequests =
       widget.tabRequests ?? DashboardTabRequest.instance;
@@ -103,7 +105,6 @@ class _DashboardShellState extends State<_DashboardShell>
 
   /// The hand-off revision this shell has already reacted to, so a rebuild
   /// cannot pull the user back to the deck they just navigated away from.
-  late int _handoffRevision = _handoff.revision;
 
   /// One question at a time. The prompt is triggered from two places that can
   /// both fire around a resume, and two sheets over each other would be a bug
@@ -127,8 +128,8 @@ class _DashboardShellState extends State<_DashboardShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _handoff.addListener(_onHandoff);
     _tabRequestRevision = _tabRequests.revision;
+    _handoff.addListener(_onHandoff);
     _tabRequests.addListener(_onTabRequested);
     _plans.addListener(_onPlansChanged);
     // The calendar feeds four surfaces that are not the calendar — the Bites
@@ -294,30 +295,40 @@ class _DashboardShellState extends State<_DashboardShell>
       // re-deal the deck and refetch the map each time the user glanced at
       // another tab. The switch itself is instant, so the fade below is what
       // makes it read as a change of screen rather than as a repaint.
-      body: FadeTransition(
-        opacity: CurvedAnimation(parent: _tabFade, curve: kMotionEase),
-        child: IndexedStack(
-          index: _selectedIndex,
-          children: [
-            SwipeDeck(
-              authController: widget.authController,
-              handoff: widget.handoff,
+      body: Stack(
+        children: [
+          const ScreenGlow(),
+          FadeTransition(
+            opacity: CurvedAnimation(parent: _tabFade, curve: kMotionEase),
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                SwipeDeck(
+                  authController: widget.authController,
+                  handoff: widget.handoff,
+                  // Every tab stays mounted behind the IndexedStack, so the
+                  // deck has to be told when it is no longer the one on
+                  // screen — otherwise an unmuted clip plays on from behind
+                  // the map.
+                  isActive: _selectedIndex == 0,
+                ),
+                NearbyTab(
+                  authController: widget.authController,
+                  handoff: widget.handoff,
+                ),
+                LikesTab(plans: _plans),
+                CalendarTab(controller: _plans, tabRequests: _tabRequests),
+                ProfileTab(
+                  authController: widget.authController,
+                  stats: ProfileStats(
+                    plansKept: _plans.stats.plansKept,
+                    streakWeeks: _plans.stats.streakWeeks,
+                  ),
+                ),
+              ],
             ),
-            NearbyTab(
-              authController: widget.authController,
-              handoff: widget.handoff,
-            ),
-            LikesTab(plans: _plans),
-            CalendarTab(controller: _plans, tabRequests: _tabRequests),
-            ProfileTab(
-              authController: widget.authController,
-              stats: ProfileStats(
-                plansKept: _plans.stats.plansKept,
-                streakWeeks: _plans.stats.streakWeeks,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -15,7 +15,6 @@ import '../state/deck_controller.dart';
 import '../state/deck_handoff.dart';
 import 'discovery_filter_sheet.dart';
 import 'swipe_card.dart';
-import 'tiktok_player.dart';
 
 /// The card deck: one restaurant at a time, swiped right to like and left to
 /// pass.
@@ -28,6 +27,7 @@ class SwipeDeck extends StatefulWidget {
     super.key,
     required this.authController,
     this.controller,
+    this.isActive = true,
     this.handoff,
   });
 
@@ -38,6 +38,15 @@ class SwipeDeck extends StatefulWidget {
 
   /// Which hand-off the deck deals from ("Swipe all" on the map). Defaults to
   /// the shared instance; injected so a test can wire one map to one deck.
+  /// Whether the deck's tab is the one on screen.
+  ///
+  /// The dashboard keeps every tab mounted in an `IndexedStack`, so a clip
+  /// the user unmuted would go on playing out loud from behind the map. It
+  /// does not: leaving the tab mutes it.
+  final bool isActive;
+
+  /// The hand-off the Nearby map's "Swipe all" publishes to. Injected so a
+  /// widget test can drive it; the app wires the shared instance.
   final DeckHandoff? handoff;
 
   @override
@@ -45,7 +54,7 @@ class SwipeDeck extends StatefulWidget {
 }
 
 class _SwipeDeckState extends State<SwipeDeck>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final DeckController _deck = widget.controller ??
       DeckController(
         authController: widget.authController,
@@ -57,9 +66,6 @@ class _SwipeDeckState extends State<SwipeDeck>
 
   Offset _dragOffset = Offset.zero;
 
-  /// The clip the fullscreen route is currently showing, if any. The card
-  /// underneath must not mount the same controller at the same time.
-  String? _fullscreenVideoUrl;
   Offset _animationStartOffset = Offset.zero;
   Offset _animationEndOffset = Offset.zero;
   _SwipeMotionType _motionType = _SwipeMotionType.idle;
@@ -87,6 +93,7 @@ class _SwipeDeckState extends State<SwipeDeck>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _messages = _deck.messages.listen(_showMessage);
     _likeMessages = _deck.likeMessages.listen(_showMessage);
     if (_ownsController) {
@@ -95,7 +102,37 @@ class _SwipeDeckState extends State<SwipeDeck>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // The trip to Settings to switch location on is an app switch, so this is
+    // where the app finds out. Without it the deck keeps the fallback — and
+    // the stale town name that goes with it — until the next cold start.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_deck.refreshLocation());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SwipeDeck oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive && !widget.isActive) {
+      _muteCurrentClip();
+    }
+  }
+
+  /// Sends the card on screen back to silent.
+  void _muteCurrentClip() {
+    final videoUrl = _deck.current?.videoUrl;
+    if (videoUrl == null || videoUrl.isEmpty) {
+      return;
+    }
+
+    unawaited(_deck.players.warm(videoUrl)?.then((h) => h.setMuted(true)));
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_messages?.cancel());
     unawaited(_likeMessages?.cancel());
     _motionController.dispose();
@@ -151,57 +188,6 @@ class _SwipeDeckState extends State<SwipeDeck>
     _animateOut(liked: liked, later: later);
   }
 
-  Future<void> _openVideoPlayer(RestaurantCard data) async {
-    final videoUrl = data.videoUrl;
-    if (videoUrl == null || videoUrl.isEmpty || !mounted) {
-      return;
-    }
-
-    // The card hands its player over rather than letting the route build a
-    // second one: two controllers on the same clip means the same audio twice,
-    // and one controller cannot be mounted in two WebViews at once.
-    setState(() {
-      _fullscreenVideoUrl = videoUrl;
-    });
-
-    try {
-      await Navigator.of(context).push(
-        PageRouteBuilder<void>(
-          opaque: true,
-          barrierDismissible: false,
-          // Popping resolves this future as the reverse transition starts, so
-          // the card remounts the player while a fading fullscreen route still
-          // holds it — the two-mounts-one-controller state this handover
-          // exists to avoid. Leaving on the same frame keeps them exclusive.
-          reverseTransitionDuration: Duration.zero,
-          pageBuilder: (context, animation, secondaryAnimation) {
-            return TikTokPlayerScreen(
-              videoUrl: videoUrl,
-              playerFuture: _deck.players.warm(videoUrl),
-            );
-          },
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              ),
-              child: child,
-            );
-          },
-        ),
-      );
-    } finally {
-      // Whatever closed the route — the button, a back gesture, a failure on
-      // the way in — the card takes its player back.
-      if (mounted) {
-        setState(() {
-          _fullscreenVideoUrl = null;
-        });
-      }
-    }
-  }
-
   /// Card pose for the frame being painted.
   ///
   /// [_motionController] ticks without calling `setState`, so these values MUST
@@ -242,9 +228,14 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
-  /// The info block's tap: the restaurant's own screen, handed the card so it
-  /// paints before the row is refetched.
+  /// A tap anywhere on the card: the restaurant's own screen, handed the card
+  /// so it paints before the row is refetched.
   void _openDetail(RestaurantCard card) {
+    // The deck card stays mounted under the opaque detail route. If its clip
+    // was unmuted it would keep playing audio behind a hero showing the same
+    // clip, so the card's player goes back to silent on the way out.
+    _muteCurrentClip();
+
     context.push('/restaurant/${card.id}', extra: card.toDetailPayload());
   }
 
@@ -263,8 +254,7 @@ class _SwipeDeckState extends State<SwipeDeck>
       mealLabel: mealLabel(DateTime.now()),
       stalenessLabel: _deck.stalenessLabel,
       handoffLabel: _deck.handoffLabel,
-      activeFilterCount:
-          widget.authController.user?.activeFilterCount ?? 0,
+      activeFilterCount: widget.authController.user?.activeFilterCount ?? 0,
       onFilterTap: () => unawaited(_openFilters()),
     );
   }
@@ -417,7 +407,7 @@ class _SwipeDeckState extends State<SwipeDeck>
         data: next,
         isBehind: true,
         distanceText: _deck.distanceLabelFor(next),
-        onTap: () => unawaited(_openVideoPlayer(next)),
+        onTap: () => _openDetail(next),
         onOpenDetail: () => _openDetail(next),
         tiktokPlayerFuture: _deck.players.warm(next.videoUrl),
       ),
@@ -498,8 +488,7 @@ class _SwipeDeckState extends State<SwipeDeck>
 
           // The stamps live here, not in the card: this builder ticks every
           // frame while the card (a WebView host) is built once as `child`.
-          final likeOpacity =
-              frame.offset.dx > 20 ? frame.dragPercentage : 0.0;
+          final likeOpacity = frame.offset.dx > 20 ? frame.dragPercentage : 0.0;
           final nopeOpacity =
               frame.offset.dx < -20 ? frame.dragPercentage : 0.0;
 
@@ -546,11 +535,9 @@ class _SwipeDeckState extends State<SwipeDeck>
           key: ValueKey(current.id),
           data: current,
           distanceText: _deck.distanceLabelFor(current),
-          onTap: () => unawaited(_openVideoPlayer(current)),
+          onTap: () => _openDetail(current),
           onOpenDetail: () => _openDetail(current),
           tiktokPlayerFuture: _deck.players.warm(current.videoUrl),
-          videoHiddenForFullscreen: _fullscreenVideoUrl != null &&
-              _fullscreenVideoUrl == current.videoUrl,
         ),
       ),
     );
@@ -558,7 +545,14 @@ class _SwipeDeckState extends State<SwipeDeck>
 }
 
 /// The design's three-button bar under the deck: a ghost Skip, the Ngap
-/// button, a ghost Later, centred as equals around the one that matters.
+/// button, a ghost Later, in three equal columns with the one that matters in
+/// the middle.
+///
+/// The ghosts carry their word under the glyph. The Ngap button already says
+/// its own, and the primer taught all three as words, so a cross and a clock
+/// on their own would be asking the user to remember a lesson from a screen
+/// they saw once. Equal columns keep Ngap dead-centre whatever the captions
+/// measure.
 ///
 /// Three, not five. Rewind and the super-like star are gone with the features
 /// behind them — the design has neither, and a control for a feature that no
@@ -580,26 +574,20 @@ class DeckActionBar extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        AppIconButton(
+        _GhostAction(
           icon: Icons.close_rounded,
-          size: kActionButtonSize,
-          iconSize: 22,
-          onPhoto: false,
-          background: kSurfaceDark,
+          caption: 'Skip',
           semanticLabel: 'Skip',
           onTap: onPass,
         ),
-        const SizedBox(width: 20),
+        const SizedBox(width: kDeckActionGap),
         AppNgapButton(onTap: onLike),
-        const SizedBox(width: 20),
+        const SizedBox(width: kDeckActionGap),
         // A clock, not a bookmark: "later" here is about when you eat, not
         // about filing the place away.
-        AppIconButton(
+        _GhostAction(
           icon: Icons.schedule_rounded,
-          size: kActionButtonSize,
-          iconSize: 22,
-          onPhoto: false,
-          background: kSurfaceDark,
+          caption: 'Later',
           semanticLabel: 'Save for later',
           onTap: onLater,
         ),
@@ -608,8 +596,63 @@ class DeckActionBar extends StatelessWidget {
   }
 }
 
+/// One of the two ghosts flanking Ngap: the disc, and its word underneath.
+class _GhostAction extends StatelessWidget {
+  const _GhostAction({
+    required this.icon,
+    required this.caption,
+    required this.semanticLabel,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String caption;
+  final String semanticLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      // As wide as the Ngap disc, so the bar is three equal columns and the
+      // captions cannot nudge the centre one off-centre.
+      width: kNgapButtonSize,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppIconButton(
+            icon: icon,
+            size: kActionButtonSize,
+            iconSize: 22,
+            onPhoto: false,
+            background: kSurfaceDark,
+            semanticLabel: semanticLabel,
+            onTap: onTap,
+          ),
+          const SizedBox(height: kDeckActionCaptionGap),
+          // The button already announces itself; a second node reading the
+          // same word would make a screen reader say every move twice.
+          ExcludeSemantics(
+            child: Text(
+              caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: kTextFontFamily,
+                fontSize: kFontSizeMicro,
+                fontWeight: FontWeight.w600,
+                color: kCreamSecondary,
+                height: 1.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The deck's top bar, the design's `.topbar`: where the user is with the
-/// radius and the meal under it, and the filters button.
+/// radius and the meal under it, and the discovery-settings button.
 class DeckHeader extends StatelessWidget {
   const DeckHeader({
     super.key,
@@ -637,15 +680,22 @@ class DeckHeader extends StatelessWidget {
   final String? stalenessLabel;
 
   /// Set while the deck is dealing a list handed over from Nearby ("Swipe all
-  /// 6"), so the user knows these six are not the ranked deck. Its own chip —
-  /// the offline chip's cloud would say the wrong thing about fresh rows.
+  /// 6"), so the user knows these six are not the ranked deck.
   final String? handoffLabel;
 
-  /// How many discovery filters are on — the badge on the filter button.
+  /// Set while the deck is dealing a list handed over from Nearby ("Swipe all
+  /// 6"), so the user knows these six are not the ranked deck. Its own chip —
+  /// the offline chip's cloud would say the wrong thing about fresh rows.
+  /// How many discovery filters are on — the badge on the discovery button,
+  /// and what turns it ember.
   final int activeFilterCount;
 
-  /// Opens the discovery filter sheet. Null hides the button.
+  /// Opens the discovery settings sheet. Null hides the button.
   final VoidCallback? onFilterTap;
+
+  /// Whether a filter is narrowing the deck beyond radius and meal, which the
+  /// subline already reports.
+  bool get _narrowed => activeFilterCount > 0;
 
   String get _subline {
     final parts = <String>[
@@ -701,15 +751,35 @@ class DeckHeader extends StatelessWidget {
                 ),
                 if (onFilterTap != null) ...[
                   const SizedBox(width: 8),
-                  AppIconButton(
-                    icon: Icons.tune_rounded,
-                    size: kUtilityButtonSize,
-                    iconSize: 20,
-                    onPhoto: false,
-                    background: kGlass,
-                    semanticLabel: 'Filters',
-                    badgeCount: activeFilterCount,
-                    onTap: onFilterTap!,
+                  // The sheet behind this sets radius, cuisines, dietary needs
+                  // and rating — the whole of what the deck is allowed to
+                  // show — so it is named for that, not for one of its rows.
+                  // The count is a value rather than part of the name, so
+                  // "Discovery settings" is what a screen reader lands on and
+                  // "2 filters on" is what it hears next. Excluding the
+                  // button's own node drops its tap action, so the action is
+                  // re-declared here (D83).
+                  Semantics(
+                    label: 'Discovery settings',
+                    value: _narrowed
+                        ? '$activeFilterCount ${activeFilterCount == 1 ? 'filter' : 'filters'} on'
+                        : null,
+                    button: true,
+                    excludeSemantics: true,
+                    onTap: onFilterTap,
+                    child: AppIconButton(
+                      icon: Icons.tune_rounded,
+                      size: kUtilityButtonSize,
+                      iconSize: 20,
+                      onPhoto: false,
+                      background: kGlass,
+                      // Ember is the palette's word for "chosen". A filter that
+                      // is on is a choice the deck is obeying, and the glyph
+                      // says so before the count is read.
+                      iconColor: _narrowed ? kAccentEmber : kTextOnPhoto,
+                      badgeCount: activeFilterCount,
+                      onTap: onFilterTap!,
+                    ),
                   ),
                 ],
               ],

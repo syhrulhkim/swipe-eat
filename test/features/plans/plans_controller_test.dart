@@ -142,7 +142,8 @@ void main() {
   });
 
   group('PlansController loading', () {
-    test('flips past plans before it lists, and asks from the first of the '
+    test(
+        'flips past plans before it lists, and asks from the first of the '
         'month', () async {
       final repository = FakePlansRepository(
         rows: [
@@ -192,7 +193,8 @@ void main() {
     });
 
     test('a failed list is reported and retried by the next call', () async {
-      final repository = FakePlansRepository()..failList = StateError('offline');
+      final repository = FakePlansRepository()
+        ..failList = StateError('offline');
       final controller = buildController(repository);
       addTearDown(controller.dispose);
 
@@ -224,11 +226,18 @@ void main() {
     test('today before six is Today, after six is Tonight', () async {
       final repository = FakePlansRepository(
         rows: [
-          testPlan(1, restaurantId: 11, date: DateTime(2026, 9, 2), hour: 12,
+          testPlan(1,
+              restaurantId: 11,
+              date: DateTime(2026, 9, 2),
+              hour: 12,
               minute: 30),
           testPlan(2, restaurantId: 22, date: DateTime(2026, 9, 2), hour: 20),
-          testPlan(3, restaurantId: 33, date: DateTime(2026, 9, 2), hour: null,
-              minute: null, timeLabel: 'late'),
+          testPlan(3,
+              restaurantId: 33,
+              date: DateTime(2026, 9, 2),
+              hour: null,
+              minute: null,
+              timeLabel: 'late'),
         ],
       );
       final controller = buildController(repository);
@@ -297,9 +306,15 @@ void main() {
     test('plansOn puts Late last', () async {
       final repository = FakePlansRepository(
         rows: [
-          testPlan(1, date: DateTime(2026, 9, 4), hour: null, minute: null,
+          testPlan(1,
+              date: DateTime(2026, 9, 4),
+              hour: null,
+              minute: null,
               timeLabel: 'late'),
-          testPlan(2, restaurantId: 7, date: DateTime(2026, 9, 4), hour: 12,
+          testPlan(2,
+              restaurantId: 7,
+              date: DateTime(2026, 9, 4),
+              hour: 12,
               minute: 30),
           testPlan(3, restaurantId: 8, date: DateTime(2026, 9, 5)),
         ],
@@ -357,7 +372,8 @@ void main() {
       expect(repository.listedFrom, hasLength(2));
     });
 
-    test('cancel drops the row before the server answers, and puts it back '
+    test(
+        'cancel drops the row before the server answers, and puts it back '
         'when the server refuses', () async {
       final repository = FakePlansRepository(
         rows: [testPlan(1, date: DateTime(2026, 9, 4))],

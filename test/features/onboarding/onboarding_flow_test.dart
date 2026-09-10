@@ -250,7 +250,8 @@ void main() {
         (tester) async {
       // The fallback is a hardcoded Batu Pahat coordinate. Storing it would
       // tell the ranking the user is somewhere they have never been.
-      await pumpWizard(tester, resolvePosition: () async => fallbackUserPosition());
+      await pumpWizard(tester,
+          resolvePosition: () async => fallbackUserPosition());
       await completeNameStep(tester);
       await completeTasteStep(tester);
       await completeRulesStep(tester);
@@ -327,8 +328,8 @@ void main() {
       onboarding.failCatalog = true;
       await pumpWizard(tester);
 
-      expect(find.textContaining('Could not load the taste list'),
-          findsOneWidget);
+      expect(
+          find.textContaining('Could not load the taste list'), findsOneWidget);
 
       onboarding.failCatalog = false;
       await tester.tap(find.text('Try again'));
@@ -495,8 +496,7 @@ void main() {
           reason: 'habits, location and the primer are ahead');
     });
 
-    testWidgets('the spice segment starts with nothing chosen',
-        (tester) async {
+    testWidgets('the spice segment starts with nothing chosen', (tester) async {
       // "Not answered" has to look different from "Mild": the step is
       // skippable, so a segment that defaulted to the first option would put
       // an answer on the profile that nobody gave.
@@ -543,8 +543,8 @@ void main() {
       await reachRules(tester);
 
       tester.widget<Slider>(find.byType(Slider)).onChanged!(
-            100,
-          );
+        100,
+      );
       await tester.pumpAndSettle();
       expect(find.text('RM 10+'), findsOneWidget);
 
@@ -560,8 +560,8 @@ void main() {
       await reachRules(tester);
 
       tester.widget<Slider>(find.byType(Slider)).onChanged!(
-            60,
-          );
+        60,
+      );
       await tester.pumpAndSettle();
       expect(find.text('RM 10–60'), findsOneWidget);
 
@@ -604,8 +604,8 @@ void main() {
       await tester.tap(find.text('Pedas'));
       await tester.pump();
       tester.widget<Slider>(find.byType(Slider)).onChanged!(
-            60,
-          );
+        60,
+      );
       await tester.pumpAndSettle();
 
       await tapBack(tester);

@@ -364,9 +364,7 @@ void main() {
       await tester.pumpAndSettle();
       // Driven through the callback rather than by gesture: landing a range
       // thumb on an exact division is brittle, and the mapping is the subject.
-      tester
-          .widget<Slider>(find.byType(Slider))
-          .onChanged!(100);
+      tester.widget<Slider>(find.byType(Slider)).onChanged!(100);
       await tester.pumpAndSettle();
       expect(find.text('RM 10+'), findsOneWidget);
 
@@ -378,7 +376,8 @@ void main() {
       expect(find.text('RM 10+'), findsOneWidget);
     });
 
-    testWidgets('dismissing the budget sheet without touching it writes nothing',
+    testWidgets(
+        'dismissing the budget sheet without touching it writes nothing',
         (tester) async {
       await pumpTab(tester, user: _user(budgetMin: null, budgetMax: null));
 
@@ -454,9 +453,7 @@ void main() {
 
       await tester.tap(find.text('Budget per person'));
       await tester.pumpAndSettle();
-      tester
-          .widget<Slider>(find.byType(Slider))
-          .onChanged!(60);
+      tester.widget<Slider>(find.byType(Slider)).onChanged!(60);
       await tester.pumpAndSettle();
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
@@ -480,9 +477,7 @@ void main() {
       await tester.tap(find.text('Budget per person'));
       await tester.pumpAndSettle();
       for (final end in const [20.0, 35.0, 60.0]) {
-        tester
-          .widget<Slider>(find.byType(Slider))
-            .onChanged!(end);
+        tester.widget<Slider>(find.byType(Slider)).onChanged!(end);
         await tester.pump();
       }
       expect(profile.preferenceCalls, isEmpty,
@@ -612,9 +607,7 @@ void main() {
       expect(find.bySemanticsLabel('Budget per person'), findsOneWidget);
       // The pips carry no text, so the words have to come from the node.
       expect(
-        tester
-            .getSemantics(find.bySemanticsLabel('Spice'))
-            .value,
+        tester.getSemantics(find.bySemanticsLabel('Spice')).value,
         'Bring it',
       );
 
@@ -632,8 +625,7 @@ void main() {
       tester.semantics.tap(find.semantics.byLabel('Halal only'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Only places we know are certified'),
-          findsOneWidget,
+      expect(find.text('Only places we know are certified'), findsOneWidget,
           reason: 'the tap action must open the sheet');
 
       handle.dispose();

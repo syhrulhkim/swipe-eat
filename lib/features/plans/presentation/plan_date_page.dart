@@ -88,7 +88,8 @@ class PlanDatePage extends StatefulWidget {
 }
 
 class _PlanDatePageState extends State<PlanDatePage> {
-  late final PlansController _plans = widget.controller ?? PlansController.instance;
+  late final PlansController _plans =
+      widget.controller ?? PlansController.instance;
 
   /// Read once, in `initState`: a page that asked the clock on every build
   /// would redraw "today" mid-session, and every test would race it.
@@ -178,6 +179,7 @@ class _PlanDatePageState extends State<PlanDatePage> {
                     draft: widget.draft,
                     selected: _selected,
                     timeText: _slot.label,
+                    withFriends: _withFriends,
                     saving: _saving,
                     onLockIn: _canLockIn ? _lockIn : null,
                   ),
@@ -308,6 +310,7 @@ class _PickedBar extends StatelessWidget {
     required this.draft,
     required this.selected,
     required this.timeText,
+    required this.withFriends,
     required this.saving,
     required this.onLockIn,
   });
@@ -315,6 +318,7 @@ class _PickedBar extends StatelessWidget {
   final PlanDraft draft;
   final DateTime? selected;
   final String timeText;
+  final bool withFriends;
   final bool saving;
   final VoidCallback? onLockIn;
 
@@ -335,7 +339,12 @@ class _PickedBar extends StatelessWidget {
           // instead — the answer read back stays legible and the button spans
           // the row under it.
           final stacked = constraints.maxWidth < kPickedBarStackWidth;
-          final summary = _PickedSummary(draft: draft, selected: selected, timeText: timeText);
+          final summary = _PickedSummary(
+            draft: draft,
+            selected: selected,
+            timeText: timeText,
+            withFriends: withFriends,
+          );
           final button = AppPrimaryButton(
             label: 'Lock it in',
             busy: saving,
@@ -374,11 +383,13 @@ class _PickedSummary extends StatelessWidget {
     required this.draft,
     required this.selected,
     required this.timeText,
+    required this.withFriends,
   });
 
   final PlanDraft draft;
   final DateTime? selected;
   final String timeText;
+  final bool withFriends;
 
   @override
   Widget build(BuildContext context) {
@@ -386,61 +397,57 @@ class _PickedSummary extends StatelessWidget {
     final cover = draft.coverUrl;
 
     return Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(kRadiusWishThumb),
-            child: Container(
-              width: kWishThumbSize,
-              height: kWishThumbSize,
-              color: kSurfacePanel,
-              child: cover == null || cover.isEmpty
-                  ? null
-                  : Image.network(
-                      cover,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, _, __) => const SizedBox.shrink(),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  day == null
-                      ? 'Pick a day'
-                      : pickedSummary(day, timeText),
-                  // The CSS says `white-space:nowrap`; in Flutter that has to
-                  // be spelled out or the line wraps the bar taller at a large
-                  // text scale.
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: kTextFontFamily,
-                    fontSize: kPickedTitleFontSize,
-                    fontWeight: FontWeight.w600,
-                    color: kTextOnPhoto,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(kRadiusWishThumb),
+          child: Container(
+            width: kWishThumbSize,
+            height: kWishThumbSize,
+            color: kSurfacePanel,
+            child: cover == null || cover.isEmpty
+                ? null
+                : Image.network(
+                    cover,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, _, __) => const SizedBox.shrink(),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  // "3 friends" once the Friends phase can count them. Until
-                  // then the honest number is none.
-                  '${draft.shortName} · Just you',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: kTextFontFamily,
-                    fontSize: kFontSizeSmall,
-                    color: kCreamSecondary,
-                  ),
-                ),
-              ],
-            ),
           ),
-        ],
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                day == null ? 'Pick a day' : pickedSummary(day, timeText),
+                // The CSS says `white-space:nowrap`; in Flutter that has to
+                // be spelled out or the line wraps the bar taller at a large
+                // text scale.
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: kTextFontFamily,
+                  fontSize: kPickedTitleFontSize,
+                  fontWeight: FontWeight.w600,
+                  color: kTextOnPhoto,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${draft.shortName} · ${withFriends ? 'With friends' : 'Just you'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: kTextFontFamily,
+                  fontSize: kFontSizeSmall,
+                  color: kCreamSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

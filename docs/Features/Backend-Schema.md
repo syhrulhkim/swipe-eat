@@ -7,11 +7,20 @@ Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](..
 
 > **Client drift, 2026-09-05.** The client no longer uses `undo_swipe`,
 > `get_swipe_stats`, `get_super_liked_ids`, `get_visited_restaurants`,
-> `get_reviewed_restaurants`, `set_passport`, `profiles.passport_*` or
-> `swipes.super_like` — "save for later" moved to `wishlist_items` (D84, D94,
-> D96). Nothing has been dropped: dropping destroys data and is irreversible,
-> so it wants its own decision rather than riding along with a client change.
-> This document still describes the database as it is.
+> `get_reviewed_restaurants` or `swipes.super_like` — "save for later" moved to
+> `wishlist_items` (D84, D94, D96). Nothing there has been dropped: dropping
+> destroys data and is irreversible, so it wants its own decision rather than
+> riding along with a client change. This document still describes the
+> database as it is.
+
+> **Changed 2026-09-10 (D121).** `set_passport` **is** dropped, and
+> `deck_scored` / `search_restaurants` no longer read
+> `profiles.passport_latitude/longitude`. Unused was not the whole story
+> there: the columns still outranked the caller's own fix inside both
+> functions, so a pin left behind before D84 kept steering a live account's
+> deck. The columns remain — no data is destroyed — but nothing reads them.
+> `update_location` also stopped coalescing a missing `p_place_name` back to
+> the row's existing name: the name belongs to the fix.
 
 The **as-built** state of the Supabase project `vpcldlhqpvunnuexecgn`, read from
 the live database on 2026-09-03. Where this disagrees with
@@ -180,9 +189,11 @@ Four concerns share the table:
 - **Location** — `search_radius_km`, `last_latitude`, `last_longitude`,
   `last_place_name`, `located_at`, `location_source`. The stored fix is what
   lets a user who denied location still get a sensible deck.
-- **Discovery filters and Passport** — `filter_cuisine_ids bigint[]`,
-  `filter_dietary_tag_ids bigint[]`, `filter_min_rating`,
-  `passport_latitude`, `passport_longitude`, `passport_place_name`.
+- **Discovery filters** — `filter_cuisine_ids bigint[]`,
+  `filter_dietary_tag_ids bigint[]`, `filter_min_rating`.
+- **Passport (dead columns)** — `passport_latitude`, `passport_longitude`,
+  `passport_place_name`. Nothing reads or writes them since D121; kept only
+  because dropping a column destroys data.
 
 Filters live on the profile rather than in device storage so they survive a
 reinstall. A null passport latitude means Passport is off.
@@ -211,19 +222,20 @@ cron job. See [TikTok-Video.md](TikTok-Video.md).
 | `nearest_restaurant_km` | `(p_latitude, p_longitude) → float8` | How far the nearest place is, for the "nothing nearby" copy |
 | `tiktok_video_id` | `(video_url text) → bigint` | Immutable. Parses the post id, which increases with post time — the freshness signal |
 
-`deck_scored` resolves location **server-side**, passport first:
+`deck_scored` resolves location **server-side**, two steps since D121:
 
 ```sql
 coalesce(
-  (select m.passport_latitude from me m),  -- manual pin beats everything
   p_latitude,                              -- the device's real fix
   (select m.last_latitude from me m)       -- last known
 ) as lat
 ```
 
-Doing it here rather than in `DeckController` means the client cannot
-accidentally override an active Passport by passing a GPS fix — which it does
-on every `load()`.
+`passport_latitude` used to head that list and no longer appears in it — see
+the D121 note at the top. `search_restaurants` resolves it identically, and so
+does the client when it labels a card's distance, which is the point: the
+radius is applied from this origin, so anything that quotes a distance has to
+quote it from here too.
 
 The seed is derived from the current date in `Asia/Kuala_Lumpur`, so a
 shortlist is stable for a day and rerolls at midnight for free.
@@ -300,7 +312,6 @@ that called them are gone (D102).
 | `complete_onboarding` | `(p_name, p_cuisine_ids, p_dietary_ids, p_morning_mode, p_spice_bias, p_nearby_focus, p_radius_km, p_latitude, p_longitude, p_place_name, p_location_source, p_halal_only, p_vegetarian, p_spice_level, p_budget_min, p_budget_max, p_clear_budget) → profiles` |
 | `update_preferences` | `(p_name, p_morning_mode, p_spice_bias, p_nearby_focus, p_radius_km, p_clear_radius, p_cuisine_ids, p_dietary_ids, p_halal_only, p_vegetarian, p_spice_level, p_budget_min, p_budget_max, p_clear_budget) → profiles` |
 | `set_discovery_filters` | `(p_cuisine_ids, p_dietary_tag_ids, p_min_rating) → profiles` |
-| `set_passport` | `(p_latitude, p_longitude, p_place_name) → profiles` |
 | `update_location` | `(p_latitude, p_longitude, p_place_name, p_source) → profiles` |
 
 Each returns the whole updated `profiles` row, so the client refreshes its

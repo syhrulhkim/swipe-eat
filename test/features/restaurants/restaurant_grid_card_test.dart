@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,21 +13,11 @@ import 'fake_restaurant_repositories.dart';
 /// grid: two columns inside 12 pt of screen padding with 10 pt between them.
 const double _narrowScreen = 320;
 const double _tileWidth = (_narrowScreen - 12 * 2 - 10) / 2;
-const double _tileHeight = _tileWidth / 0.78;
+const double _tileHeight = _tileWidth / 0.9;
 
 /// How far a corner mark sits in from the tile's edges — the design's
 /// `top: 8; right: 8`.
 const double _markInset = 8;
-
-/// Where the bite's left edge falls on a tile of [width].
-///
-/// The notch is a circle of [radius] centred [kBiteNotchInset] inside the
-/// corner, so it first touches the top edge where the circle crosses it.
-double _biteLeftEdge(double width, double radius) {
-  final halfChord =
-      math.sqrt(radius * radius - kBiteNotchInset * kBiteNotchInset);
-  return width - kBiteNotchInset - halfChord;
-}
 
 Restaurant _restaurant({String tag = 'Nasi lemak', String? neighbourhood}) {
   final base = testRestaurant(1, name: 'Warung Kak Ros');
@@ -51,7 +40,6 @@ Restaurant _restaurant({String tag = 'Nasi lemak', String? neighbourhood}) {
 Future<void> _pumpTile(
   WidgetTester tester, {
   bool isSaved = false,
-  bool isWishlisted = false,
   String? plannedLabel,
   Restaurant? restaurant,
   String distanceText = '1.2 km',
@@ -68,7 +56,6 @@ Future<void> _pumpTile(
               distanceText: distanceText,
               onTap: () {},
               isSaved: isSaved,
-              isWishlisted: isWishlisted,
               plannedLabel: plannedLabel,
             ),
           ),
@@ -78,8 +65,17 @@ Future<void> _pumpTile(
   );
 }
 
-/// The wish badge, found by the one icon only it draws.
-Finder get _wishBadge => find.byIcon(Icons.bookmark_outline_rounded);
+/// The saved check, found by the one icon only it draws.
+Finder get _savedCheck => find.byIcon(Icons.check_rounded);
+
+/// The photo half of the tile — the one Stack, holding the picture (or its
+/// placeholder) and the corner marks.
+Finder get _photo => find
+    .descendant(
+      of: find.byType(RestaurantGridCard),
+      matching: find.byType(Stack),
+    )
+    .first;
 
 void main() {
   setUpAll(() => HttpOverrides.global = ImageHttpOverrides());
@@ -123,18 +119,22 @@ void main() {
     });
   });
 
-  group('RestaurantGridCard bite', () {
-    testWidgets('the notch is taken out of a saved tile only', (tester) async {
-      Finder notch() => find.descendant(
-            of: find.byType(RestaurantGridCard),
-            matching: find.byType(BiteNotch),
-          );
-
-      await _pumpTile(tester);
-      expect(tester.widget<BiteNotch>(notch()).bitten, isFalse);
-
+  group('RestaurantGridCard layout', () {
+    testWidgets('the caption sits below the photo, not over it',
+        (tester) async {
+      // The whole point of the split tile (D125): the text has its own dark
+      // ground under the picture. If someone lays it back over the photo, the
+      // name's top climbs above the photo's bottom edge and this fails.
       await _pumpTile(tester, isSaved: true);
-      expect(tester.widget<BiteNotch>(notch()).bitten, isTrue);
+
+      final photo = tester.getRect(_photo);
+      final name = tester.getRect(find.text('Warung Kak Ros'));
+      final tile = tester.getRect(find.byType(RestaurantGridCard));
+
+      expect(name.top, greaterThanOrEqualTo(photo.bottom));
+      expect(photo.top, closeTo(tile.top, 1.5), reason: 'photo starts at the top');
+      // Near the reference's 60/40 split at the default text size.
+      expect(photo.height / tile.height, inInclusiveRange(0.55, 0.75));
     });
 
     testWidgets('the tile is one tap target, however it is marked',
@@ -152,7 +152,6 @@ void main() {
                   distanceText: '1.2 km',
                   onTap: () => taps++,
                   isSaved: true,
-                  isWishlisted: true,
                   plannedLabel: 'Fri 4',
                 ),
               ),
@@ -161,7 +160,7 @@ void main() {
         ),
       );
 
-      // The badge and the pill are marks, not controls: a tap on either has to
+      // The check and the pill are marks, not controls: a tap on either has to
       // reach the tile underneath.
       await tester.tap(find.text('Warung Kak Ros'));
       expect(taps, 1, reason: 'the name');
@@ -169,51 +168,39 @@ void main() {
       await tester.tap(find.text('Fri 4'), warnIfMissed: false);
       expect(taps, 2, reason: 'the planned pill');
 
-      await tester.tap(_wishBadge, warnIfMissed: false);
-      expect(taps, 3, reason: 'the wishlist badge');
+      await tester.tap(_savedCheck, warnIfMissed: false);
+      expect(taps, 3, reason: 'the saved check');
     });
   });
 
-  group('RestaurantGridCard wishlist badge', () {
-    testWidgets('appears only for a wishlisted place', (tester) async {
+  group('RestaurantGridCard saved check', () {
+    testWidgets('appears on a saved tile only', (tester) async {
+      await _pumpTile(tester);
+      expect(_savedCheck, findsNothing);
+
       await _pumpTile(tester, isSaved: true);
-      expect(_wishBadge, findsNothing);
-
-      await _pumpTile(tester, isSaved: true, isWishlisted: true);
-      expect(_wishBadge, findsOneWidget);
+      expect(_savedCheck, findsOneWidget);
     });
 
-    testWidgets('sits in the top-right corner', (tester) async {
-      await _pumpTile(tester, isSaved: true, isWishlisted: true);
+    testWidgets('sits in the top-right corner of the photo', (tester) async {
+      await _pumpTile(tester, isSaved: true);
 
-      final tile = tester.getRect(find.byType(RestaurantGridCard));
-      final badge = tester.getRect(_wishBadge);
+      final photo = tester.getRect(_photo);
+      final check = tester.getRect(find.ancestor(
+        of: _savedCheck,
+        matching: find.byType(DecoratedBox),
+      ).first);
 
-      expect(badge.right, closeTo(tile.right - _markInset, 0.01));
-      expect(badge.top, closeTo(tile.top + _markInset, 0.01));
+      expect(check.right, closeTo(photo.right - _markInset, 0.01));
+      expect(check.top, closeTo(photo.top + _markInset, 0.01));
+      expect(check.width, kCheckCircleSize);
     });
 
-    testWidgets('survives the bite it overlaps', (tester) async {
-      // The badge's centre is well inside the notch's radius, so a badge drawn
-      // *inside* the clip would be erased. It has to be painted over the bite,
-      // and this is what says so: the widget is laid out and hit-testable at
-      // full size on a bitten tile.
-      await _pumpTile(tester, isSaved: true, isWishlisted: true);
+    testWidgets('the bookmark is gone', (tester) async {
+      // Removed, not hidden (D84, D125).
+      await _pumpTile(tester, isSaved: true);
 
-      expect(tester.getSize(find.byIcon(Icons.bookmark_outline_rounded)).width,
-          greaterThan(0));
-
-      final tile = tester.getRect(find.byType(RestaurantGridCard));
-      final badgeCentre = tester.getCenter(_wishBadge);
-      final notchCentre = Offset(
-        tile.right - kBiteNotchInset,
-        tile.top + kBiteNotchInset,
-      );
-
-      // Guards against a vacuous pass: if the geometry ever stops overlapping,
-      // this test is no longer testing anything.
-      expect((badgeCentre - notchCentre).distance,
-          lessThan(kBiteNotchRadius));
+      expect(find.byIcon(Icons.bookmark_outline_rounded), findsNothing);
     });
   });
 
@@ -233,14 +220,6 @@ void main() {
       await _pumpTile(tester, isSaved: true);
 
       expect(find.text('Fri 4'), findsNothing);
-    });
-
-    test('the full-size bite leaves the planned corner alone', () {
-      // The pill lives in the left corner precisely so the notch cannot clip
-      // it. A pill wide enough to reach the bite would be a copy problem, not
-      // a layout one, so the margin is asserted rather than assumed.
-      expect(_biteLeftEdge(_tileWidth, kBiteNotchRadius),
-          greaterThan(_markInset + 44));
     });
   });
 }

@@ -19,9 +19,8 @@ class PendingVisit {
       userId: json['user_id'] as String? ?? '',
       restaurantId: (json['restaurant_id'] as num?)?.toInt() ?? 0,
       name: json['name'] as String? ?? '',
-      openedAt:
-          DateTime.tryParse(json['opened_at'] as String? ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0),
+      openedAt: DateTime.tryParse(json['opened_at'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
 

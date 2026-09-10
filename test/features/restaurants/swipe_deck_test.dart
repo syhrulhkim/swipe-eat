@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/restaurants/presentation/swipe_deck.dart';
@@ -16,30 +17,43 @@ const String _longLocation =
 /// most-used examples of.
 const double _minTapTarget = 44;
 
+/// The largest system text size the design is asked to survive.
+const TextScaler _doubleText = TextScaler.linear(2.0);
+
+/// Hosts a deck widget under the app's scaffold, optionally at a system text
+/// size other than the default.
+Widget _host(Widget child, {TextScaler textScaler = TextScaler.noScaling}) {
+  return MaterialApp(
+    home: Builder(
+      builder: (context) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+        child: Scaffold(backgroundColor: kBackgroundDark, body: child),
+      ),
+    ),
+  );
+}
+
 Future<void> _pumpHeader(
   WidgetTester tester, {
   String locationLabel = 'Kampung Baru',
   int? radiusKm,
   String? mealLabel,
   String? stalenessLabel,
-  String? handoffLabel,
   int activeFilterCount = 0,
   VoidCallback? onFilterTap,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        backgroundColor: kBackgroundDark,
-        body: DeckHeader(
-          locationLabel: locationLabel,
-          radiusKm: radiusKm,
-          mealLabel: mealLabel,
-          stalenessLabel: stalenessLabel,
-          handoffLabel: handoffLabel,
-          activeFilterCount: activeFilterCount,
-          onFilterTap: onFilterTap,
-        ),
+    _host(
+      DeckHeader(
+        locationLabel: locationLabel,
+        radiusKm: radiusKm,
+        mealLabel: mealLabel,
+        stalenessLabel: stalenessLabel,
+        activeFilterCount: activeFilterCount,
+        onFilterTap: onFilterTap,
       ),
+      textScaler: textScaler,
     ),
   );
 }
@@ -49,19 +63,18 @@ Future<void> _pumpActionBar(
   VoidCallback? onPass,
   VoidCallback? onLike,
   VoidCallback? onLater,
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        backgroundColor: kBackgroundDark,
-        body: Center(
-          child: DeckActionBar(
-            onPass: onPass ?? () {},
-            onLike: onLike ?? () {},
-            onLater: onLater ?? () {},
-          ),
+    _host(
+      Center(
+        child: DeckActionBar(
+          onPass: onPass ?? () {},
+          onLike: onLike ?? () {},
+          onLater: onLater ?? () {},
         ),
       ),
+      textScaler: textScaler,
     ),
   );
 }
@@ -81,8 +94,7 @@ void main() {
       expect(find.text('within 3 km · dinner'), findsOneWidget);
     });
 
-    testWidgets('no radius means no limit, not a missing line',
-        (tester) async {
+    testWidgets('no radius means no limit, not a missing line', (tester) async {
       await _pumpHeader(tester, mealLabel: 'lunch');
 
       expect(find.text('any distance · lunch'), findsOneWidget);
@@ -95,19 +107,76 @@ void main() {
       expect(find.textContaining('·'), findsNothing);
     });
 
-    testWidgets('the Filters button reads as one and fires', (tester) async {
+    testWidgets('the discovery control announces itself and fires',
+        (tester) async {
       final handle = tester.ensureSemantics();
       var taps = 0;
       await _pumpHeader(tester, onFilterTap: () => taps++);
 
       expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
-      expect(find.bySemanticsLabel('Filters'), findsOneWidget);
+      // Named for the sheet it opens — radius, cuisines, diet, rating — not
+      // for one of its rows.
+      expect(find.bySemanticsLabel('Discovery settings'), findsOneWidget);
+      expect(find.bySemanticsLabel('Filters'), findsNothing);
+
+      final node = tester.getSemantics(
+        find.bySemanticsLabel('Discovery settings'),
+      );
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      expect(node.value, isEmpty);
 
       await tester.tap(find.byType(AppIconButton));
       await tester.pump();
       expect(taps, 1);
 
       handle.dispose();
+    });
+
+    testWidgets('a screen reader hears how many filters are on',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpHeader(tester, activeFilterCount: 2, onFilterTap: () {});
+
+      final node = tester.getSemantics(
+        find.bySemanticsLabel('Discovery settings'),
+      );
+      expect(node.value, '2 filters on');
+      // The word is announced once, by the value — the badge's own "2" does
+      // not leak out as a second fragment.
+      expect(node.label, 'Discovery settings');
+
+      handle.dispose();
+    });
+
+    testWidgets('one filter on is singular', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpHeader(tester, activeFilterCount: 1, onFilterTap: () {});
+
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Discovery settings')).value,
+        '1 filter on',
+      );
+
+      handle.dispose();
+    });
+
+    testWidgets('a filter that is on turns the glyph ember', (tester) async {
+      await _pumpHeader(tester, activeFilterCount: 1, onFilterTap: () {});
+
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.tune_rounded)).color,
+        kAccentEmber,
+      );
+    });
+
+    testWidgets('nothing narrowing the deck leaves the glyph cream',
+        (tester) async {
+      await _pumpHeader(tester, onFilterTap: () {});
+
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.tune_rounded)).color,
+        kTextOnPhoto,
+      );
     });
 
     testWidgets('no filter handler, no filter button', (tester) async {
@@ -193,34 +262,26 @@ void main() {
         lessThanOrEqualTo(_narrowViewport.width),
       );
     });
-  });
 
-  group('DeckHeader handoff chip', () {
-    testWidgets('names the handed-over list, without the offline cloud',
+    testWidgets('a 320 px phone at double text size still fits the control',
         (tester) async {
-      await _pumpHeader(tester, handoffLabel: 'Nearby · 6 places');
-
-      expect(find.text('Nearby · 6 places'), findsOneWidget);
-      expect(find.byIcon(Icons.near_me_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.cloud_off_rounded), findsNothing);
-    });
-
-    testWidgets('sits beside the offline chip when both apply', (tester) async {
+      useViewport(tester, _narrowViewport);
       await _pumpHeader(
         tester,
-        handoffLabel: 'Nearby · 6 places',
-        stalenessLabel: 'Offline · saved deck',
+        locationLabel: _longLocation,
+        radiusKm: 3,
+        mealLabel: 'dinner',
+        stalenessLabel: 'Saved 2 h ago',
+        activeFilterCount: 12,
+        onFilterTap: () {},
+        textScaler: _doubleText,
       );
 
-      expect(find.text('Nearby · 6 places'), findsOneWidget);
-      expect(find.text('Offline · saved deck'), findsOneWidget);
       expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('is absent when nothing was handed over', (tester) async {
-      await _pumpHeader(tester);
-
-      expect(find.byIcon(Icons.near_me_rounded), findsNothing);
+      expect(
+        tester.getTopRight(find.byType(AppIconButton)).dx,
+        lessThanOrEqualTo(_narrowViewport.width),
+      );
     });
   });
 
@@ -321,8 +382,73 @@ void main() {
       await _pumpActionBar(tester);
 
       final ngap = tester.getSize(find.byType(AppNgapButton)).width;
-      expect(ngap, greaterThan(tester.getSize(find.byType(AppIconButton).at(0)).width));
-      expect(ngap, greaterThan(tester.getSize(find.byType(AppIconButton).at(1)).width));
+      expect(ngap,
+          greaterThan(tester.getSize(find.byType(AppIconButton).at(0)).width));
+      expect(ngap,
+          greaterThan(tester.getSize(find.byType(AppIconButton).at(1)).width));
+    });
+
+    testWidgets('the ghosts carry the words the primer taught', (tester) async {
+      await _pumpActionBar(tester);
+
+      // The Ngap button already says its own word, so only the two ghosts
+      // get a caption.
+      expect(find.text('Skip'), findsOneWidget);
+      expect(find.text('Later'), findsOneWidget);
+      expect(find.text('Ngap!'), findsOneWidget);
+      expect(find.text('Ngap'), findsNothing);
+    });
+
+    testWidgets('a caption does not make a screen reader say the move twice',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpActionBar(tester);
+
+      expect(find.bySemanticsLabel('Skip'), findsOneWidget);
+      expect(find.bySemanticsLabel('Later'), findsNothing);
+      expect(find.bySemanticsLabel('Save for later'), findsOneWidget);
+
+      handle.dispose();
+    });
+
+    testWidgets('Ngap is dead-centre whatever the captions measure',
+        (tester) async {
+      await _pumpActionBar(tester);
+
+      final bar = tester.getCenter(find.byType(DeckActionBar)).dx;
+      final ngap = tester.getCenter(find.byType(AppNgapButton)).dx;
+      expect(ngap, closeTo(bar, 0.5));
+    });
+
+    testWidgets('survives a 320 px phone at double text size', (tester) async {
+      useViewport(tester, _narrowViewport);
+      await _pumpActionBar(tester, textScaler: _doubleText);
+
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byType(DeckActionBar)).width,
+        lessThanOrEqualTo(_narrowViewport.width),
+      );
+      // A paragraph clips rather than overflowing, so "no exception" alone
+      // would pass with half a word: the word must fit its disc, and each
+      // caption its column. Measured as painted — the word is scaled back
+      // into the disc, and its own layout size is the unscaled one.
+      expect(
+        tester.getRect(find.text('Ngap!')).width,
+        lessThanOrEqualTo(kNgapButtonSize),
+      );
+      for (final caption in ['Skip', 'Later']) {
+        expect(
+          tester.getRect(find.text(caption)).width,
+          lessThanOrEqualTo(kNgapButtonSize),
+          reason: caption,
+        );
+      }
+      // And the buttons are untouched by the text size.
+      expect(
+        tester.getSize(find.byType(AppNgapButton)),
+        const Size(kNgapButtonSize, kNgapButtonSize),
+      );
     });
 
     testWidgets('sits in the middle, in reading order', (tester) async {

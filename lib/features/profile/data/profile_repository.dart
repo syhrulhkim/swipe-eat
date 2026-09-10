@@ -21,6 +21,10 @@ class ProfileRepository {
   /// Persists a real GPS fix (and its reverse-geocoded name), so the deck,
   /// Explore and the header chip all agree on where the user is — including
   /// on their next device.
+  ///
+  /// The name is always sent, null included: it belongs to *this* fix. Keeping
+  /// the previous one when reverse geocoding fails would move the coordinates
+  /// to a new town and leave the old town's name on the header.
   Future<AppUser> updateLocation({
     required double latitude,
     required double longitude,
@@ -29,7 +33,7 @@ class ProfileRepository {
     return _rpc('update_location', {
       'p_latitude': latitude,
       'p_longitude': longitude,
-      if (placeName != null) 'p_place_name': placeName,
+      'p_place_name': placeName,
       'p_source': 'gps',
     });
   }

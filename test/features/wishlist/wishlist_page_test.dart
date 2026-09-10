@@ -305,7 +305,8 @@ void main() {
 
       await tester.tap(find.text('Beta'));
       await tester.pumpAndSettle();
-      expect(_titleTop(tester, 'Beta'), greaterThan(_titleTop(tester, 'Alpha')));
+      expect(
+          _titleTop(tester, 'Beta'), greaterThan(_titleTop(tester, 'Alpha')));
 
       await tester.tap(find.text('Beta'));
       await tester.pumpAndSettle();
@@ -498,7 +499,8 @@ void main() {
         tester,
         rows: [
           testWishlistItem(1, title: 'Still To Go'),
-          testWishlistItem(2, title: 'Eaten One', eatenAt: DateTime(2026, 8, 1)),
+          testWishlistItem(2,
+              title: 'Eaten One', eatenAt: DateTime(2026, 8, 1)),
         ],
         onShare: (text) async => shared = text,
       );
@@ -516,7 +518,8 @@ void main() {
       await _pumpPage(
         tester,
         rows: [
-          testWishlistItem(1, title: 'Eaten One', eatenAt: DateTime(2026, 8, 1)),
+          testWishlistItem(1,
+              title: 'Eaten One', eatenAt: DateTime(2026, 8, 1)),
         ],
         onShare: (text) async => called = true,
       );

@@ -181,8 +181,7 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('inside a row it announces nothing of its own',
-        (tester) async {
+    testWidgets('inside a row it announces nothing of its own', (tester) async {
       // Otherwise the row and the switch would be read out as two controls
       // that happen to share a state.
       final handle = tester.ensureSemantics();
@@ -298,7 +297,8 @@ void main() {
 
       final pill = tester
           .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
-          .where((container) => container.constraints?.maxHeight == kSegmentHeight);
+          .where((container) =>
+              container.constraints?.maxHeight == kSegmentHeight);
       expect(pill, hasLength(SpiceLevel.values.length));
     });
 
@@ -363,8 +363,8 @@ void main() {
       // Driven through the callback: landing a range thumb on an exact
       // division by gesture is brittle, and the mapping is the subject.
       tester.widget<Slider>(find.byType(Slider)).onChanged!(
-            100,
-          );
+        100,
+      );
       await tester.pump();
 
       expect(calls, 1);
@@ -386,8 +386,8 @@ void main() {
       );
 
       tester.widget<Slider>(find.byType(Slider)).onChanged!(
-            60,
-          );
+        60,
+      );
       await tester.pump();
 
       expect(reportedMax, 60);

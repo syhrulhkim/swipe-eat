@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-10
 Cross-references: [General/PLAN.md](../General/PLAN.md), [Backend-Schema.md](Backend-Schema.md), [TikTok-Video.md](TikTok-Video.md), [Likes-Visits.md](Likes-Visits.md), [Profile-Preferences.md](Profile-Preferences.md), [History/tinder-parity-plan.md](../History/tinder-parity-plan.md)
 
 # Swipe Deck
@@ -27,7 +27,7 @@ motion), `swipe_card.dart` (one card), `state/deck_controller.dart` (all state),
 | Drag left | `dx < -110` | Pass |
 | Drag up | `dy < -140` **and** `|dx| < 110` | **Later** — save without deciding |
 | Release below threshold | — | Springs back |
-| Tap the card | — | Full-screen TikTok player |
+| Tap the card | — | The restaurant's screen (D93) |
 | Action bar buttons | — | Same path as a drag, via `_triggerAction` |
 
 The up-swipe guard on `|dx|` matters: without it a diagonal fling reads as a
@@ -36,6 +36,14 @@ Later, and Later is a decision to make later — it must be deliberate (D14).
 The action bar is the design's **three circles**: a 56 px ghost Skip, the 72 px
 gradient **Ngap!** button carrying the word, and a 56 px ghost Later. It was
 five controls — rewind, Pass, the super-like star, Like — until D84.
+
+Since 2026-09-10 the two ghosts carry their word **under** the glyph — the same
+words the onboarding "Three moves" primer teaches, so the screen that teaches
+the gesture and the screen that runs it agree. Ngap already says its own, so
+there is no third caption. Each ghost sits in a fixed 72 px column, which is
+what keeps Ngap dead-centre whatever the captions measure at a large text size.
+The captions are `ExcludeSemantics`: a screen reader hears each action named
+once, not twice.
 
 ### Motion
 
@@ -137,7 +145,7 @@ its result, so a slow response from an earlier call can never overwrite a
 fresher deck. Init and every retry button share the path.
 
 The deck is re-dealt when any **deck-shaping** profile field changes — radius,
-discovery filters, passport. The tabs live in an `IndexedStack` that never
+discovery filters. The tabs live in an `IndexedStack` that never
 re-inits, so these have to be listened for; they are server-side filters, and
 stale cards would break the promise they make. `lastPlaceName` and the stored
 fix are deliberately excluded, since every load syncs those anyway and
@@ -156,13 +164,51 @@ places are.
 ### The header
 
 The design's `.topbar`: a place icon, the location on one line and
-"within 3 km · dinner" under it, and the **Filters** button with its count dot.
-Nothing else — Settings moved to the You tab on 2026-09-05, because the design
-gives the swipe screen one button.
+"within 3 km · dinner" under it, and the **discovery** button with its count
+dot. Nothing else — account settings moved to the You tab on 2026-09-05,
+because the design gives the swipe screen one button. That one button now
+opens the radius as well as the filters
+([Profile-Preferences](Profile-Preferences.md) §3): the subline says how far
+the deck is looking, and the control next to it is where that is changed.
+
+The button is announced as **"Discovery settings"** — the sheet behind it sets
+the radius, cuisines, dietary needs and rating, so it is named for the whole of
+that rather than for one row — with the count as a semantics *value* ("2
+filters on"). When anything is narrowing the deck the glyph goes ember, the
+palette's word for "chosen", so the state is legible before the count is read.
+Nearby's own filter button opens the same sheet and is named and coloured the
+same way.
 
 `locationLabel` is the reverse-geocoded name of the last stored fix, else
-`'Nearby'` for an account that has never granted location (the passport pin
-that used to come first was retired with D84). The second line is the profile's
+`'Nearby'` for an account that has never granted location — and `'Location
+off'` whenever the device position is the **fallback**, because the stored
+name is then the last town the app managed to geocode, which can be days and a
+hundred kilometres out of date. Printing it plain reads as a claim about where
+the user is standing.
+
+A fallback also means the deck itself is dealt around the stored point rather
+than the device, so `SwipeDeck` re-runs `DeckController.refreshLocation()` on
+`AppLifecycleState.resumed`. Turning location on happens in Settings, which is
+an app switch, and `resolveUserPosition` drops its session cache after a
+fallback — so the resume is where a fix that was granted after launch first
+reaches the app. The refresh is a no-op when a real fix is already in hand: a
+re-deal restarts the stack, and nobody should lose their place six cards in
+just for switching apps.
+
+The name now belongs to the fix rather than to the profile
+([Profile-Preferences](Profile-Preferences.md) §3): `update_location` writes
+whatever the geocoder returned, null included, so a fix in a new town can no
+longer wear the old town's name when reverse geocoding fails. "Nearby" is the
+honest answer there.
+
+The card's distance is measured from `DeckController._deckOrigin` — the real
+device fix, else `AppUser.lastLatitude/lastLongitude` — which is exactly the
+chain `deck_scored` uses to apply the radius. It has to be: measuring from a
+different point is how a card the server picked as "within 15 km" ends up
+labelled 80 km. A **fallback** position is not a fix and is never measured
+from, because the RPC is never told about it either.
+
+The second line is the profile's
 `search_radius_km` ("any distance" when unset) and `mealLabel(now)` from
 `domain/meal_label.dart` — breakfast before 11, lunch to 15, tea to 18, dinner
 to 22, supper otherwise.
@@ -186,8 +232,10 @@ in `swipe_card.dart`), changed 2026-09-05 (D93):
 - **Meta** — `**1.2 km** · Masai` and `**From RM 19**`. Each part hides when
   unknown; the distance always shows.
 
-A tap on the block opens the restaurant's screen; a tap on the clip opens the
-fullscreen player. The card carries **no buttons**: the three actions are
+A tap anywhere on the card — the info block, the clip — opens the restaurant's
+screen. The only exception is the "Tap for sound" chip, which unmutes the clip
+in place (D89). The deck no longer has a fullscreen player route; the detail
+screen keeps its own. The card carries **no buttons**: the three actions are
 `DeckActionBar` under the deck (`swipe_deck.dart`), so the card behind is the
 same surface as the card in front. The tap-to-expand panel, the `details`
 paragraph and the review carousel are gone from the card — with 6 reviews across

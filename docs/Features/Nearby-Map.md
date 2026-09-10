@@ -3,6 +3,20 @@ Owner: Swipe Eat team
 Last updated: 2026-09-06
 Cross-references: [Explore-Search.md](Explore-Search.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md), [Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
+> **Changed 2026-09-10 (D126).** **The map no longer draws a map.** The
+> `TileLayer` is gone, and with it the OpenStreetMap tile server, the
+> `MAP_TILE_URL_TEMPLATE` / `MAP_TILE_ATTRIBUTION` defines, the `© OpenStreetMap`
+> credit, the scrim that darkened the tiles, and the injected `TileProvider`
+> the tests used to fake them. `flutter_map` **stays**: the tab still needs
+> its camera to turn a coordinate into a screen position for the pins. The
+> ground under those pins is now `kBackgroundDark` — the app's own surface.
+>
+> OSM's public server is development-only under their usage policy, which
+> D120 named as the last thing standing between this app and a store release.
+> Dropping the raster settles it without a tile account. Everything else about
+> the tab — the me-dot, the distance-sized pins, the slot layout, the radius
+> stepper, the results bar, "Swipe all" — is unchanged.
+
 # Nearby (the map)
 
 Tab index 1. A full-bleed map of everything inside a radius the thumb sets.
@@ -119,6 +133,15 @@ stepper has been touched, and until it has, a profile arriving late is allowed
 to move the circle to its own radius. After the first tap the circle is the
 user's answer and nothing overrules it — including a tap that changed nothing.
 
+There is now a second exception, added 2026-09-10: the discovery sheet sets the
+radius as well as the filters ([Profile-Preferences](Profile-Preferences.md)
+§3), and Apply *does* move the circle. That is not Settings reaching in behind
+the user's back — it is the user answering the same question a few seconds ago
+in a sheet they opened from this screen — so `_radiusTouched` is cleared and
+the new radius adopted. Only when the sheet actually changed the radius:
+applying a cuisine leaves the circle where the stepper left it, and choosing
+"any distance" does too, because the map has no circle for "any".
+
 Cuisine, dietary tag and minimum-rating changes *do* refetch, and so do the
 three diet & budget answers, because `get_nearby` now applies them as hard rules
 (D105).
@@ -127,26 +150,27 @@ three diet & budget answers, because `get_nearby` now applies them as hard rules
 
 Resolved the way `deck_scored` resolves it, in order:
 
-1. The **passport pin** (`profiles.passport_latitude/longitude`) — a pin the
-   user dropped on purpose beats a fix they never chose (D12).
-2. A real device fix, through the injected resolver (D60).
-3. The coordinates the profile stored (`profiles.last_latitude/longitude`).
-   `(0, 0)` counts as unknown, for the passport and the stored pair alike.
-   Both pairs come back from one read, `NearbyRepository.profileOrigins()`,
-   because the passport has to be known *before* the device is asked. A read
-   that fails is not an error the map shows: the device fix is still worth
-   trying, and with no fix either the empty state already says the right thing.
-4. Nothing — and then the map is not drawn at all. `AppEmptyState` asks
+1. A real device fix, through the injected resolver (D60).
+2. The coordinates the profile stored (`profiles.last_latitude/longitude`),
+   carried on `AppUser.lastLatitude/lastLongitude`. `(0, 0)` counts as unknown.
+3. Nothing — and then the map is not drawn at all. `AppEmptyState` asks
    "Where are you eating?", offers **"Use my location"** and a secondary
    **"Not now"**. There is no stepper and no results bar in that state: there
    is nothing to centre them on.
 
 One origin drives all three of the me-dot, the camera fit and the query, so
-they can never disagree. That is also **why the passport is resolved on the
-client** rather than inside `get_nearby` the way `deck_scored` does it: an RPC
-that quietly swapped in a different origin would measure every `distance_km`
-from a place the map is not showing, and the me-dot would sit somewhere else
-again.
+they can never disagree — and it is the same chain the deck uses, so the two
+screens cannot disagree with each other either.
+
+> **Changed 2026-09-10.** The **passport pin** used to head this list (D12)
+> and was read on the client, ahead of the device, through a
+> `NearbyRepository.profileOrigins()` round trip. D84 retired passport, but
+> `profiles.passport_latitude/longitude` kept winning the chain here *and*
+> inside `deck_scored` — so a pin left behind before the retirement silently
+> centred one live profile's map and deck 25 km from the town the header
+> named, while the card distances were measured from the device again. Three
+> origins, one screen. The pin is out of both chains, the extra read is gone
+> (the stored pair rides on `AppUser`), and `set_passport` is dropped.
 
 ## 4. The `get_nearby` RPC
 
@@ -173,7 +197,7 @@ and the three hard `halal_only` / `vegetarian` / `budget_max` predicates copied
 from it verbatim (D105) — orders by `haversine_km` and caps at `p_limit` (hard
 ceiling 200). Missing coordinates fall back to the caller's stored profile pair,
 so the function is usable with both arguments null. It does **not** read the
-passport pin: that is the client's job here, for the reason in section 3.
+passport pin — nothing does any more.
 
 The three hard rules keep their `deck_scored` shapes exactly, because the same
 reasoning holds on a map: `halal_only` needs `is_halal is true` (unknown is not
@@ -284,8 +308,8 @@ resolver, the clock and the repository are all injected.
 - `test/features/nearby/nearby_format_test.dart` — the radius snapping, the
   distance strings, every branch of the open line.
 - `test/features/nearby/nearby_controller_test.dart` — radius walking and its
-  stops, the counts and the cheapest price, the four origin outcomes including
-  **the passport pin beating a real device fix**, the hand-off and its
+  stops, the counts and the cheapest price, the three origin outcomes
+  (device fix, the profile's stored pair, neither), the hand-off and its
   **skipping of swiped places**, that Settings' radius does not move a circle
   the thumb has set but *does* move one it has not, that a diet or budget answer
   refetches, that the default clock is **Kuala Lumpur time**, and that a load in

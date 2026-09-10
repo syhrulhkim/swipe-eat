@@ -142,7 +142,8 @@ class _StarGridState extends State<StarGrid> with TickerProviderStateMixin {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.hasBoundedWidth ? constraints.maxWidth : 0.0;
-        final height = constraints.hasBoundedHeight ? constraints.maxHeight : 0.0;
+        final height =
+            constraints.hasBoundedHeight ? constraints.maxHeight : 0.0;
         final columns = width > 0 ? (width / widget.spacing).floor() + 1 : 0;
         final rows = height > 0 ? (height / widget.spacing).floor() + 1 : 0;
         _syncDotCount(columns * rows);
@@ -219,9 +220,8 @@ class _StarGridPainter extends CustomPainter {
     final originX = (size.width - (columns - 1) * spacing) / 2;
     final originY = (size.height - (rows - 1) * spacing) / 2;
 
-    final featuredIndex = showFeatured
-        ? _nearestIndex(size, originX, originY)
-        : -1;
+    final featuredIndex =
+        showFeatured ? _nearestIndex(size, originX, originY) : -1;
 
     final fadingOut = previousActive.toSet();
     final fadingIn = currentActive.toSet();
@@ -278,7 +278,8 @@ class _StarGridPainter extends CustomPainter {
 
   int _nearestIndex(Size size, double originX, double originY) {
     final target = featuredAlignment.alongSize(size);
-    final column = ((target.dx - originX) / spacing).round().clamp(0, columns - 1);
+    final column =
+        ((target.dx - originX) / spacing).round().clamp(0, columns - 1);
     final row = ((target.dy - originY) / spacing).round().clamp(0, rows - 1);
     return row * columns + column;
   }

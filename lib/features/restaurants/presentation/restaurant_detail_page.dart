@@ -346,74 +346,80 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
 
     return Scaffold(
       backgroundColor: kBackgroundDark,
-      body: Column(
+      body: Stack(
         children: [
-          SizedBox(
-            height: math.max(
-              kDetailHeroMinHeight,
-              MediaQuery.sizeOf(context).height * kDetailHeroFraction,
-            ),
-            child: DetailHero(
-              title: data.title,
-              tags: _heroTags(),
-              metaLine: _metaLine(),
-              videoUrl: videoUrl,
-              imageUrl: data.imageUrls.isEmpty ? null : data.imageUrls.first,
-              bitten: _liked,
-              playerFuture: _playerFuture,
-              videoHiddenForFullscreen: _fullscreenOpen,
-              onOpenPlayer:
-                  hasVideo ? () => unawaited(_openPlayer(videoUrl)) : null,
-              leading: AppIconButton(
-                icon: Icons.arrow_back_rounded,
-                size: kUtilityButtonSize,
-                semanticLabel: 'Back',
-                onTap: () => unawaited(Navigator.of(context).maybePop()),
+          const ScreenGlow(),
+          Column(
+            children: [
+              SizedBox(
+                height: math.max(
+                  kDetailHeroMinHeight,
+                  MediaQuery.sizeOf(context).height * kDetailHeroFraction,
+                ),
+                child: DetailHero(
+                  title: data.title,
+                  tags: _heroTags(),
+                  metaLine: _metaLine(),
+                  videoUrl: videoUrl,
+                  imageUrl:
+                      data.imageUrls.isEmpty ? null : data.imageUrls.first,
+                  bitten: _liked,
+                  playerFuture: _playerFuture,
+                  videoHiddenForFullscreen: _fullscreenOpen,
+                  onOpenPlayer:
+                      hasVideo ? () => unawaited(_openPlayer(videoUrl)) : null,
+                  leading: AppIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    size: kUtilityButtonSize,
+                    semanticLabel: 'Back',
+                    onTap: () => unawaited(Navigator.of(context).maybePop()),
+                  ),
+                  trailing: AppIconButton(
+                    icon: onWishlist
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    size: kUtilityButtonSize,
+                    iconColor: onWishlist ? kAccentEmber : kTextOnPhoto,
+                    semanticLabel:
+                        onWishlist ? 'Remove from wishlist' : 'Add to wishlist',
+                    onTap: () => unawaited(_toggleWishlist()),
+                  ),
+                ),
               ),
-              trailing: AppIconButton(
-                icon: onWishlist
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_border_rounded,
-                size: kUtilityButtonSize,
-                iconColor: onWishlist ? kAccentEmber : kTextOnPhoto,
-                semanticLabel:
-                    onWishlist ? 'Remove from wishlist' : 'Add to wishlist',
-                onTap: () => unawaited(_toggleWishlist()),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    20,
+                    AppSpacing.md,
+                    20,
+                    AppSpacing.md,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (facts.isNotEmpty) ...[
+                        FactsStrip(facts: facts),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
+                      if (data.dishes.isNotEmpty) ...[
+                        DishList(dishes: data.dishes),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
+                      if (data.details.trim().isNotEmpty)
+                        AboutParagraph(text: data.details),
+                      const FriendsBiteRow(avatars: [], caption: null),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                20,
-                AppSpacing.md,
-                20,
-                AppSpacing.md,
+              DetailCtaBar(
+                busy: _settingDate,
+                onSetDate: () => unawaited(_setDate()),
+                onDirections: hasMapFix(data.latitude, data.longitude)
+                    ? () => unawaited(_openDirections())
+                    : null,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (facts.isNotEmpty) ...[
-                    FactsStrip(facts: facts),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                  if (data.dishes.isNotEmpty) ...[
-                    DishList(dishes: data.dishes),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                  if (data.details.trim().isNotEmpty)
-                    AboutParagraph(text: data.details),
-                  const FriendsBiteRow(avatars: [], caption: null),
-                ],
-              ),
-            ),
-          ),
-          DetailCtaBar(
-            busy: _settingDate,
-            onSetDate: () => unawaited(_setDate()),
-            onDirections: hasMapFix(data.latitude, data.longitude)
-                ? () => unawaited(_openDirections())
-                : null,
+            ],
           ),
         ],
       ),

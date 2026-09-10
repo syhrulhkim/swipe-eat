@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/nearby/data/nearby_repository.dart';
@@ -24,7 +22,7 @@ class NearbyQuery {
 /// extends, so an interface change breaks the fake instead of silently
 /// diverging from it (D69).
 class FakeNearbyRepository implements NearbyRepository {
-  FakeNearbyRepository({this.stored, this.passport});
+  FakeNearbyRepository();
 
   /// Returned for every radius unless [rowsByRadius] names that radius.
   List<NearbyPlace> rows = const [];
@@ -32,15 +30,7 @@ class FakeNearbyRepository implements NearbyRepository {
   /// Per-radius answers, for a test that widens the circle and expects more.
   Map<double, List<NearbyPlace>> rowsByRadius = const {};
 
-  /// What the profile has on file, for a user who denied location.
-  NearbyOrigin? stored;
-
-  /// The passport pin the profile carries, if any — the origin that beats even
-  /// a real device fix.
-  NearbyOrigin? passport;
-
   bool fail = false;
-  bool failStored = false;
 
   /// Gates [fetchNearby] so a test can hold a load open — dispose the
   /// controller mid-flight, then let the answer arrive.
@@ -64,24 +54,6 @@ class FakeNearbyRepository implements NearbyRepository {
       throw Exception('nearby unavailable');
     }
     return rowsByRadius[radiusKm] ?? rows;
-  }
-
-  @override
-  Future<NearbyProfileOrigins> profileOrigins() async {
-    if (failStored) {
-      throw Exception('profile unavailable');
-    }
-    return NearbyProfileOrigins(passport: passport, stored: stored);
-  }
-}
-
-/// A tile provider that answers every tile with a transparent pixel and never
-/// opens a socket. `TileProvider.transparentImage` is the package's own bytes,
-/// so the decode path is the real one.
-class FakeTileProvider extends TileProvider {
-  @override
-  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
-    return MemoryImage(TileProvider.transparentImage);
   }
 }
 

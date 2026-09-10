@@ -8,7 +8,8 @@
 /// Fixed rather than free because a plan's time is a thing to agree on with
 /// other people, and four options are agreed on faster than 1 440.
 class PlanSlot {
-  const PlanSlot._({required this.label, this.hour, this.minute, this.wireLabel});
+  const PlanSlot._(
+      {required this.label, this.hour, this.minute, this.wireLabel});
 
   /// What the chip says, and what the summary line reads back.
   final String label;

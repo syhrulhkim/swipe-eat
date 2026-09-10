@@ -1,10 +1,15 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-10
 Cross-references: [Wishlist.md](Wishlist.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Restaurant-Data.md](Restaurant-Data.md)
 
 # Likes, Visits & Reviews
 
+> **Changed 2026-09-10.** The Bites tile is a **photo over a caption strip**
+> — name and cuisine on their own dark ground under the picture, not laid over
+> it — with an **ember check** in the photo's corner as the saved mark. The
+> wishlist bookmark badge is removed, not hidden (D125).
+>
 > **Changed 2026-09-05.** The Liked | Visited | Reviewed segments are gone from
 > the client, replaced by the design's chip row (D96). **Visited and Reviewed
 > are retired from the UI** — their RPCs and data are untouched, nothing calls
@@ -33,14 +38,18 @@ updated_at desc` server-side. The client does not re-sort it — Latest was the
 only sort anyone could use and it was already the backend's order.
 
 Every tile in Bites is a place the user saved, so **every tile carries the
-bite**. Two further marks sit on it:
+saved check** — the wishlist row's 26 px ember tick, in the photo's top-right
+(D125). One further mark sits on the photo:
 
-- the **wishlist bookmark** (`.wish`) in the top-right, when the place is still
-  on the wishlist. Painted over the notch rather than inside it, because a
-  28 px badge at that inset falls wholly within the 30 px bite;
 - the **planned day pill** (`.planned`) in the top-left — "Today", "Tonight",
   "Fri 4". **Live since 2026-09-06**: `PlansController` fills it, see
   [Plans-Calendar.md](Plans-Calendar.md).
+
+The tile splits **photo above, caption below**: the picture fills the top of
+the tile and the name and second line sit on a solid `kSurfaceDark` strip
+under it, so neither needs a scrim. The strip is sized to its text and the
+photo takes the rest, which is what lets a 2× text scale grow the caption
+instead of overflowing the tile — and why the name is one line, not two.
 
 The tile's second line is **"Cuisine · Neighbourhood"**, dropping the
 neighbourhood rather than dangling a separator when the row has none. The
@@ -55,6 +64,7 @@ distance and rating that used to live there are not in the design.
 | `LikedSort` and the sort dropdown | — |
 | The filter sheet and "With TikTok review" | — |
 | The per-tile unlike / mark-visited buttons | — |
+| The wishlist bookmark badge on a tile (D125) | `wishlist_items`, which the Wishlist screen still reads |
 
 `RestaurantListController` lost its only two callers with the two grids. It is
 left in place rather than deleted, as the shape any future lazily loaded list
@@ -99,8 +109,13 @@ which are server-side profile state
 deliberate: this is a finite list the user already owns, so filtering it is a
 view concern, not a query.
 
-Leaving the Wishlist refreshes the tab, because crossing a place off over there
-clears its bookmark here.
+A **pull down on the grid** refreshes too, and refreshes *both* caches — the
+likes behind the tiles and the calendar behind the day badges and the Planned
+chips. The tab is the two of them crossed, so reloading one would leave the
+other's stale answer on screen. Every branch of the grid is
+`AlwaysScrollableScrollPhysics`, the empty state included: a list shorter than
+its viewport does not scroll, and "no bites yet" is exactly the state a user
+pulls in after saving something on another device.
 
 ## 3. Unlike vs rewind
 
@@ -192,4 +207,5 @@ deleted once no install predates the migration.
 | D26 | The visit prompt only arms when the maps app actually opened, and only for signed-in users. | locked 2026-08-31 |
 | D27 | "I didn't go" records nothing — a dismissal is not data. | locked 2026-08-31 |
 | D96 | The design's chip row replaces the Liked / Visited / Reviewed segments, and Visited and Reviewed leave the client entirely. Their RPCs and data stay. The three plan chips are one enum, not three booleans; "Wishlist →" navigates and never holds a pressed state. | locked 2026-09-05 |
+| D125 | The Bites tile is a **photo over a solid caption strip**, and its saved mark is an **ember check drawn in the photo's corner** — the wishlist row's tick, so "saved" and "done" are one family of mark. The **wishlist bookmark badge is removed**, not hidden (D84): every tile in Bites is saved, the Wishlist chip is one tap away, and a second badge in the same corner was a collision the prototype's own mask never resolved. This supersedes D79 **on the grid tile only** — a notch-revealed disc at inset 6 / radius 30 is a quarter-circle hanging off the corner, not the reference's full circle, and a notch *and* a badge in one corner would be two saved-marks. The bite stays on the detail hero and the auth blob. With the badge gone, the tab no longer refreshes on the way back from the Wishlist; `LikesController.isSavedForLater` keeps its wishlist callers and tests but has no reader in the tab. | locked 2026-09-10 |
 | D28 | `confirm()` clears its cache only after the write lands, so a failure re-asks rather than losing the visit. | locked 2026-08-31 |

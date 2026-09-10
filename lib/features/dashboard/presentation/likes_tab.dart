@@ -75,26 +75,34 @@ class _LikesTabState extends State<LikesTab> {
     }
   }
 
+  /// Pull-to-refresh on the grid.
+  ///
+  /// Both caches, because the tab is the two of them crossed: the tiles come
+  /// from the likes and the day badges and the Planned chips come from the
+  /// calendar, and refreshing one would leave the other's answer on screen.
+  /// Errors surface as the same message the initial load uses — a pull that
+  /// silently changes nothing is worse than one that says why.
+  Future<void> _refresh() async {
+    try {
+      await Future.wait([
+        LikesController.instance.refresh(),
+        _plans.refresh(),
+      ]);
+      if (mounted) {
+        setState(() => _error = null);
+      }
+    } on Object catch (error) {
+      debugPrint('Refreshing bites failed: $error');
+      if (mounted) {
+        setState(() => _error = 'Could not load your bites.');
+      }
+    }
+  }
+
   void _openRestaurant(Restaurant restaurant) {
     context.push(
       '/restaurant/${restaurant.id}',
       extra: RestaurantCard.fromRestaurant(restaurant).toDetailPayload(),
-    );
-  }
-
-  /// The Wishlist chip. The refresh on the way back is the whole reason this
-  /// awaits the push: crossing a place off over there clears its bookmark
-  /// here, and the tab would otherwise keep showing a badge for a place the
-  /// user has already eaten.
-  Future<void> _openWishlist() async {
-    await context.push<void>('/wishlist');
-    if (!mounted) {
-      return;
-    }
-    unawaited(
-      LikesController.instance.refresh().catchError((Object error) {
-        debugPrint('Refreshing bites after the wishlist failed: $error');
-      }),
     );
   }
 
@@ -132,14 +140,11 @@ class _LikesTabState extends State<LikesTab> {
                 ))
           : LikesTabView(
               liked: likes.liked,
-              wishlistedIds: {
-                for (final restaurant in likes.liked)
-                  if (likes.isSavedForLater(restaurant.id)) restaurant.id,
-              },
               plannedIds: _plans.plannedRestaurantIds,
               plannedLabels: _plans.plannedLabels,
               onOpenRestaurant: _openRestaurant,
-              onOpenWishlist: () => unawaited(_openWishlist()),
+              onOpenWishlist: () => context.push('/wishlist'),
+              onRefresh: _refresh,
             ),
     );
   }

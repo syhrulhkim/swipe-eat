@@ -35,7 +35,8 @@ Future<GoRouter> _pumpPage(
       GoRoute(
         path: '/welcome',
         builder: (context, state) => WelcomePage(
-          loadCovers: loadCovers ?? (limit) async => _covers().take(limit).toList(),
+          loadCovers:
+              loadCovers ?? (limit) async => _covers().take(limit).toList(),
         ),
       ),
       GoRoute(
@@ -138,7 +139,8 @@ void main() {
       await _pumpPage(tester);
 
       expect(find.bySemanticsLabel('Start swiping'), findsOneWidget);
-      expect(find.bySemanticsLabel('I already have an account'), findsOneWidget);
+      expect(
+          find.bySemanticsLabel('I already have an account'), findsOneWidget);
 
       handle.dispose();
     });

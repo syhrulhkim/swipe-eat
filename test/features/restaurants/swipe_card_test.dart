@@ -173,7 +173,8 @@ Future<void> pumpBlock(
 
 void main() {
   group('RestaurantInfoBlock', () {
-    testWidgets('shows the open chip, cuisine and halal when known', (tester) async {
+    testWidgets('shows the open chip, cuisine and halal when known',
+        (tester) async {
       await pumpBlock(
         tester,
         card(
@@ -233,7 +234,8 @@ void main() {
       expect(find.textContaining('Closed'), findsNothing);
     });
 
-    testWidgets('a tap opens the restaurant and reads as one button', (tester) async {
+    testWidgets('a tap opens the restaurant and reads as one button',
+        (tester) async {
       var taps = 0;
       await pumpBlock(tester, card(priceFrom: 8), onTap: () => taps++);
 
@@ -309,7 +311,8 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('does not overflow on a narrow phone with a long name', (tester) async {
+    testWidgets('does not overflow on a narrow phone with a long name',
+        (tester) async {
       const data = RestaurantCard(
         id: 1,
         title: 'Restoran Nasi Kandar Pelita Kampung Baru Cawangan Utama',
@@ -387,6 +390,22 @@ void main() {
       expect(find.byIcon(Icons.volume_off_rounded), findsOneWidget);
     });
 
+    testWidgets('the sound hint keeps its tap off the card', (tester) async {
+      // The hint sits on top of the media, inside the card's InkWell. If the
+      // tap fell through, "Tap for sound" would open the restaurant instead.
+      var taps = 0;
+      await pumpCard(
+        tester,
+        card(videoUrl: 'https://tiktok.test/v/1'),
+        onTap: () => taps++,
+      );
+
+      await tester.tap(find.text('Tap for sound'));
+      await tester.pump();
+
+      expect(taps, 0);
+    });
+
     testWidgets('a card with no clip promises no sound', (tester) async {
       await pumpCard(tester, card());
 
@@ -461,7 +480,8 @@ void main() {
       expect([opened, detail], [1, 1]);
     });
 
-    testWidgets('a card with no photos and no clip still paints', (tester) async {
+    testWidgets('a card with no photos and no clip still paints',
+        (tester) async {
       await pumpCard(tester, card());
 
       expect(tester.takeException(), isNull);

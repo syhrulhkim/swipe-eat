@@ -42,6 +42,7 @@ class AuthRepository {
 
   static const String _profileColumns =
       'id, name, avatar_url, onboarded_at, search_radius_km, last_place_name, '
+      'last_latitude, last_longitude, '
       'filter_cuisine_ids, filter_dietary_tag_ids, filter_min_rating, '
       'created_at, halal_only, vegetarian, spice_level, budget_min, budget_max';
 
@@ -154,11 +155,12 @@ class AuthRepository {
     // be captured then or it is lost forever.
     final name = tokens.displayName;
     if (name != null && name.isNotEmpty) {
-      await _guard(() => _auth.updateUser(UserAttributes(data: {'name': name})));
+      await _guard(
+          () => _auth.updateUser(UserAttributes(data: {'name': name})));
       await _client.from('profiles').update({'name': name}).eq(
-            'id',
-            _auth.currentUser!.id,
-          );
+        'id',
+        _auth.currentUser!.id,
+      );
     }
   }
 

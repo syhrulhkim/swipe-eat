@@ -18,9 +18,9 @@ void main() {
     late AuthController controller;
 
     setUp(() {
-    // The auth controller caches the profile on the device; without a fake
-    // store behind it every resolve logs a missing-plugin failure.
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+      // The auth controller caches the profile on the device; without a fake
+      // store behind it every resolve logs a missing-plugin failure.
+      SharedPreferences.setMockInitialValues(<String, Object>{});
       repository = FakeAuthRepository();
       controller = AuthController(repository);
     });

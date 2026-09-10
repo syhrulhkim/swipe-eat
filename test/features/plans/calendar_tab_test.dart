@@ -39,13 +39,28 @@ Position _kualaLumpur() {
 /// The two plans the design's own screenshot lists under "Today".
 List<Plan> _designPlans() {
   return [
-    testPlan(1, restaurantId: 11, date: DateTime(2026, 9, 2), hour: 12,
-        minute: 30, name: 'Warung Kak Ros', neighbourhood: 'Kepong',
-        latitude: 3.1950, longitude: 101.6320),
-    testPlan(2, restaurantId: 22, date: DateTime(2026, 9, 2), hour: 20,
-        name: 'Kuey Teow Ah Seng', neighbourhood: 'Pudu'),
-    testPlan(3, restaurantId: 33, date: DateTime(2026, 9, 4), hour: 21,
-        minute: 30, name: 'Chapati', neighbourhood: 'Brickfields'),
+    testPlan(1,
+        restaurantId: 11,
+        date: DateTime(2026, 9, 2),
+        hour: 12,
+        minute: 30,
+        name: 'Warung Kak Ros',
+        neighbourhood: 'Kepong',
+        latitude: 3.1950,
+        longitude: 101.6320),
+    testPlan(2,
+        restaurantId: 22,
+        date: DateTime(2026, 9, 2),
+        hour: 20,
+        name: 'Kuey Teow Ah Seng',
+        neighbourhood: 'Pudu'),
+    testPlan(3,
+        restaurantId: 33,
+        date: DateTime(2026, 9, 4),
+        hour: 21,
+        minute: 30,
+        name: 'Chapati',
+        neighbourhood: 'Brickfields'),
   ];
 }
 
@@ -122,13 +137,18 @@ void main() {
 
   group('CalendarTab chrome', () {
     testWidgets('titles itself and offers both actions', (tester) async {
+      final handle = tester.ensureSemantics();
       await _pumpTab(tester, rows: _designPlans());
 
       expect(find.text('Calendar'), findsOneWidget);
       expect(find.bySemanticsLabel('Search plans'), findsOneWidget);
       expect(find.bySemanticsLabel('New plan'), findsOneWidget);
       expect(find.text('September 2026'), findsOneWidget);
-      expect(find.text('This month'), findsOneWidget);
+      // The month arrows, same control the date picker uses. Only forward:
+      // the tab lists from today on, so there is nothing behind September.
+      expect(find.bySemanticsLabel('Next month'), findsOneWidget);
+      expect(find.bySemanticsLabel('Previous month'), findsNothing);
+      handle.dispose();
     });
 
     testWidgets('"New plan" asks the dashboard for the deck', (tester) async {
@@ -157,14 +177,42 @@ void main() {
       await _pumpTab(tester, rows: _designPlans());
 
       expect(find.text('Warung Kak Ros'), findsOneWidget);
-      // Meal, neighbourhood and, when a fix has landed, the distance.
-      expect(find.text('Lunch · Kepong · 8.7 km'), findsOneWidget);
+      // Solo plans read "Just you" first, then neighbourhood and distance.
+      expect(find.text('Just you · Kepong · 8.7 km'), findsOneWidget);
       expect(find.text('12:30'), findsOneWidget);
 
       // No coordinates on this one, so the distance is left off rather than
       // guessed at.
-      expect(find.text('Dinner · Pudu'), findsOneWidget);
+      expect(find.text('Just you · Pudu'), findsOneWidget);
       expect(find.text('20:00'), findsOneWidget);
+    });
+
+    testWidgets('a plan with friends shows a count and an avatar stack',
+        (tester) async {
+      await _pumpTab(
+        tester,
+        rows: [
+          testPlan(
+            4,
+            restaurantId: 44,
+            date: DateTime(2026, 9, 4),
+            hour: 20,
+            name: 'Chapati',
+            neighbourhood: 'Brickfields',
+            withFriends: true,
+            members: const [
+              PlanMember(userId: 'aiman', status: 'going'),
+              PlanMember(userId: 'mei', status: 'invited'),
+            ],
+          ),
+        ],
+      );
+
+      expect(find.text('Chapati'), findsOneWidget);
+      expect(find.text('2 friends · 1 confirmed'), findsOneWidget);
+      // One avatar per member, up to the cap.
+      expect(find.text('AI'), findsOneWidget);
+      expect(find.text('ME'), findsOneWidget);
     });
 
     testWidgets('a plan with no cover wears its initials', (tester) async {
@@ -176,7 +224,8 @@ void main() {
       expect(find.text('CH'), findsNWidgets(2));
     });
 
-    testWidgets('with no fix the rows drop the distance rather than inventing '
+    testWidgets(
+        'with no fix the rows drop the distance rather than inventing '
         'one', (tester) async {
       await _pumpTab(
         tester,
@@ -196,7 +245,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Lunch · Kepong'), findsOneWidget);
+      expect(find.text('Just you · Kepong'), findsOneWidget);
     });
 
     testWidgets('a row reads as one sentence and answers both gestures',
@@ -205,7 +254,7 @@ void main() {
       await _pumpTab(tester, rows: _designPlans());
 
       final node = tester.getSemantics(find.text('Warung Kak Ros'));
-      expect(node.label, 'Warung Kak Ros, Lunch · Kepong · 8.7 km, 12:30');
+      expect(node.label, 'Warung Kak Ros, Just you · Kepong · 8.7 km, 12:30');
       expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
       expect(
         node.getSemanticsData().hasAction(SemanticsAction.longPress),
@@ -274,29 +323,27 @@ void main() {
     });
   });
 
-  group('CalendarTab month sheet', () {
-    testWidgets('lists the next six months and follows the one chosen',
-        (tester) async {
+  group('CalendarTab month arrows', () {
+    testWidgets('steps forward and back through the months', (tester) async {
+      final handle = tester.ensureSemantics();
       await _pumpTab(tester, rows: _designPlans());
 
-      await tester.tap(find.text('This month'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('September 2026'), findsNWidgets(2));
-      expect(find.text('October 2026'), findsOneWidget);
-      expect(find.text('February 2027'), findsOneWidget);
-      expect(find.text('March 2027'), findsNothing);
-
-      await tester.tap(find.text('October 2026'));
+      await tester.tap(find.bySemanticsLabel('Next month'));
       await tester.pumpAndSettle();
 
       expect(find.text('October 2026'), findsOneWidget);
-      // The chip names the month once it is not this one.
-      expect(find.text('October'), findsOneWidget);
-      expect(find.text('This month'), findsNothing);
       // Nothing is planned in October, so the sections give way.
       expect(find.text('Nothing this month'), findsOneWidget);
       expect(find.text('Warung Kak Ros'), findsNothing);
+
+      // Back is only offered once there is somewhere to go back to.
+      await tester.tap(find.bySemanticsLabel('Previous month'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('September 2026'), findsOneWidget);
+      expect(find.bySemanticsLabel('Previous month'), findsNothing);
+      expect(find.text('Warung Kak Ros'), findsOneWidget);
+      handle.dispose();
     });
   });
 
@@ -343,7 +390,8 @@ void main() {
     });
 
     testWidgets('a failed load offers a retry', (tester) async {
-      final repository = FakePlansRepository()..failList = StateError('offline');
+      final repository = FakePlansRepository()
+        ..failList = StateError('offline');
       await _pumpTab(tester, repository: repository);
 
       expect(find.text('Something went wrong'), findsOneWidget);
@@ -387,7 +435,8 @@ void main() {
   });
 
   group('CalendarTab layout', () {
-    testWidgets('does not overflow on the narrowest phone at a doubled text '
+    testWidgets(
+        'does not overflow on the narrowest phone at a doubled text '
         'scale', (tester) async {
       await _pumpTab(
         tester,
@@ -398,6 +447,35 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Calendar'), findsOneWidget);
+    });
+
+    testWidgets('the day discs stay circles inside the month card',
+        (tester) async {
+      await _pumpTab(
+        tester,
+        rows: _designPlans(),
+        viewport: _narrowViewport,
+      );
+
+      // The grid sits in a card, so its columns are narrower than the screen
+      // divided by seven. A disc wider than its column is not dropped, it is
+      // squashed into an ellipse — the grid drifts off the design without ever
+      // reporting an overflow, so the check is the shape, not the exception.
+      final discs = find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration! as BoxDecoration).shape == BoxShape.circle,
+      );
+      expect(discs, findsWidgets);
+      for (var i = 0; i < discs.evaluate().length; i++) {
+        final size = tester.getSize(discs.at(i));
+        expect(size.width, size.height);
+      }
+      expect(
+        tester.getSize(discs.first),
+        const Size(kCalendarDaySize, kCalendarDaySize),
+      );
     });
 
     testWidgets('the empty state survives the same', (tester) async {

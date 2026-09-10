@@ -110,9 +110,10 @@ class NearbyController extends ChangeNotifier {
 
   NearbyOrigin? _origin;
 
-  /// Where the map is centred and what the query measured from: the passport
-  /// pin when one is set, else the device fix, else the coordinates the
-  /// profile stored.
+  /// Where the map is centred and what the query measured from: the device
+  /// fix, else the coordinates the profile stored. The same chain
+  /// `deck_scored` uses, so the map and the deck cannot disagree about where
+  /// the user is (D121).
   NearbyOrigin? get origin => _origin;
 
   List<NearbyPlace> _places = const [];
@@ -286,15 +287,15 @@ class NearbyController extends ChangeNotifier {
   /// `deck_scored` (D12): the client draws the me-dot and fits the camera to
   /// this origin, so an RPC that quietly swapped in a different one would
   /// measure every distance from a place the map is not showing.
+  /// The device fix, else the coordinates the profile stored for an account
+  /// that has never granted location on this device. Null means neither
+  /// exists, which is the empty state.
+  ///
+  /// The passport pin used to come first (D12). D84 retired passport, but the
+  /// column kept winning this chain — and a stale pin nobody could see was
+  /// silently centring the map on a city the user had left, with every
+  /// distance measured from there. Removed 2026-09-10 (D121).
   Future<NearbyOrigin?> _resolveOrigin() async {
-    final profile = await _profileOrigins();
-
-    // A pin the user dropped on purpose beats a fix they never chose.
-    final passport = profile.passport;
-    if (passport != null) {
-      return passport;
-    }
-
     final position = await _resolvePosition();
     if (!isFallbackUserPosition(position)) {
       return NearbyOrigin(position.latitude, position.longitude);
@@ -302,19 +303,15 @@ class NearbyController extends ChangeNotifier {
 
     // A fallback is not a fix — centring on it would put the user in a town
     // they have never been to and call it "away from you".
-    return profile.stored;
-  }
-
-  /// The profile's two coordinate pairs. A read that fails is not an error the
-  /// map shows: the device fix is still worth trying, and with no fix either
-  /// the empty state already says the right thing.
-  Future<NearbyProfileOrigins> _profileOrigins() async {
-    try {
-      return await _repository.profileOrigins();
-    } on Object catch (error) {
-      debugPrint('Nearby profile origins failed: $error');
-      return NearbyProfileOrigins.none;
+    final user = authController.user;
+    final latitude = user?.lastLatitude;
+    final longitude = user?.lastLongitude;
+    if (latitude == null ||
+        longitude == null ||
+        (latitude == 0 && longitude == 0)) {
+      return null;
     }
+    return NearbyOrigin(latitude, longitude);
   }
 
   /// Widens the circle one step and refetches. The map's zoom follows.
@@ -388,8 +385,18 @@ class NearbyController extends ChangeNotifier {
     required List<int> cuisineIds,
     required List<int> dietaryTagIds,
     double? minRating,
+    int? searchRadiusKm,
   }) async {
+    // Read before the writes: applyUser lands between them, so asking
+    // afterwards would compare the new radius against itself.
+    final radiusChanged = searchRadiusKm != authController.user?.searchRadiusKm;
+
     try {
+      if (radiusChanged) {
+        authController.applyUser(
+          await _profiles.updateSearchRadius(searchRadiusKm),
+        );
+      }
       final user = await _profiles.setDiscoveryFilters(
         cuisineIds: cuisineIds,
         dietaryTagIds: dietaryTagIds,
@@ -400,6 +407,12 @@ class NearbyController extends ChangeNotifier {
     } on Object catch (error) {
       debugPrint('Nearby discovery filters write failed: $error');
       return false;
+    } finally {
+      // The stepper's local override has to give way to a radius the sheet
+      // just wrote, or the map would keep drawing the old circle.
+      if (radiusChanged && authController.user?.searchRadiusKm != null) {
+        _radiusTouched = false;
+      }
     }
   }
 }

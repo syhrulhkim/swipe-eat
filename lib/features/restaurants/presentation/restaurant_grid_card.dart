@@ -4,8 +4,9 @@ import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/tiktok_thumbnail_placeholder.dart';
 import '../models/restaurant.dart';
 
-/// One restaurant as a photo tile in a two-column browse grid — the cuisine
-/// list and the Liked grid share this card so the two surfaces read as one.
+/// One restaurant as a tile in the Bites grid: the photo on top, and the name
+/// and cuisine on their own dark strip underneath it rather than laid over
+/// the picture.
 class RestaurantGridCard extends StatelessWidget {
   const RestaurantGridCard({
     super.key,
@@ -13,34 +14,23 @@ class RestaurantGridCard extends StatelessWidget {
     required this.distanceText,
     required this.onTap,
     this.isSaved = false,
-    this.isWishlisted = false,
     this.plannedLabel,
   });
 
   final Restaurant restaurant;
 
-  /// How far away the place is. The Bites grid no longer shows it — the design
-  /// puts cuisine and neighbourhood on that line instead — but the cuisine
-  /// browse grid still passes one, so the parameter stays.
+  /// Only the fallback for a row with neither cuisine nor neighbourhood; the
+  /// Bites grid passes an empty string. The parameter outlives the cuisine
+  /// browse grid that used to fill it (D102).
   final String distanceText;
   final VoidCallback onTap;
 
-  /// Bites the top-right corner out of the tile. Every tile in Bites is saved,
-  /// so the whole grid carries it; a mixed grid uses it to tell saved from
-  /// unsaved without adding a second badge.
+  /// Draws the ember check in the photo's top-right corner. Every tile in
+  /// Bites is saved, so the whole grid carries it; a mixed grid would use it
+  /// to tell saved from unsaved.
   final bool isSaved;
 
-  /// The place is on the wishlist — the design's `.wish` bookmark, a small
-  /// dark circle in the top-right corner.
-  ///
-  /// It is drawn *over* the bite rather than inside it: the notch's 30 px
-  /// radius swallows a 28 px badge at this inset almost whole, which is what
-  /// the prototype's mask actually does to its own markup. Painting it above
-  /// the clip is the only way both marks survive on one tile.
-  final bool isWishlisted;
-
   /// The day a plan is set for ("Fri 4"), as an ember pill in the top-left.
-  /// Always null today — the plans phase fills it in.
   final String? plannedLabel;
 
   /// "Nasi lemak · Kampung Baru" — the design's tile subtitle. The
@@ -67,131 +57,118 @@ class RestaurantGridCard extends StatelessWidget {
       button: true,
       child: GestureDetector(
         onTap: onTap,
-        // Opaque, not the default defer-to-child: the bite clips the top-right
-        // corner out of the tile's hit test, and the wishlist bookmark is
-        // painted right there. Left deferring, a tap on the bookmark — the
-        // most obviously tappable-looking mark on the tile — would land on the
-        // clipped-away corner and open nothing.
+        // Opaque so a tap on the check or the day pill — the marks that look
+        // most like controls — lands on the tile rather than falling through.
         behavior: HitTestBehavior.opaque,
-        // Two stacks, one inside the other. The inner one is clipped by the
-        // bite; the outer one is not, which is where the wishlist bookmark
-        // has to live — see [isWishlisted].
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Full size, as the prototype specifies for tiles as well as
-            // cards. The scale factor that used to sit here existed only to
-            // clear the super-like star; the star went with the feature.
-            BiteNotch(
-              bitten: isSaved,
-              borderRadius: BorderRadius.circular(kRadiusPanel),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (photoUrl == null)
-                    TikTokThumbnailPlaceholder(
-                      creatorHandle: tiktokCreatorHandle(restaurant.videoUrl),
-                    )
-                  else
-                    Image.network(
-                      photoUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return TikTokThumbnailPlaceholder(
-                          creatorHandle: tiktokCreatorHandle(restaurant.videoUrl),
-                        );
-                      },
-                    ),
-                  const PhotoTileScrim(),
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 10,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          restaurant.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: appPanelTitleStyle(context),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: kTextOnPhotoMuted,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // No clip of its own: this sits inside the tile's own
-                  // BiteNotch at the same size, so the notch has already
-                  // removed the border wherever it bites. A second identical
-                  // clip would cost another path union per tile and, on an
-                  // unbitten tile, nest two equal ClipRRects around a 1 px
-                  // hairline — which thins it.
-                  //
-                  // There is no stroke along the notch arc, by design: the
-                  // border stops where the clip does, as the prototype's
-                  // mask does.
-                  IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(kRadiusPanel),
-                        border: Border.all(color: kHairline),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: kSurfaceDark,
+            borderRadius: BorderRadius.circular(kRadiusPanel),
+          ),
+          // The outline is painted over the photo, not under it: a border in
+          // the background decoration insets the square-cornered photo one
+          // pixel inside a rounded stroke, and the photo then overpaints the
+          // stroke at every corner.
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(kRadiusPanel),
+            border: Border.all(color: kHairline),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The photo takes whatever the caption leaves, so a large text
+              // scale grows the strip and shrinks the picture instead of
+              // overflowing the tile.
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (photoUrl == null)
+                      TikTokThumbnailPlaceholder(
+                        creatorHandle: tiktokCreatorHandle(restaurant.videoUrl),
+                      )
+                    else
+                      Image.network(
+                        photoUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return TikTokThumbnailPlaceholder(
+                            creatorHandle:
+                                tiktokCreatorHandle(restaurant.videoUrl),
+                          );
+                        },
                       ),
-                    ),
-                  ),
-                  if (planned != null)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: _PlannedPill(label: planned),
-                    ),
-                ],
+                    if (isSaved)
+                      const Positioned(
+                        top: 8,
+                        right: 8,
+                        child: _SavedCheck(),
+                      ),
+                    if (planned != null)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: _PlannedPill(label: planned),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            if (isWishlisted)
-              const Positioned(top: 8, right: 8, child: _WishBadge()),
-          ],
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // One line, not two: the strip is sized to its text, so a
+                    // second line of name would come straight out of the photo.
+                    Text(
+                      restaurant.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: appPanelTitleStyle(context),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: kCreamMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// The design's `.tile .wish` — a bookmark saying this place is on the
-/// wishlist.
+/// The ember check in the photo's corner: "this is in your bites".
 ///
-/// Decorative, and deliberately not a button: the tile is one tap target, and
-/// a second control inside it would compete with opening the restaurant.
-/// Removing a place from the wishlist happens on the Wishlist screen, where
-/// the whole row is about exactly that.
-class _WishBadge extends StatelessWidget {
-  const _WishBadge();
+/// A mark, not a button — the tile is one tap target, and a second control
+/// inside it would compete with opening the restaurant. It is the wishlist
+/// row's tick at the same size and glyph, so "done" and "saved" read as the
+/// same family of mark.
+class _SavedCheck extends StatelessWidget {
+  const _SavedCheck();
 
   @override
   Widget build(BuildContext context) {
     return const IgnorePointer(
       child: SizedBox(
-        width: kWishBadgeSize,
-        height: kWishBadgeSize,
+        width: kCheckCircleSize,
+        height: kCheckCircleSize,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: kFillWishBadge,
+            color: kAccentEmber,
             shape: BoxShape.circle,
-            border: Border.fromBorderSide(BorderSide(color: kHairline)),
           ),
-          child: Icon(
-            Icons.bookmark_outline_rounded,
-            size: 14,
-            color: kTextOnPhoto,
-          ),
+          child: Icon(Icons.check_rounded, size: 14, color: kTextOnPhoto),
         ),
       ),
     );

@@ -34,16 +34,21 @@ class DeckController extends ChangeNotifier {
     LikesController? likes,
     TikTokPlayerCache? players,
     DeckCache? cache,
-    DeckHandoff? handoff,
     Future<Position> Function()? resolvePosition,
+    Future<String?> Function(Position)? resolvePlace,
+    DeckHandoff? handoff,
   })  : _restaurants = restaurants ?? RestaurantRepository(),
         _cache = cache ?? const DeckCache(),
         _swipes = swipes ?? SwipeRepository(),
         _profiles = profiles ?? ProfileRepository(),
         _likes = likes ?? LikesController.instance,
         players = players ?? TikTokPlayerCache(),
+        _resolvePosition = resolvePosition ?? resolveUserPosition,
         _handoff = handoff ?? DeckHandoff.instance,
-        _resolvePosition = resolvePosition ?? resolveUserPosition {
+        // Injected the way onboarding injects it: the OS geocoder is the one
+        // dependency here a test cannot stand up, and its failure is a real
+        // path, not an edge case.
+        _resolvePlace = resolvePlace ?? resolvePlaceName {
     _appliedDeckSignature = _deckSignature(authController.user);
     authController.addListener(_onAuthChanged);
     _handoffRevision = _handoff.revision;
@@ -61,8 +66,9 @@ class DeckController extends ChangeNotifier {
   /// subscriptions to two objects.
   Stream<String> get likeMessages => _likes.messages;
   final DeckCache _cache;
-  final DeckHandoff _handoff;
   final Future<Position> Function() _resolvePosition;
+  final DeckHandoff _handoff;
+  final Future<String?> Function(Position) _resolvePlace;
 
   /// The hand-off revision this deck has already dealt, so a rebuild-driven
   /// notification cannot re-deal a list the deck is already showing.
@@ -101,8 +107,19 @@ class DeckController extends ChangeNotifier {
 
   /// What the header chip says: the reverse-geocoded name of the last stored
   /// fix, or 'Nearby' for an account that has never granted location.
-  String get locationLabel =>
-      authController.user?.lastPlaceName ?? 'Nearby';
+  ///
+  /// A fallback position means the app asked and got nothing — services off,
+  /// permission denied, no fix at all. The stored name is then whatever town
+  /// the user was in the last time it worked, which can be days and a hundred
+  /// kilometres ago, so the header says why it has no answer instead of
+  /// presenting an old one as current.
+  String get locationLabel {
+    final position = _userPosition;
+    if (position != null && isFallbackUserPosition(position)) {
+      return 'Location off';
+    }
+    return authController.user?.lastPlaceName ?? 'Nearby';
+  }
 
   /// True once every dealt card has been swiped.
   bool get isExhausted => _index >= _cards.length;
@@ -146,7 +163,8 @@ class DeckController extends ChangeNotifier {
 
   /// Errors worth telling the user about, raised by [recordSwipe]. The widget
   /// drains this to show a toast; nothing else depends on it.
-  final StreamController<String> _messages = StreamController<String>.broadcast();
+  final StreamController<String> _messages =
+      StreamController<String>.broadcast();
   Stream<String> get messages => _messages.stream;
 
   /// Swipe writes still in flight, by restaurant id. Swipes are optimistic,
@@ -158,8 +176,7 @@ class DeckController extends ChangeNotifier {
   /// True when [generation] no longer speaks for this deck: a newer load (or a
   /// hand-off) has started, or the controller is gone. Either way the run that
   /// asks returns without notifying — a notification after dispose throws.
-  bool _isStale(int generation) =>
-      _disposed || generation != _loadGeneration;
+  bool _isStale(int generation) => _disposed || generation != _loadGeneration;
 
   @override
   void dispose() {
@@ -220,6 +237,21 @@ class DeckController extends ChangeNotifier {
     }
     _appliedDeckSignature = signature;
     unawaited(load());
+  }
+
+  /// Re-deals if the app still has nothing but the fallback to go on.
+  ///
+  /// [resolveUserPosition] drops its session cache after a fallback, so this
+  /// is the call that picks up a fix the moment the user comes back from
+  /// Settings having turned location on. Guarded on the fallback because a
+  /// re-deal restarts the stack: someone six cards in, with a perfectly good
+  /// fix, must not lose their place every time they switch apps.
+  Future<void> refreshLocation() async {
+    final position = _userPosition;
+    if (position != null && !isFallbackUserPosition(position)) {
+      return;
+    }
+    await load();
   }
 
   Future<void> load() async {
@@ -294,9 +326,11 @@ class DeckController extends ChangeNotifier {
       _cards = cached.restaurants.map(RestaurantCard.fromRestaurant).toList();
       _index = 0;
       _dealtFromCacheAt = cached.savedAt;
+      // These cards came off the device, not off the map a moment ago, so
+      // whatever handed the last deck over does not get the credit.
+      _handoffLabel = null;
       // These cards are the cache's, not the map's: leaving the hand-off label
       // on them would credit "Nearby · 6 places" to a deck saved days ago.
-      _handoffLabel = null;
       players.clear();
       notifyListeners();
     }
@@ -308,7 +342,7 @@ class DeckController extends ChangeNotifier {
   /// what swaps the chip from the stale name to the current one.
   Future<void> _syncLocation(Position position) async {
     try {
-      final placeName = await resolvePlaceName(position);
+      final placeName = await _resolvePlace(position);
       final user = await _profiles.updateLocation(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -316,7 +350,8 @@ class DeckController extends ChangeNotifier {
       );
       authController.applyUser(user);
     } on Object catch (error) {
-      // The chip keeps the last stored name; nothing else depends on this.
+      // The write failed, so the profile keeps the whole of its last fix —
+      // coordinates and name together, which at least agree with each other.
       debugPrint('Location sync failed: $error');
     }
   }
@@ -410,29 +445,75 @@ class DeckController extends ChangeNotifier {
     required List<int> cuisineIds,
     required List<int> dietaryTagIds,
     double? minRating,
+    int? searchRadiusKm,
   }) async {
+    // Two writes, because the radius has its own RPC. The radius goes first:
+    // if it fails the filters are left alone, so the sheet's "could not save"
+    // is the whole truth rather than half of it.
+    //
+    // Only the last row reaches [applyUser], and only once. Applying the
+    // radius on its own would re-deal the deck under the new radius and the
+    // old filters, a whole load thrown away a moment later.
+    AppUser? written;
     try {
-      final user = await _profiles.setDiscoveryFilters(
+      if (searchRadiusKm != authController.user?.searchRadiusKm) {
+        written = await _profiles.updateSearchRadius(searchRadiusKm);
+      }
+
+      written = await _profiles.setDiscoveryFilters(
         cuisineIds: cuisineIds,
         dietaryTagIds: dietaryTagIds,
         minRating: minRating,
       );
-      authController.applyUser(user);
       return true;
     } on Object catch (error) {
       debugPrint('Discovery filters write failed: $error');
       if (!_messages.isClosed) {
-        _messages.add('Could not save your filters.');
+        _messages.add('Could not save your discovery settings.');
       }
       return false;
+    } finally {
+      // Whatever landed is the truth now, half a sheet included.
+      if (written != null) {
+        authController.applyUser(written);
+      }
     }
   }
 
   /// How far the user is from [card], phrased for the card's location row.
-  String distanceLabelFor(RestaurantCard card) {
+  /// The point the deck was dealt around, which is the only point a distance
+  /// on a card may be measured from.
+  ///
+  /// It mirrors `deck_scored`'s own chain — the device fix, else the profile's
+  /// stored one — because the server applies the radius from there. Measuring
+  /// from anywhere else is how a card the server picked as "within 15 km"
+  /// ends up labelled 78 km: three origins on one screen.
+  ///
+  /// A fallback position is not a fix. It is a made-up coordinate near the
+  /// seeded data, and the RPC is told nothing about it, so it must not be
+  /// measured from either.
+  ({double latitude, double longitude})? get _deckOrigin {
     final position = _userPosition;
-    if (position == null) {
-      return 'Distance loading';
+    if (position != null && !isFallbackUserPosition(position)) {
+      return (latitude: position.latitude, longitude: position.longitude);
+    }
+
+    final user = authController.user;
+    final latitude = user?.lastLatitude;
+    final longitude = user?.lastLongitude;
+    if (latitude == null || longitude == null ||
+        !hasMapFix(latitude, longitude)) {
+      return null;
+    }
+    return (latitude: latitude, longitude: longitude);
+  }
+
+  String distanceLabelFor(RestaurantCard card) {
+    final origin = _deckOrigin;
+    if (origin == null) {
+      // Nothing to measure from — not the device, not the profile. Saying
+      // "loading" is honest: the first fix is still the likely answer.
+      return _userPosition == null ? 'Distance loading' : 'Distance unknown';
     }
 
     if (!hasMapFix(card.latitude, card.longitude)) {
@@ -442,8 +523,8 @@ class DeckController extends ChangeNotifier {
     }
 
     final meters = Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
+      origin.latitude,
+      origin.longitude,
       card.latitude,
       card.longitude,
     );

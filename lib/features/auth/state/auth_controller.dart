@@ -247,9 +247,8 @@ class AuthController extends ChangeNotifier {
     try {
       final user = await _repository.loadCurrentUser();
       _user = user;
-      _status = user == null
-          ? AuthStatus.unauthenticated
-          : AuthStatus.authenticated;
+      _status =
+          user == null ? AuthStatus.unauthenticated : AuthStatus.authenticated;
       if (user != null) {
         unawaited(_profileCache.save(user));
       }

@@ -99,8 +99,7 @@ void main() {
             body: NearbyTab(
               authController: authController,
               controller: controller,
-              tileProvider: FakeTileProvider(),
-              likes: likes,
+                  likes: likes,
             ),
           ),
         ),

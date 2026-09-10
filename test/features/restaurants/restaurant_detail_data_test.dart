@@ -76,7 +76,8 @@ void main() {
     test('carries the dishes, in the order the card held them', () {
       final data = RestaurantDetailData.fromPayload(_card().toDetailPayload());
 
-      expect(data.dishes.map((dish) => dish.name), ['Ikan pari', 'Sotong goreng']);
+      expect(
+          data.dishes.map((dish) => dish.name), ['Ikan pari', 'Sotong goreng']);
       expect(data.dishes.first.id, 2);
       expect(data.dishes.first.position, 1);
       expect(data.dishes.first.priceLabel, 'RM 25');
@@ -93,7 +94,8 @@ void main() {
       );
 
       expect(data.hours.closedWeekdays, {DateTime.monday});
-      expect(data.dishes.map((dish) => dish.name), ['Ikan pari', 'Sotong goreng']);
+      expect(
+          data.dishes.map((dish) => dish.name), ['Ikan pari', 'Sotong goreng']);
       expect(data.priceFrom, 19);
       expect(data.isHalal, isTrue);
     });

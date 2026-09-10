@@ -5,7 +5,6 @@ import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/core/location/user_location.dart';
 import 'package:swipe_eat/features/auth/models/app_user.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
-import 'package:swipe_eat/features/nearby/data/nearby_repository.dart';
 import 'package:swipe_eat/features/nearby/domain/nearby_format.dart';
 import 'package:swipe_eat/features/nearby/state/nearby_controller.dart';
 import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
@@ -20,12 +19,16 @@ AppUser _user({
   bool halalOnly = false,
   bool vegetarian = false,
   int? budgetMax,
+  double? lastLatitude,
+  double? lastLongitude,
 }) {
   return AppUser(
     id: 'user-1',
     name: 'Aisyah',
     email: 'aisyah@example.com',
     searchRadiusKm: searchRadiusKm,
+    lastLatitude: lastLatitude,
+    lastLongitude: lastLongitude,
     halalOnly: halalOnly,
     vegetarian: vegetarian,
     budgetMax: budgetMax,
@@ -38,14 +41,24 @@ void main() {
   late AuthController authController;
   late DeckHandoff handoff;
 
-  NearbyController build({int? searchRadiusKm, bool realFix = true}) {
+  NearbyController build({
+    int? searchRadiusKm,
+    bool realFix = true,
+    double? storedLatitude,
+    double? storedLongitude,
+  }) {
+    final user = _user(
+      searchRadiusKm: searchRadiusKm,
+      lastLatitude: storedLatitude,
+      lastLongitude: storedLongitude,
+    );
     authController = AuthController(auth);
-    authController.applyUser(_user(searchRadiusKm: searchRadiusKm));
+    authController.applyUser(user);
 
     return NearbyController(
       authController: authController,
       repository: repository,
-      profiles: FakeProfileRepository(_user(searchRadiusKm: searchRadiusKm)),
+      profiles: FakeProfileRepository(user),
       handoff: handoff,
       resolvePosition: () async =>
           realFix ? testPosition() : fallbackUserPosition(),
@@ -255,9 +268,11 @@ void main() {
     });
 
     test('falls back to the coordinates the profile stored', () async {
-      repository.stored = const NearbyOrigin(5.4141, 100.3288);
-
-      final nearby = build(realFix: false);
+      final nearby = build(
+        realFix: false,
+        storedLatitude: 5.4141,
+        storedLongitude: 100.3288,
+      );
       await nearby.load();
 
       expect(nearby.needsLocation, isFalse);
@@ -276,15 +291,6 @@ void main() {
       expect(repository.queries, isEmpty);
     });
 
-    test('a profile read that fails is still "we do not know where you are"',
-        () async {
-      repository.failStored = true;
-
-      final nearby = build(realFix: false);
-      await nearby.load();
-
-      expect(nearby.needsLocation, isTrue);
-    });
   });
 
   group('NearbyController swipe-all', () {
@@ -471,18 +477,19 @@ void main() {
   });
 
   group('NearbyController origin', () {
-    test('the passport pin beats even a real device fix', () async {
-      repository.passport = const NearbyOrigin(3.1390, 101.6869);
-      repository.stored = const NearbyOrigin(5.4141, 100.3288);
-
-      final nearby = build();
+    test('a real device fix beats the coordinates on the profile', () async {
+      // The passport pin used to win this (D12) and it outlived the feature:
+      // a stale pin nobody could see centred the map on a city the user had
+      // left. The chain is now the device, then the profile, and nothing
+      // else — the same one `deck_scored` applies the radius with (D121).
+      final nearby = build(
+        storedLatitude: 5.4141,
+        storedLongitude: 100.3288,
+      );
       await nearby.load();
 
-      // The me-dot, the camera fit and the query all read this one origin, so
-      // the client resolves the passport rather than letting the RPC swap it.
-      expect(nearby.origin!.latitude, 3.1390);
-      expect(repository.queries.single.latitude, 3.1390);
-      expect(repository.queries.single.longitude, 101.6869);
+      expect(nearby.origin!.latitude, 1.4655);
+      expect(repository.queries.single.latitude, 1.4655);
     });
   });
 

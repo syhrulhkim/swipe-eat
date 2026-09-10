@@ -232,9 +232,16 @@ dashboard only decides where to hang it.
 - **Topbar**: "Calendar", a search button, and a "New plan" button that asks
   the dashboard for tab 0 (`DashboardTabRequest`). Search is a real inline
   filter over plan names, not a placeholder.
-- **Month card**: the grid, with a "This month" chip — the label only, no
-  caret glyph — that opens a bottom sheet of the next six months. A planned day wears the ring and its cover;
-  more than one plan on a day adds pips underneath.
+- **Month grid**: `PlanCalendarHeader` over `PlanCalendar`, drawn straight on
+  the page at the screen padding — *exactly* as S4's date picker draws them
+  (D123). It used to sit inside a `SimpleCard`, and that card's border and
+  padding narrowed the columns enough that the same widget read as a
+  different calendar on the two screens the user moves between. The header
+  carries the picker's month arrows; the "This month ▾" chip and the
+  six-month bottom sheet behind it are gone. Back is offered only once there
+  is a month to go back to, since the tab lists from today forward. A planned
+  day wears the ring and its cover; more than one plan on a day adds pips
+  underneath.
 - **Sections**: "Today · 2 plans", "Fri 4 · 1 plan", … each row a `.plan` card
   — 48 px logo (cover, or two initials from the name), name, and a detail line
   reading "Lunch · Kepong · 6 km". The meal comes from the deck's own

@@ -110,7 +110,8 @@ class FakeRestaurantRepository implements RestaurantRepository {
   final Map<int, int> ngapCounts = {};
 
   @override
-  Future<int> ngapCount(int restaurantId) async => ngapCounts[restaurantId] ?? 0;
+  Future<int> ngapCount(int restaurantId) async =>
+      ngapCounts[restaurantId] ?? 0;
 
   @override
   Future<Set<int>> laterIds() async {

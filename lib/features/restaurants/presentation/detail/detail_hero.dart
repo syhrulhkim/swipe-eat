@@ -124,7 +124,7 @@ class DetailHero extends StatelessWidget {
                   // instead — same corner, nothing overlapping.
                   if (_showsVideo) ...[
                     const SizedBox(height: AppSpacing.xs),
-                    const IgnorePointer(child: MutedHint()),
+                    MutedHint(player: playerFuture),
                   ],
                 ],
               ),
@@ -142,6 +142,7 @@ class DetailHero extends StatelessWidget {
         child: TikTokPlayerView(
           key: ValueKey(url),
           videoUrl: url!,
+          framing: TikTokFraming.hero,
           playerFuture: playerFuture,
         ),
       );
@@ -223,45 +224,6 @@ class _TitleBlock extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Says the clip is playing without sound, and where to get it.
-///
-/// The same hint the swipe card carries, in the same words: the tap does not
-/// unmute the clip, it opens the player that can. Duplicated rather than
-/// shared because the card's copy is private to `swipe_card.dart`.
-class MutedHint extends StatelessWidget {
-  const MutedHint({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: kFillOnPhoto,
-        borderRadius: BorderRadius.circular(kRadiusPill),
-        border: Border.all(color: kHairline),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.volume_off_rounded,
-            size: 13,
-            color: kTextOnPhotoMuted,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            'Tap for sound',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: kTextOnPhotoMuted,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
         ],
       ),
     );

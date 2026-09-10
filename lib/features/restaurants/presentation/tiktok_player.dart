@@ -1,10 +1,59 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../core/ui/design_tokens.dart';
 import '../data/tiktok_player_factory.dart';
+
+/// How the clip is fitted into the box it is given.
+enum TikTokFraming {
+  /// The swipe card: the clip covers the box, nudged down so its subject
+  /// clears the title block.
+  card,
+
+  /// The detail hero: the same nudge, but no cover. The hero is barely taller
+  /// than it is wide, and covering a 9:16 clip in that box crops it to a
+  /// two-times zoom on the middle.
+  hero,
+
+  /// The fullscreen route: TikTok's own player, untouched.
+  fullscreen,
+}
+
+/// How far down the box the clip is nudged, as a fraction of its height, so
+/// the clip's subject clears the title block.
+const double _kShift = 0.07;
+
+/// What the clip must be scaled by to fill [constraints] after that nudge.
+///
+/// TikTok's player letterboxes: it fits a 9:16 clip inside whatever box it is
+/// given and pads the rest black. On a card that is not exactly 9:16 that
+/// padding shows as bars, and the nudge exposes more of it along the top, so
+/// the scale is computed from the fitted size rather than guessed.
+@visibleForTesting
+double tikTokFramingScale(BoxConstraints constraints, TikTokFraming framing) {
+  final width = constraints.maxWidth;
+  final height = constraints.maxHeight;
+  if (framing != TikTokFraming.card ||
+      width <= 0 ||
+      height <= 0 ||
+      !width.isFinite ||
+      !height.isFinite) {
+    // The hero keeps the hand-picked nudge-and-a-hair it has always had.
+    return 1.03;
+  }
+
+  const clipAspect = 9 / 16;
+  final fittedWidth = math.min(width, height * clipAspect);
+  final fittedHeight = math.min(height, width / clipAspect);
+
+  return math.max(
+    width / fittedWidth,
+    (1 + (2 * _kShift)) * height / fittedHeight,
+  );
+}
 
 /// TikTok's player filling its slot, with the card's framing on top.
 ///
@@ -14,15 +63,14 @@ class TikTokPlayerView extends StatefulWidget {
   const TikTokPlayerView({
     super.key,
     required this.videoUrl,
-    this.applyCardFraming = true,
+    this.framing = TikTokFraming.card,
     this.playerFuture,
   });
 
   final String videoUrl;
 
-  /// Nudges and scales the player so the clip's subject clears the card's
-  /// title block. The fullscreen route turns it off.
-  final bool applyCardFraming;
+  /// How the clip is fitted into the slot — see [TikTokFraming].
+  final TikTokFraming framing;
 
   final Future<TikTokPlayerHandle>? playerFuture;
 
@@ -67,11 +115,14 @@ class _TikTokPlayerViewState extends State<TikTokPlayerView> {
                 const ColoredBox(color: Colors.black),
                 if (handle != null)
                   ClipRect(
-                    child: widget.applyCardFraming
+                    child: widget.framing != TikTokFraming.fullscreen
                         ? Transform.translate(
-                            offset: Offset(0, constraints.maxHeight * 0.07),
+                            offset: Offset(0, constraints.maxHeight * _kShift),
                             child: Transform.scale(
-                              scale: 1.03,
+                              scale: tikTokFramingScale(
+                                constraints,
+                                widget.framing,
+                              ),
                               alignment: Alignment.center,
                               child: SizedBox.expand(
                                 child: WebViewWidget(
@@ -84,7 +135,7 @@ class _TikTokPlayerViewState extends State<TikTokPlayerView> {
                             child: WebViewWidget(controller: handle.controller),
                           ),
                   ),
-                if (widget.applyCardFraming)
+                if (widget.framing != TikTokFraming.fullscreen)
                   Positioned(
                     left: 0,
                     right: 0,
@@ -201,9 +252,10 @@ class TikTokPlayerScreen extends StatelessWidget {
 
   final String videoUrl;
 
-  /// The deck's warmed player, so opening fullscreen does not start a second
-  /// copy of the same video playing behind the first. The card hides its own
-  /// WebView while this route is up: one controller cannot be mounted twice.
+  /// The caller's warmed player, so opening fullscreen does not start a second
+  /// copy of the same video playing behind the first. The screen underneath
+  /// hides its own WebView while this route is up: one controller cannot be
+  /// mounted twice.
   final Future<TikTokPlayerHandle>? playerFuture;
 
   @override
@@ -218,7 +270,7 @@ class TikTokPlayerScreen extends StatelessWidget {
             TikTokPlayerView(
               key: ValueKey(videoUrl),
               videoUrl: videoUrl,
-              applyCardFraming: false,
+              framing: TikTokFraming.fullscreen,
               playerFuture: playerFuture,
             ),
             SafeArea(
@@ -240,6 +292,99 @@ class TikTokPlayerScreen extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Says the clip is playing without sound, and turns it on.
+///
+/// The tap reloads the player unmuted (D89, amended). It always swallows the
+/// tap, even before [player] resolves: the hint sits on the card, and letting
+/// the tap fall through would open the restaurant instead of doing what the
+/// pill says.
+class MutedHint extends StatelessWidget {
+  const MutedHint({super.key, this.player});
+
+  final Future<TikTokPlayerHandle>? player;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<TikTokPlayerHandle>(
+      future: player,
+      builder: (context, snapshot) {
+        final handle = snapshot.data;
+        if (handle == null) {
+          return const _MutedHintButton(muted: true);
+        }
+
+        return ValueListenableBuilder<bool>(
+          valueListenable: handle.muted,
+          builder: (context, muted, _) {
+            return _MutedHintButton(
+              muted: muted,
+              onTap: () => unawaited(handle.setMuted(!muted)),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _MutedHintButton extends StatelessWidget {
+  const _MutedHintButton({required this.muted, this.onTap});
+
+  final bool muted;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      // The pill's own words are the label; without this they are announced
+      // twice.
+      excludeSemantics: true,
+      label: muted ? 'Tap for sound' : 'Mute',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap ?? () {},
+        child: Container(
+          // Sized as a control, not as a caption: at the old 13 px glyph and
+          // 5 px padding the pill was 24 px tall — under any sane thumb, on a
+          // card whose every other pixel means "swipe me".
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            // Solid rather than the 35% wash the other on-photo chips use: it
+            // sits over a moving clip that can go white at any frame.
+            color: kSurfaceDark.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(kRadiusPill),
+            border: Border.all(
+              // Ember once the sound is on, so the state is readable at a
+              // glance and not only by reading the word.
+              color: muted ? kHairline : kAccentEmber,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                size: 16,
+                color: muted ? kTextOnPhoto : kAccentEmber,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                muted ? 'Tap for sound' : 'Sound on',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: muted ? kTextOnPhoto : kAccentEmber,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );

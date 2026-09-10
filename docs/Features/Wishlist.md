@@ -107,7 +107,9 @@ now has to do itself, because the pass no longer clears anything server-side.
 `RestaurantRepository.laterIds()` keeps its name and its callers, and now reads
 `wishlist_items` where `eaten_at is null` — an eaten place is not a place you
 are still going to. It feeds `LikesController.isSavedForLater` /
-`laterCount`, which is what puts the bookmark badge on a Bites tile.
+`laterCount`. Nothing in the Bites tab reads them any more — the tile's
+bookmark badge is gone (D125) — but the like/unlike flows still keep the set
+current.
 
 ## 4. Client shape
 

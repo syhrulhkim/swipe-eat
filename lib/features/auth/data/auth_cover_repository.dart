@@ -59,7 +59,8 @@ class AuthCoverRepository {
         .select('name, restaurant_images!inner(url, position)')
         // `!inner` above drops rows with no image at all; this keeps the
         // gallery's first picture rather than an arbitrary one.
-        .order('position', ascending: true, referencedTable: 'restaurant_images')
+        .order('position',
+            ascending: true, referencedTable: 'restaurant_images')
         .limit(1, referencedTable: 'restaurant_images')
         .order('rating', ascending: false)
         .limit(limit)

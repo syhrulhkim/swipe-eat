@@ -91,8 +91,8 @@ class _WelcomePageState extends State<WelcomePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _StackPreview(
-                                height: constraints.maxHeight *
-                                    kAuthHeroFraction,
+                                height:
+                                    constraints.maxHeight * kAuthHeroFraction,
                                 covers: [
                                   for (var i = 0; i < _cardCount; i++)
                                     _coverAt(i),

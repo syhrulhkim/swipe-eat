@@ -341,7 +341,9 @@ class OnboardingLocationStep extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  located ? Icons.check_circle_rounded : Icons.my_location_rounded,
+                  located
+                      ? Icons.check_circle_rounded
+                      : Icons.my_location_rounded,
                   color: located ? kAccentEmber : kTextOnPhotoMuted,
                 ),
                 const SizedBox(width: 12),
@@ -420,7 +422,6 @@ class _TasteChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Semantics(
       selected: selected,
       button: true,

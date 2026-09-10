@@ -26,20 +26,6 @@ import 'nearby_pin.dart';
 import 'nearby_radius_stepper.dart';
 import 'nearby_results_bar.dart';
 
-/// The public OpenStreetMap tile server.
-///
-/// **Development only.** OSM's tile usage policy forbids a released app from
-/// pointing at it: no heavy use, no bulk downloading, and it may be cut off
-/// without notice. Shipping means a tile account (MapTiler, Stadia, Mapbox,
-/// Thunderforest, or a self-hosted renderer) and swapping this template plus
-/// its attribution — see `docs/Features/Nearby-Map.md`.
-const String kOsmTileUrlTemplate =
-    'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-/// Sent as the `User-Agent`, as OSM's policy requires. The app's real
-/// application id, so a blocked client is identifiable rather than anonymous.
-const String kTileUserAgentPackageName = 'com.swipeeat.app';
-
 /// The Nearby map: what is actually around you right now, at a radius you set
 /// with your thumb.
 ///
@@ -51,7 +37,6 @@ class NearbyTab extends StatefulWidget {
     super.key,
     required this.authController,
     this.controller,
-    this.tileProvider,
     this.likes,
     this.handoff,
   });
@@ -60,11 +45,6 @@ class NearbyTab extends StatefulWidget {
 
   /// Injected by tests; in the app the tab builds its own.
   final NearbyController? controller;
-
-  /// The tiles. Defaults to the network provider, which is why it is injected
-  /// at all: a widget test hands over one that serves a transparent pixel and
-  /// never opens a socket.
-  final TileProvider? tileProvider;
 
   /// Which places are already bitten. Defaults to the shared instance.
   final LikesController? likes;
@@ -318,11 +298,13 @@ class _NearbyTabState extends State<NearbyTab> {
     required List<int> cuisineIds,
     required List<int> dietaryTagIds,
     double? minRating,
+    int? searchRadiusKm,
   }) async {
     final saved = await _nearby.applyDiscoveryFilters(
       cuisineIds: cuisineIds,
       dietaryTagIds: dietaryTagIds,
       minRating: minRating,
+      searchRadiusKm: searchRadiusKm,
     );
     if (!saved && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -417,22 +399,15 @@ class _NearbyTabState extends State<NearbyTab> {
                 }
               },
             ),
+            // No TileLayer. The map draws no streets: `flutter_map` is here
+            // for its camera — the thing that turns a coordinate into a
+            // screen position for the pins — and the ground under them is the
+            // app's own background. Rendering somebody else's raster meant
+            // OSM's public server, which their usage policy forbids a
+            // released app from using, and a tile account to escape that
+            // (D126). The scrim went with the tiles: there is nothing left to
+            // darken.
             children: [
-              TileLayer(
-                urlTemplate: kOsmTileUrlTemplate,
-                userAgentPackageName: kTileUserAgentPackageName,
-                tileProvider: widget.tileProvider,
-                // The tiles are somebody else's raster; fading them in over
-                // the app's own motion timing keeps the screen from flashing.
-                tileDisplay: const TileDisplay.fadeIn(
-                  duration: kMotionDuration,
-                ),
-              ),
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(color: kNearbyMapScrim),
-                ),
-              ),
               MarkerLayer(
                 markers: [
                   Marker(
@@ -452,7 +427,6 @@ class _NearbyTabState extends State<NearbyTab> {
             ],
           ),
         ),
-        _buildAttribution(context),
         _buildTopBar(context),
         _buildStepper(context),
         if (_nearby.error != null) _buildOverlayMessage(_nearby.error!),
@@ -526,25 +500,6 @@ class _NearbyTabState extends State<NearbyTab> {
         canWiden: _nearby.canWiden,
         onNarrow: () => unawaited(_nearby.narrow()),
         onWiden: () => unawaited(_nearby.widen()),
-      ),
-    );
-  }
-
-  /// OSM's licence requires the credit, wherever the tiles come from.
-  Widget _buildAttribution(BuildContext context) {
-    return const Positioned(
-      left: 20,
-      bottom: 20,
-      child: IgnorePointer(
-        child: Text(
-          '© OpenStreetMap',
-          style: TextStyle(
-            fontFamily: kTextFontFamily,
-            fontSize: kFontSizeMicro,
-            color: kCreamMuted,
-            height: 1.2,
-          ),
-        ),
       ),
     );
   }

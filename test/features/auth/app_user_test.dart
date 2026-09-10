@@ -15,8 +15,7 @@ void main() {
       expect(user.lastPlaceName, 'Peserai, Batu Pahat');
     });
 
-    test('a null radius means no limit and an empty place name means none',
-        () {
+    test('a null radius means no limit and an empty place name means none', () {
       final user = AppUser.fromProfile(const {
         'id': '39c39a30-c8fb-4e08-8e13-c90212f68e59',
         'search_radius_km': null,

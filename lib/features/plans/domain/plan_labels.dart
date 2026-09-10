@@ -73,8 +73,7 @@ DateTime addMonths(DateTime month, int months) =>
 
 /// How many days [month] has. Day zero of the next month is the last day of
 /// this one, which is the trick that makes February behave.
-int daysInMonth(DateTime month) =>
-    DateTime(month.year, month.month + 1, 0).day;
+int daysInMonth(DateTime month) => DateTime(month.year, month.month + 1, 0).day;
 
 /// The badge a bitten place carries once it has a day: "Today", "Tonight",
 /// "Fri 4", or "Sat 12 Sep" once the day is outside the current month.

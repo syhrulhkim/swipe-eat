@@ -216,7 +216,8 @@ void main() {
   });
 
   group('restaurant facts', () {
-    test('reads hours, price, halal, neighbourhood and dishes from the row', () {
+    test('reads hours, price, halal, neighbourhood and dishes from the row',
+        () {
       final restaurant = Restaurant.fromJson({
         'id': 167,
         'name': 'Ikan Bakar Medan',

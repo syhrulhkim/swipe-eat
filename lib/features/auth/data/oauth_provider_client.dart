@@ -65,7 +65,8 @@ class OAuthProviderClient {
 
     final GoogleSignInAccount account;
     try {
-      account = await google.authenticate(scopeHint: const ['email', 'profile']);
+      account =
+          await google.authenticate(scopeHint: const ['email', 'profile']);
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled) {
         return null;

@@ -158,8 +158,7 @@ void main() {
       expect(repository.calls.where((call) => call == 'list').length, 1);
     });
 
-    test('a failed load reports itself and retries on the next call',
-        () async {
+    test('a failed load reports itself and retries on the next call', () async {
       repository.failList = true;
       await controller.ensureLoaded();
 
@@ -386,7 +385,8 @@ void main() {
       await inFlight;
 
       expect(scoped.error, isNull,
-          reason: 'the failure belongs to a list nobody is looking at any more');
+          reason:
+              'the failure belongs to a list nobody is looking at any more');
     });
 
     test('an add in flight cannot publish into the next account', () async {
@@ -420,8 +420,7 @@ void main() {
       expect(scoped.error, isNull);
     });
 
-    test('a stale load settling cannot clear a newer load\'s handle',
-        () async {
+    test('a stale load settling cannot clear a newer load\'s handle', () async {
       // reset() nulls the shared handle; when the discarded load finally
       // settles it must recognise the handle now belongs to a newer request,
       // or "fetches once" silently breaks after every account change.

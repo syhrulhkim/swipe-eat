@@ -213,8 +213,7 @@ void main() {
       );
     });
 
-    testWidgets('a wrong code is said plainly under the field',
-        (tester) async {
+    testWidgets('a wrong code is said plainly under the field', (tester) async {
       final harness = await sendCode(tester);
       harness.repository.nextFailure = const AuthFailure(
         'That code is wrong or has expired. Ask for a new one.',

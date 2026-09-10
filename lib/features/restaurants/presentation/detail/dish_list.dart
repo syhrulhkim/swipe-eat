@@ -49,9 +49,8 @@ class _DishRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        border: last
-            ? null
-            : const Border(bottom: BorderSide(color: kHairline)),
+        border:
+            last ? null : const Border(bottom: BorderSide(color: kHairline)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,

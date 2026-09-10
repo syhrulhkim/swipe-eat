@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-06
+Last updated: 2026-09-10
 Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Restaurant-Data.md](Restaurant-Data.md), [Wishlist.md](Wishlist.md), [TikTok-Video.md](TikTok-Video.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
 # Restaurant detail
@@ -121,10 +121,9 @@ Two different facts sit in two different places:
 
 ## 8. Video
 
-The hero plays the clip **muted** (D89) and the hint says "Tap for sound", not
-the prototype's "tap to unmute": a tap opens the fullscreen player, which is
-where TikTok's own volume control lives, and D4 forbids driving their player
-ourselves. The page owns its player and stops it in `dispose`; while the
+The hero plays the clip **muted** (D89) and the hint says "Tap for sound":
+tapping it reloads the player with TikTok's own `muted=0`, so the clip restarts
+with sound and D4 still holds — nothing scripts their page. The page owns its player and stops it in `dispose`; while the
 fullscreen route is up the hero falls back to its photo, because one controller
 cannot be mounted in two WebViews.
 

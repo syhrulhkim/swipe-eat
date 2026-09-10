@@ -133,6 +133,7 @@ class _SwipeEatAppState extends State<SwipeEatApp> {
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
+        dragHandleColor: kHairline,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(kRadiusSheet),

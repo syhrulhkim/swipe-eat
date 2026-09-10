@@ -154,13 +154,19 @@ class WishlistRepository {
   Future<void> markEaten(int id, bool eaten) async {
     await _client
         .from('wishlist_items')
-        .update({'eaten_at': eaten ? DateTime.now().toUtc().toIso8601String() : null})
+        .update({
+          'eaten_at': eaten ? DateTime.now().toUtc().toIso8601String() : null
+        })
         .eq('id', id)
         .timeout(_timeout);
   }
 
   Future<void> remove(int id) async {
-    await _client.from('wishlist_items').delete().eq('id', id).timeout(_timeout);
+    await _client
+        .from('wishlist_items')
+        .delete()
+        .eq('id', id)
+        .timeout(_timeout);
   }
 
   /// Empties the bottom half of the list. Deletes rather than archives: the

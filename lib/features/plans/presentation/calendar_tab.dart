@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/location/distance_label.dart';
 import '../../../core/location/user_location.dart';
+import '../../../dev/calendar_dev_data.dart';
 import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/app_spacing.dart';
@@ -80,7 +81,10 @@ class _CalendarTabState extends State<CalendarTab> {
   }
 
   Future<void> _resolvePosition() async {
-    final resolve = widget.resolvePosition ?? resolveUserPosition;
+    final resolve = widget.resolvePosition ??
+        (const bool.fromEnvironment('USE_DEV_PLANS')
+            ? devUserPosition
+            : resolveUserPosition);
     try {
       final position = await resolve();
       if (!mounted || isFallbackUserPosition(position)) {
@@ -131,6 +135,12 @@ class _CalendarTabState extends State<CalendarTab> {
           // "next thing happening" rule the Bites badge follows.
           coverUrl: entry.value.first.coverUrl,
           planCount: entry.value.length,
+          // Each plan can bring friends; the grid shows one cream pip per
+          // unique friend involved that day.
+          friendCount: {
+            for (final plan in entry.value)
+              for (final member in plan.members) member.userId,
+          }.length,
           initials: entry.value.first.initials,
         ),
     };
@@ -176,7 +186,8 @@ class _CalendarTabState extends State<CalendarTab> {
     if (!_plans.isLoaded) {
       final error = _plans.error;
       if (error == null) {
-        return const Center(child: AppLottie(motion: AppMotion.heart, size: 88));
+        return const Center(
+            child: AppLottie(motion: AppMotion.heart, size: 88));
       }
       return ListView(
         physics: const BouncingScrollPhysics(),
@@ -204,11 +215,24 @@ class _CalendarTabState extends State<CalendarTab> {
         AppSpacing.screenPadding,
       ),
       children: [
-        _MonthCard(
+        // Header and grid sit on the page itself, exactly as the date picker
+        // draws them. They used to be boxed in a SimpleCard, and the card's
+        // border and padding made the same widget read as a different
+        // calendar on the two screens the user moves between.
+        PlanCalendarHeader(
+          month: _month,
+          // No stepping back past the month you are standing in — the tab
+          // only ever lists from today forward, so an earlier month would be
+          // a grid that can hold nothing. Same rule the picker uses.
+          onPrevious: isSameMonth(_month, _today) ? null : () => _stepMonth(-1),
+          onNext: () => _stepMonth(1),
+        ),
+        const SizedBox(height: 12),
+        PlanCalendar(
           month: _month,
           today: _today,
           marks: _marks,
-          onPickMonth: _openMonthSheet,
+          semanticsLabel: 'Your plans this month',
         ),
         if (_plans.plans.isEmpty)
           Padding(
@@ -272,50 +296,13 @@ class _CalendarTabState extends State<CalendarTab> {
     context.push('/restaurant/${plan.restaurantId}');
   }
 
-  Future<void> _openMonthSheet() async {
-    // Built from today rather than from the month on screen, so the list is
-    // the same six months however far the user has already stepped.
-    final months = [for (var i = 0; i < 6; i++) addMonths(firstOfMonth(_today), i)];
-
-    final chosen = await showModalBottomSheet<DateTime>(
-      context: context,
-      backgroundColor: kSurfaceDark,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusSheet)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            for (final month in months)
-              ListTile(
-                title: Text(
-                  monthTitle(month),
-                  style: TextStyle(
-                    fontFamily: kTextFontFamily,
-                    fontSize: kFontSizeBody,
-                    fontWeight: FontWeight.w600,
-                    color: isSameMonth(month, _month)
-                        ? kAccentEmber
-                        : kTextOnPhoto,
-                  ),
-                ),
-                trailing: isSameMonth(month, _month)
-                    ? const Icon(Icons.check_rounded, color: kAccentEmber)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(month),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-
-    if (chosen == null || !mounted) {
-      return;
-    }
-    setState(() => _month = chosen);
+  /// Walks the grid a month at a time, the way the picker's arrows do.
+  ///
+  /// Replaces a bottom sheet listing six months. The design puts arrows on
+  /// this header, and two taps to reach next month beats a sheet — the tab
+  /// only ever looks a few months ahead.
+  void _stepMonth(int delta) {
+    setState(() => _month = addMonths(_month, delta));
   }
 
   /// A sheet, not a dialog: cancelling is a decision about a row on this
@@ -479,51 +466,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// The glass card holding the month and its grid.
-class _MonthCard extends StatelessWidget {
-  const _MonthCard({
-    required this.month,
-    required this.today,
-    required this.marks,
-    required this.onPickMonth,
-  });
-
-  final DateTime month;
-  final DateTime today;
-  final Map<int, PlanDayMark> marks;
-  final VoidCallback onPickMonth;
-
-  @override
-  Widget build(BuildContext context) {
-    return SimpleCard(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 16, 12, 20),
-        child: Column(
-          children: [
-            PlanCalendarHeader(
-              month: month,
-              trailing: AppFilterChip(
-                label: isSameMonth(month, today)
-                    ? 'This month'
-                    : monthTitle(month).split(' ').first,
-                selected: false,
-                onTap: onPickMonth,
-              ),
-            ),
-            const SizedBox(height: 12),
-            PlanCalendar(
-              month: month,
-              today: today,
-              marks: marks,
-              semanticsLabel: 'Your plans this month',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SectionHead extends StatelessWidget {
   const _SectionHead({required this.title, required this.count});
 
@@ -577,7 +519,7 @@ class _PlanRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Semantics(
-        label: '${plan.restaurantName}, $subtitle, ${plan.timeText}',
+        label: '${plan.restaurantName}, ${subtitle.label}, ${plan.timeText}',
         button: true,
         // Excluding the children keeps the announcement one sentence; that
         // also drops the InkWell's actions, so both are re-declared here (D83)
@@ -586,7 +528,7 @@ class _PlanRow extends StatelessWidget {
         onTap: onTap,
         onLongPress: onCancel,
         child: Material(
-          color: kSurfaceDark,
+          color: kGlass,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(kRadiusPanel),
             side: const BorderSide(color: kHairline),
@@ -624,16 +566,7 @@ class _PlanRow extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: kTextFontFamily,
-                            fontSize: kFontSizeSmall,
-                            color: kCreamSecondary,
-                          ),
-                        ),
+                        _SubtitleRow(subtitle: subtitle),
                       ],
                     ),
                   ),
@@ -648,11 +581,36 @@ class _PlanRow extends StatelessWidget {
     );
   }
 
-  /// "Lunch · Kepong · 6 km". Every part is dropped when it is not known,
-  /// rather than filled with a guess — a distance the app invented is worse
-  /// than a line that is one item shorter.
-  String _subtitle() {
-    final parts = <String>[planMealLabel(plan)];
+  /// The detail line the prototype draws under a plan's name. With friends it
+  /// shows an avatar stack plus either the confirmed count or the practical
+  /// details when nobody has confirmed yet; solo plans read "Just you" followed
+  /// by the place's neighbourhood and distance.
+  _SubtitleParts _subtitle() {
+    final members = plan.members;
+    if (plan.withFriends && members.isNotEmpty) {
+      final going = members.where((m) => m.isGoing).length;
+      if (going > 0) {
+        return _SubtitleParts(
+          avatars: members,
+          label:
+              '${members.length} ${members.length == 1 ? 'friend' : 'friends'}'
+              ' · $going confirmed',
+        );
+      }
+      // Nobody confirmed yet — show when/where instead, same as a solo row.
+      final parts = <String>[planMealLabel(plan)];
+      final neighbourhood = plan.neighbourhood;
+      if (neighbourhood != null && neighbourhood.isNotEmpty) {
+        parts.add(neighbourhood);
+      }
+      final distance = _distance();
+      if (distance != null) {
+        parts.add(distance);
+      }
+      return _SubtitleParts(avatars: members, label: parts.join(' · '));
+    }
+
+    final parts = <String>['Just you'];
 
     final neighbourhood = plan.neighbourhood;
     if (neighbourhood != null && neighbourhood.isNotEmpty) {
@@ -664,7 +622,7 @@ class _PlanRow extends StatelessWidget {
       parts.add(distance);
     }
 
-    return parts.join(' · ');
+    return _SubtitleParts(label: parts.join(' · '));
   }
 
   String? _distance() {
@@ -687,6 +645,104 @@ class _PlanRow extends StatelessWidget {
       return null;
     }
     return label.replaceAll(' away', '');
+  }
+}
+
+/// The pieces that make up a plan row's subtitle line.
+class _SubtitleParts {
+  const _SubtitleParts({required this.label, this.avatars = const []});
+
+  final String label;
+  final List<PlanMember> avatars;
+}
+
+/// The subtitle as the prototype draws it: a short row that can lead with an
+/// overlapping avatar stack before the text.
+class _SubtitleRow extends StatelessWidget {
+  const _SubtitleRow({required this.subtitle});
+
+  final _SubtitleParts subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (subtitle.avatars.isNotEmpty) ...[
+          _AvatarStack(members: subtitle.avatars),
+          const SizedBox(width: 6),
+        ],
+        Flexible(
+          child: Text(
+            subtitle.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: kTextFontFamily,
+              fontSize: kFontSizeSmall,
+              color: kCreamSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Up to three small overlapping circles representing friends on the plan.
+/// Profiles are not joined yet, so each circle is a neutral placeholder with a
+/// generated initial from the member id — enough to give the row the same shape
+/// as the prototype until real avatars arrive.
+class _AvatarStack extends StatelessWidget {
+  const _AvatarStack({required this.members});
+
+  final List<PlanMember> members;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 20.0;
+    const overlap = 6.0;
+    final shown = members.take(3).toList();
+
+    return SizedBox(
+      width: size + (shown.length - 1) * (size - overlap),
+      height: size,
+      child: Stack(
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * (size - overlap).toDouble(),
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  color: kSurfacePanel,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: kHairline, width: 1.5),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _initials(shown[i].userId),
+                  style: const TextStyle(
+                    fontFamily: kTextFontFamily,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: kTextOnPhoto,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _initials(String userId) {
+    final cleaned = userId.replaceAll(RegExp(r'[^a-zA-Z]'), '');
+    if (cleaned.length >= 2) {
+      return cleaned.substring(0, 2).toUpperCase();
+    }
+    return (cleaned.isEmpty ? '??' : cleaned).toUpperCase();
   }
 }
 

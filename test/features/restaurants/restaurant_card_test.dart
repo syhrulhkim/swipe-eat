@@ -67,7 +67,8 @@ void main() {
       expect(card.isHalal, isTrue);
       expect(card.neighbourhood, 'Kampung Baru');
       // Menu order, as the row was sorted — not the order it arrived in.
-      expect(card.dishes.map((dish) => dish.name), ['Sotong goreng', 'Ikan pari']);
+      expect(
+          card.dishes.map((dish) => dish.name), ['Sotong goreng', 'Ikan pari']);
     });
 
     test('says nothing the row did not', () {
@@ -131,7 +132,8 @@ void main() {
 
     test('a dish writes its own price the same way', () {
       expect(const Dish(id: 1, name: 'a', priceRm: 12).priceLabel, 'RM 12');
-      expect(const Dish(id: 1, name: 'a', priceRm: 12.5).priceLabel, 'RM 12.50');
+      expect(
+          const Dish(id: 1, name: 'a', priceRm: 12.5).priceLabel, 'RM 12.50');
       expect(const Dish(id: 1, name: 'a').priceLabel, isNull);
     });
   });

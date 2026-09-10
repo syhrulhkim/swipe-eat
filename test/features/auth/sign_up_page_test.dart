@@ -446,8 +446,7 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('the provider buttons are at least 44 pt tall',
-        (tester) async {
+    testWidgets('the provider buttons are at least 44 pt tall', (tester) async {
       await _pumpPage(tester, phone: true, google: true);
 
       for (final label in [

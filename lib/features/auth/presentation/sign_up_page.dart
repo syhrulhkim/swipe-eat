@@ -53,8 +53,7 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   void initState() {
     super.initState();
-    _termsTap = TapGestureRecognizer()
-      ..onTap = () => _open(AppConfig.termsUrl);
+    _termsTap = TapGestureRecognizer()..onTap = () => _open(AppConfig.termsUrl);
     _privacyTap = TapGestureRecognizer()
       ..onTap = () => _open(AppConfig.privacyPolicyUrl);
     unawaited(_load());

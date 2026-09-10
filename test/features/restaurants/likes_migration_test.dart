@@ -15,8 +15,7 @@ void main() {
 
   Future<SharedPreferences> prefs() => SharedPreferences.getInstance();
 
-  test('replays stored likes oldest first so the tab order survives',
-      () async {
+  test('replays stored likes oldest first so the tab order survives', () async {
     // The old store kept newest first; the Like tab now orders by the
     // swipe's updated_at, so the replay has to reverse.
     SharedPreferences.setMockInitialValues({legacyLikesKey: '[3, 1, 2]'});

@@ -239,29 +239,34 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBackgroundDark,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints:
-                const BoxConstraints(maxWidth: AppSpacing.dashboardMaxWidth),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              child: _loading
-                  ? const Center(
-                      child: AppLottie(motion: AppMotion.spinner, size: 72),
-                    )
-                  : _loadError != null
-                      ? _LoadFailure(
-                          message: _loadError!,
-                          onRetry: _loadCatalog,
+      body: Stack(
+        children: [
+          const ScreenGlow(),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                    maxWidth: AppSpacing.dashboardMaxWidth),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: _loading
+                      ? const Center(
+                          child: AppLottie(motion: AppMotion.spinner, size: 72),
                         )
-                      : _buildWizard(),
+                      : _loadError != null
+                          ? _LoadFailure(
+                              message: _loadError!,
+                              onRetry: _loadCatalog,
+                            )
+                          : _buildWizard(),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

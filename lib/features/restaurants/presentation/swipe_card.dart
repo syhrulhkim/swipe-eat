@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/ui/design_tokens.dart';
@@ -22,7 +24,6 @@ class SwipeCard extends StatefulWidget {
     required this.onTap,
     required this.onOpenDetail,
     this.tiktokPlayerFuture,
-    this.videoHiddenForFullscreen = false,
     this.isBehind = false,
     this.clock = OpeningHours.kualaLumpurNow,
   });
@@ -37,11 +38,6 @@ class SwipeCard extends StatefulWidget {
   final VoidCallback onOpenDetail;
 
   final Future<TikTokPlayerHandle>? tiktokPlayerFuture;
-
-  /// True while the fullscreen route holds this card's player. One controller
-  /// cannot be mounted in two WebViews at once, so the card gives it up and
-  /// falls back to its photos until the route closes.
-  final bool videoHiddenForFullscreen;
 
   final bool isBehind;
 
@@ -58,6 +54,16 @@ class _SwipeCardState extends State<SwipeCard> {
   int _imageIndex = 0;
   Offset? _imagePointerStart;
   bool _imagePointerMoved = false;
+
+  @override
+  void dispose() {
+    // A swiped-away card is gone from the screen, but its player is not gone
+    // from the cache — it is held warm for four more swipes. Unmuted, that is
+    // a clip nobody can see still making noise, so the sound goes off with
+    // the card.
+    unawaited(widget.tiktokPlayerFuture?.then((h) => h.setMuted(true)));
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant SwipeCard oldWidget) {
@@ -92,7 +98,6 @@ class _SwipeCardState extends State<SwipeCard> {
   Widget build(BuildContext context) {
     final cardVideoUrl = widget.data.videoUrl;
     final showsPhotos = widget.isBehind ||
-        widget.videoHiddenForFullscreen ||
         cardVideoUrl == null ||
         cardVideoUrl.isEmpty;
     final hasMultipleImages = showsPhotos && widget.data.imageUrls.length > 1;
@@ -153,12 +158,29 @@ class _SwipeCardState extends State<SwipeCard> {
                   onTap: widget.onOpenDetail,
                 ),
               ),
+              // Last child, so the hint is in front of the top scrim rather
+              // than under 72% black — and in front of every other layer for
+              // hit testing, which is the whole point of a control the user
+              // has to be able to find and press. The clip starts silent
+              // (D89); tapping this reloads it with TikTok's own sound on.
+              if (_showsVideo)
+                Positioned(
+                  left: 16,
+                  top: 16,
+                  child: MutedHint(player: widget.tiktokPlayerFuture),
+                ),
             ],
           ),
         ),
       ),
     );
   }
+
+  /// Whether this card is showing a clip — the front card, with a video.
+  bool get _showsVideo =>
+      !widget.isBehind &&
+      widget.data.videoUrl != null &&
+      widget.data.videoUrl!.isNotEmpty;
 
   /// The clip when the card has one and is on top, its photos otherwise.
   ///
@@ -170,32 +192,15 @@ class _SwipeCardState extends State<SwipeCard> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final videoUrl = widget.data.videoUrl;
-        if (!widget.isBehind &&
-            !widget.videoHiddenForFullscreen &&
-            videoUrl != null &&
-            videoUrl.isNotEmpty) {
+        if (_showsVideo && videoUrl != null) {
+          // The player itself takes no taps: a WebView would eat the swipe.
+          // The sound hint is not here — it lives at the top of the card's
+          // own stack, in front of the scrim rather than washed out under it.
           return IgnorePointer(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                TikTokPlayerView(
-                  key: ValueKey(videoUrl),
-                  videoUrl: videoUrl,
-                  playerFuture: widget.tiktokPlayerFuture,
-                ),
-                // The clip starts silent (D89), so the card says so — top
-                // left, where the prototype puts its `.tag`.
-                //
-                // "Tap for sound", not the design's "tap to unmute": on the
-                // card a tap opens the fullscreen player, which is where
-                // TikTok's own volume control lives. Promising an unmute here
-                // would be promising something this tap does not do.
-                const Positioned(
-                  left: 16,
-                  top: 16,
-                  child: _MutedHint(),
-                ),
-              ],
+            child: TikTokPlayerView(
+              key: ValueKey(videoUrl),
+              videoUrl: videoUrl,
+              playerFuture: widget.tiktokPlayerFuture,
             ),
           );
         }
@@ -466,41 +471,6 @@ class SwipeStamp extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Says the clip is playing without sound, and where to get it.
-class _MutedHint extends StatelessWidget {
-  const _MutedHint();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: kFillOnPhoto,
-        borderRadius: BorderRadius.circular(kRadiusPill),
-        border: Border.all(color: kHairline),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.volume_off_rounded,
-            size: 13,
-            color: kTextOnPhotoMuted,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            'Tap for sound',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: kTextOnPhotoMuted,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ],
       ),
     );
   }

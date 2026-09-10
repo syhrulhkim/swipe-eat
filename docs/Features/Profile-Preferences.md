@@ -1,15 +1,22 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-10
 Cross-references: [Onboarding-Taste.md](Onboarding-Taste.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Account-Deletion-Legal.md](Account-Deletion-Legal.md)
 
 # Profile, Preferences, Filters & Passport
 
 > **Changed 2026-09-04.** **Passport is removed** — it appears nowhere in the
 > new design, so the model, the sheet, the tile, the stat, `setPassport` and the
-> three `AppUser` fields are gone (D84). `set_passport` and
-> `profiles.passport_*` remain on the database, unused. The "Must try" stat went
-> with the super like; "Liked" is now **Bites**.
+> three `AppUser` fields are gone (D84). The "Must try" stat went with the
+> super like; "Liked" is now **Bites**.
+
+> **Changed 2026-09-10 (D121).** The retirement was only half done: `set_passport`
+> and `profiles.passport_*` stayed on the database, and `deck_scored` /
+> `search_restaurants` / the Nearby client all still resolved the pin **first**.
+> A pin left behind before D84 was therefore still steering a live account's
+> deck. The server no longer reads the columns, `set_passport` is dropped, and
+> section 4 below is history. The columns themselves are left in place —
+> ignoring user data and deleting it are different decisions.
 
 > **Changed 2026-09-05.** The tab is now the design's **S10**: a "You" title
 > with a notifications bell, a portrait row, three stat tiles, and an editable
@@ -56,7 +63,7 @@ Below that, in the design's order:
    which belongs to the phase that has people in it.
 
 **"Videos autoplay" is not shown.** The design lists it, but
-`tikTokPlayerUrl` hard-codes `autoplay=1&muted=1` (D89) and the app has no
+`tikTokPlayerUrl` hard-codes `autoplay=1` and starts at `muted=1` (the "Tap for sound" chip flips that one) (D89) and the app has no
 connectivity package, so neither "Wi-Fi only" nor "Never" could be honoured. A
 setting that does nothing is worse than an absent one (D106).
 
@@ -129,6 +136,22 @@ would let the fallback serve cards the filter had just excluded.
 They live on `profiles` rather than in device storage so they **survive a
 reinstall**, the same way `search_radius_km` already does.
 
+**The radius is edited here too.** `DiscoveryFilterSheet` — the deck's and the
+map's top-right control — carries the radius slider above the cuisine, dietary
+and rating sections, because "how far may the deck look?" is the same question
+as the rest of the sheet. It is still a separate write:
+`applyDiscoveryFilters` calls `update_search_radius` first and
+`set_discovery_filters` second, so a failed radius write leaves the filters
+untouched rather than half-applying the sheet. Settings keeps its own slider —
+the same stops, the same RPC.
+
+Because the sheet sets it, the radius counts towards `AppUser.activeFilterCount`
+— the number on the button's badge. Counting is **by kind, not by chip**: five
+cuisines are one constraint, so the sheet's "Apply 2 limits" and the badge's "2"
+are always the same number. The button's zero-limit label is "Apply with no
+limits" rather than "show me everything", because halal, vegetarian and budget
+are set in Settings and still narrow the deck (D105).
+
 Changing any of them re-deals the deck: `DeckController` listens for
 deck-shaping profile changes because the `IndexedStack` never re-inits the tabs,
 and stale cards would break the promise the filter just made.
@@ -139,6 +162,11 @@ and stale cards would break the promise the filter just made.
 | Dietary tag ids | Yes — 6 tags |
 | Minimum rating | **No.** 2 of 1,607 rows have a rating; any threshold empties the deck |
 
+The sheet says that last row out loud: pick any rating limit and a caution
+appears under the chips. The filter is left in place rather than removed —
+the data is what is missing, not the feature — but a user who empties their
+own deck should be told why before they conclude the app is broken.
+
 `filter_min_rating` is built and correct, and unusable until the ratings gap is
 fixed. See [Restaurant-Data.md](Restaurant-Data.md).
 
@@ -146,9 +174,14 @@ fixed. See [Restaurant-Data.md](Restaurant-Data.md).
 and does not refetch. That list is finite and already owned, so filtering it is
 a view concern (D24).
 
-## 4. Passport
+## 4. ~~Passport~~ — retired 2026-09-04 (D84), unwired 2026-09-10 (D121)
 
-Deal a different city's deck without being there. `set_passport(p_latitude,
+> History. `set_passport` is dropped and nothing reads
+> `profiles.passport_latitude/longitude` any more. The origin chain in both
+> `deck_scored` and `search_restaurants` is now `p_latitude, else the stored
+> fix` — the same two steps the client measures its card distances from.
+
+~~Deal a different city's deck without being there.~~ `set_passport(p_latitude,
 p_longitude, p_place_name) → profiles`; a null latitude means off.
 
 Resolution happens **server-side** in `deck_scored`:

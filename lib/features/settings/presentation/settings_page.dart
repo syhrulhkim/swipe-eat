@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/ui/app_spacing.dart';
+import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/radius_options.dart';
 import '../../auth/models/app_user.dart';
 import '../../auth/state/auth_controller.dart';
@@ -204,9 +205,14 @@ class _SettingsPageState extends State<SettingsPage> {
       // The rules below are drawn straight from the session, so the page has
       // to rebuild when a write lands — and when an optimistic one is rolled
       // back.
-      body: AnimatedBuilder(
-        animation: widget.authController,
-        builder: (context, _) => _buildBody(context, stopIndex),
+      body: Stack(
+        children: [
+          const ScreenGlow(),
+          AnimatedBuilder(
+            animation: widget.authController,
+            builder: (context, _) => _buildBody(context, stopIndex),
+          ),
+        ],
       ),
     );
   }

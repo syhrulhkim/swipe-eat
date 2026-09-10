@@ -37,7 +37,6 @@ class _Harness {
 Future<_Harness> _pumpTab(
   WidgetTester tester, {
   int likedCount = 2,
-  Set<int> wishlisted = const {},
 }) async {
   useViewport(tester, _phoneViewport);
 
@@ -46,13 +45,8 @@ Future<_Harness> _pumpTab(
       for (var id = 1; id <= likedCount; id++) testRestaurant(id),
     ];
   final swipes = FakeSwipeRepository();
-  final wishlist = FakeWishlistRepository(rows: [
-    for (final id in wishlisted) testWishlistItem(id, restaurantId: id),
-  ]);
+  final wishlist = FakeWishlistRepository();
   wireFakeBackend(restaurants, swipes);
-  // One database, two tables: what the wishlist holds is what the bookmarks
-  // read from.
-  restaurants.laterSource = wishlist.pendingRestaurantIds;
 
   final likes = LikesController(
     restaurants: restaurants,
@@ -142,33 +136,9 @@ void main() {
       // Pushed, not replaced: the Bites tab is still underneath.
       expect(find.text('Your bites'), findsNothing);
     });
-
-    testWidgets('re-reads the bites on the way back', (tester) async {
-      // Crossing a place off over there clears its bookmark here, so the tab
-      // has to ask again rather than keep painting a stale badge.
-      final harness = await _pumpTab(tester, likedCount: 1, wishlisted: {1});
-      expect(find.byIcon(Icons.bookmark_outline_rounded), findsOneWidget);
-
-      await _tapChip(tester, 'Wishlist →');
-      // The user ticks it off on the Wishlist screen.
-      await harness.wishlist.markEaten(1, true);
-      await tester.tap(find.text('wishlist route'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(RestaurantGridCard), findsOneWidget);
-      expect(find.byIcon(Icons.bookmark_outline_rounded), findsNothing);
-    });
   });
 
   group('LikesTab tiles', () {
-    testWidgets('the bookmark follows the wishlist, not the like',
-        (tester) async {
-      await _pumpTab(tester, likedCount: 2, wishlisted: {2});
-
-      expect(find.byType(RestaurantGridCard), findsNWidgets(2));
-      expect(find.byIcon(Icons.bookmark_outline_rounded), findsOneWidget);
-    });
-
     testWidgets('tapping a tile opens the restaurant route', (tester) async {
       await _pumpTab(tester, likedCount: 2);
 

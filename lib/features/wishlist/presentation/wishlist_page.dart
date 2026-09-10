@@ -209,6 +209,8 @@ class _WishlistPageState extends State<WishlistPage> {
             onSubmit: _add,
           ),
         ),
+        if (_controller.isLoaded && _controller.items.isNotEmpty)
+          const _ListHint(),
         Expanded(child: _buildList(context)),
         if (_controller.isLoaded && _controller.items.isNotEmpty)
           _Footer(
@@ -255,30 +257,13 @@ class _WishlistPageState extends State<WishlistPage> {
       physics: const BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(
         AppSpacing.screenPadding,
-        4,
+        0,
         AppSpacing.screenPadding,
         12 + MediaQuery.viewInsetsOf(context).bottom,
       ),
-      // One extra for the separator line that heads the list.
-      itemCount: items.length + 1,
+      itemCount: items.length,
       itemBuilder: (context, index) {
-        if (index == 0) {
-          return const Padding(
-            padding: EdgeInsets.fromLTRB(4, 8, 4, 4),
-            child: Text(
-              "Tap a place once you've eaten there",
-              style: TextStyle(
-                fontFamily: kTextFontFamily,
-                fontSize: kFontSizeMicro,
-                fontWeight: FontWeight.w600,
-                color: kCreamMuted,
-                letterSpacing: 0.22,
-              ),
-            ),
-          );
-        }
-
-        final item = items[index - 1];
+        final item = items[index];
 
         final restaurantId = item.restaurantId;
 
@@ -481,6 +466,41 @@ class _AddBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The design's `.wl-sep`: the quiet instruction that sits above the list,
+/// not inside it, so it stays visible while the user scrolls.
+///
+/// On very small phones at huge text scales the fixed chrome leaves no room
+/// for the list, so the hint is dropped rather than forcing an overflow.
+class _ListHint extends StatelessWidget {
+  const _ListHint();
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).height < 600) {
+      return const SizedBox.shrink();
+    }
+
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.screenPadding + 4,
+        12,
+        AppSpacing.screenPadding,
+        4,
+      ),
+      child: Text(
+        "Tap a place once you've eaten there",
+        style: TextStyle(
+          fontFamily: kTextFontFamily,
+          fontSize: kFontSizeMicro,
+          fontWeight: FontWeight.w600,
+          color: kCreamMuted,
+          letterSpacing: 0.22,
+        ),
       ),
     );
   }

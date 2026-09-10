@@ -79,8 +79,10 @@ class _SparklesState extends State<Sparkles>
     super.initState();
     _sparkles = _buildSparkles();
     _ticker = createTicker((elapsed) {
-      _elapsedSeconds.value = elapsed.inMicroseconds / Duration.microsecondsPerSecond;
-    })..start();
+      _elapsedSeconds.value =
+          elapsed.inMicroseconds / Duration.microsecondsPerSecond;
+    })
+      ..start();
   }
 
   @override
@@ -191,11 +193,16 @@ class _SparklesPainter extends CustomPainter {
     for (final sparkle in sparkles) {
       // Drifting off one edge reappears on the other, which keeps the field
       // evenly populated forever instead of slowly emptying out.
-      final x = _wrap(sparkle.origin.dx * size.width + sparkle.velocity.dx * seconds, size.width);
-      final y = _wrap(sparkle.origin.dy * size.height + sparkle.velocity.dy * seconds, size.height);
+      final x = _wrap(
+          sparkle.origin.dx * size.width + sparkle.velocity.dx * seconds,
+          size.width);
+      final y = _wrap(
+          sparkle.origin.dy * size.height + sparkle.velocity.dy * seconds,
+          size.height);
 
       final wave = 0.5 + 0.5 * math.sin(sparkle.phase + seconds * opacitySpeed);
-      final alpha = (minOpacity + (maxOpacity - minOpacity) * wave).clamp(0.0, 1.0);
+      final alpha =
+          (minOpacity + (maxOpacity - minOpacity) * wave).clamp(0.0, 1.0);
 
       paint.color = color.withValues(alpha: color.a * alpha);
       canvas.drawCircle(Offset(x, y), sparkle.radius, paint);

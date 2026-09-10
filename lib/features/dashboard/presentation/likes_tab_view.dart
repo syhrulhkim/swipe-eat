@@ -28,7 +28,7 @@ class LikesTabView extends StatefulWidget {
     required this.liked,
     required this.onOpenRestaurant,
     required this.onOpenWishlist,
-    this.wishlistedIds = const {},
+    this.onRefresh,
     this.plannedIds = const {},
     this.plannedLabels = const {},
   });
@@ -41,8 +41,9 @@ class LikesTabView extends StatefulWidget {
   /// The "Wishlist →" chip. A navigation, not a filter.
   final VoidCallback onOpenWishlist;
 
-  /// Which tiles carry the bookmark badge.
-  final Set<int> wishlistedIds;
+  /// Pull-to-refresh. Null leaves the grid a plain scrollable, which is what
+  /// the widget tests that only care about filtering want.
+  final Future<void> Function()? onRefresh;
 
   /// Which tiles the Planned / Not planned yet chips consider planned. Empty
   /// until the plans phase feeds it, at which point both chips start working
@@ -114,20 +115,48 @@ class _LikesTabViewState extends State<LikesTabView> {
           onToggleHalal: () => setState(() => _halalOnly = !_halalOnly),
           onOpenWishlist: widget.onOpenWishlist,
         ),
-        Expanded(child: _buildGrid()),
+        Expanded(child: _buildRefreshable()),
       ],
     );
   }
 
+  Widget _buildRefreshable() {
+    final onRefresh = widget.onRefresh;
+    if (onRefresh == null) {
+      return _buildGrid();
+    }
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      color: kAccentEmber,
+      backgroundColor: kSurfaceDark,
+      child: _buildGrid(),
+    );
+  }
+
+  /// [AlwaysScrollableScrollPhysics] on every branch, empty ones included: a
+  /// list shorter than its viewport does not scroll, and a
+  /// [RefreshIndicator] with nothing to pull is a gesture that does nothing.
+  static const ScrollPhysics _pullable =
+      AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics());
+
   Widget _buildGrid() {
     if (widget.liked.isEmpty) {
-      return const AppEmptyState(
-        eyebrow: 'Nothing saved',
-        title: 'No bites yet',
-        message: 'Ngap the places you want and they land here.',
-        // One pop on arrival, then still: the tab is waiting for the user,
-        // not working.
-        art: AppLottie(motion: AppMotion.heart, size: 96, repeat: false),
+      // Wrapped in a scrollable so the pull works here too — this is exactly
+      // the state a user pulls in, having saved something on another device.
+      return ListView(
+        physics: _pullable,
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        children: const [
+          AppEmptyState(
+            eyebrow: 'Nothing saved',
+            title: 'No bites yet',
+            message: 'Ngap the places you want and they land here.',
+            // One pop on arrival, then still: the tab is waiting for the
+            // user, not working.
+            art: AppLottie(motion: AppMotion.heart, size: 96, repeat: false),
+          ),
+        ],
       );
     }
 
@@ -135,7 +164,7 @@ class _LikesTabViewState extends State<LikesTabView> {
     if (rows.isEmpty) {
       // Non-empty source, empty view: the chips hid everything.
       return ListView(
-        physics: const BouncingScrollPhysics(),
+        physics: _pullable,
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
           EmptyTabMessage(
@@ -150,7 +179,7 @@ class _LikesTabViewState extends State<LikesTabView> {
     }
 
     return GridView.builder(
-      physics: const BouncingScrollPhysics(),
+      physics: _pullable,
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenPadding,
         0,
@@ -161,7 +190,11 @@ class _LikesTabViewState extends State<LikesTabView> {
         crossAxisCount: 2,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
-        childAspectRatio: 0.78,
+        // The tile is a photo over a caption strip of fixed text height, so
+        // the ratio sets the photo's share: 0.9 lands it near two thirds of
+        // the tile on a phone, close to the reference's split, while leaving
+        // the strip room to grow at large text sizes.
+        childAspectRatio: 0.9,
       ),
       itemCount: rows.length,
       itemBuilder: (context, index) {
@@ -173,10 +206,9 @@ class _LikesTabViewState extends State<LikesTabView> {
           // fallback for a row with neither.
           distanceText: '',
           onTap: () => widget.onOpenRestaurant(restaurant),
-          // Every tile here is a place the user saved, so all of them are
-          // bitten.
+          // Every tile here is a place the user saved, so all of them carry
+          // the check.
           isSaved: true,
-          isWishlisted: widget.wishlistedIds.contains(restaurant.id),
           plannedLabel: widget.plannedLabels[restaurant.id],
         );
       },
