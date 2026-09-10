@@ -295,9 +295,10 @@ class _DashboardShellState extends State<_DashboardShell>
       // re-deal the deck and refetch the map each time the user glanced at
       // another tab. The switch itself is instant, so the fade below is what
       // makes it read as a change of screen rather than as a repaint.
+      // No ScreenGlow here: Bites, Calendar and You paint their own, and a
+      // second one underneath doubled the ember on those three tabs.
       body: Stack(
         children: [
-          const ScreenGlow(),
           FadeTransition(
             opacity: CurvedAnimation(parent: _tabFade, curve: kMotionEase),
             child: IndexedStack(

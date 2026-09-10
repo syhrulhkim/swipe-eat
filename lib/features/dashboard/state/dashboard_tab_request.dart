@@ -2,10 +2,10 @@ import 'package:flutter/foundation.dart';
 
 /// The one way a screen can ask the dashboard to show a different tab.
 ///
-/// It used to sit beside `DeckHandoff`, which did the same job for the Nearby
-/// map's "Swipe all" but could only ever mean tab 0 and insisted on carrying a
-/// list of restaurants with it. The map is gone and so is the hand-off; this
-/// is now the only route. The Calendar tab needs it in both directions: its
+/// It sits beside `DeckHandoff`, which does a narrower job for the Nearby
+/// map's "Swipe all": that one can only ever mean tab 0 and carries the list
+/// of restaurants to deal. This is the general route, with no payload. The
+/// Calendar tab needs it in both directions: its
 /// "New plan" button sends the user to the deck, and "Lock it in" sends them
 /// back to the calendar from a route pushed over the dashboard.
 ///

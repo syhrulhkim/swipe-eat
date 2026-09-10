@@ -468,6 +468,8 @@ class _NearbyTabState extends State<NearbyTab> {
   }
 
   Widget _buildTopBar(BuildContext context) {
+    final activeFilterCount = widget.authController.user?.activeFilterCount ?? 0;
+    final narrowed = activeFilterCount > 0;
     return Positioned(
       top: MediaQuery.paddingOf(context).top + 12,
       left: 20,
@@ -476,15 +478,28 @@ class _NearbyTabState extends State<NearbyTab> {
       // here it is a tab and the nav bar is already the way out.
       child: Align(
         alignment: Alignment.centerRight,
-        child: AppIconButton(
-          icon: Icons.tune_rounded,
-          size: kUtilityButtonSize,
-          iconSize: 20,
-          onPhoto: false,
-          background: kGlass,
-          semanticLabel: 'Filters',
-          badgeCount: widget.authController.user?.activeFilterCount ?? 0,
+        // Same words and the same ember as the deck's button (DeckHeader):
+        // one sheet, one name, one colour for "a filter is on". Excluding the
+        // child's semantics keeps the announcement to one node, so the tap
+        // action is re-declared here (D83).
+        child: Semantics(
+          label: 'Discovery settings',
+          value: narrowed
+              ? '$activeFilterCount ${activeFilterCount == 1 ? 'filter' : 'filters'} on'
+              : null,
+          button: true,
+          excludeSemantics: true,
           onTap: () => unawaited(_openFilters()),
+          child: AppIconButton(
+            icon: Icons.tune_rounded,
+            size: kUtilityButtonSize,
+            iconSize: 20,
+            onPhoto: false,
+            background: kGlass,
+            iconColor: narrowed ? kAccentEmber : kTextOnPhoto,
+            badgeCount: activeFilterCount,
+            onTap: () => unawaited(_openFilters()),
+          ),
         ),
       ),
     );

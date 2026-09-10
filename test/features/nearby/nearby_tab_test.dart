@@ -526,9 +526,13 @@ void main() {
       seedThreePlaces();
       await pumpTab(tester);
 
-      // The badge count merges into the button's own semantics node, so the
-      // label is matched by pattern rather than by equality.
-      expect(find.bySemanticsLabel(RegExp('Filters')), findsOneWidget);
+      // The same name and count the deck's button announces (D83): the
+      // label is fixed and the count rides on the node's value.
+      expect(find.bySemanticsLabel('Discovery settings'), findsOneWidget);
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Discovery settings')).value,
+        '2 filters on',
+      );
       expect(find.text('2'), findsWidgets);
     });
   });

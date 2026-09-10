@@ -278,10 +278,11 @@ TextStyle appSectionTitleStyle(BuildContext context) {
 /// tappable, and the exception is only granted because it never touches a
 /// control. Put it at the bottom of a [Stack], above the scaffold colour.
 ///
-/// The design's ellipse is 130% of the screen wide and 48% tall, centred on the
-/// top edge and lifted 6%. Flutter's [RadialGradient] is circular, so the shape
-/// is produced by painting into a box of that aspect and letting it overflow
-/// the sides rather than by distorting the gradient.
+/// The design's ellipse has *radii* of 130% of the screen width and 48% of it
+/// in height, centred on the top edge and lifted 6%. Flutter's [RadialGradient]
+/// is circular and sized by its box, so the box is 260% wide by 96% of that
+/// tall, centred, and left to overflow the sides rather than distorting the
+/// gradient.
 class ScreenGlow extends StatelessWidget {
   const ScreenGlow({super.key});
 
