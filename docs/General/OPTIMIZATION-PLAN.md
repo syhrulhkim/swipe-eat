@@ -1,4 +1,4 @@
-Status: DRAFT
+Status: DELIVERED
 Owner: Swipe Eat team
 Last updated: 2026-09-11
 Cross-references: [PLAN.md](PLAN.md), [DECISIONS.md](DECISIONS.md), [Features/Swipe-Deck.md](../Features/Swipe-Deck.md), [Features/Backend-Schema.md](../Features/Backend-Schema.md), [Features/Friends.md](../Features/Friends.md), [Features/TikTok-Video.md](../Features/TikTok-Video.md), [Features/Plans-Calendar.md](../Features/Plans-Calendar.md), [Release/STORE.md](../Release/STORE.md)
@@ -30,6 +30,14 @@ mechanism a dating app uses to protect the *other* side — reciprocity scoring,
 like limits, boosts, exposure fairness, the match moment — has no counterpart
 here and is left out on purpose. §7 lists those rejections by name so nobody
 re-proposes them in six months.
+
+> **Delivered 2026-09-11.** Every phase in §4 through §8 has landed and is
+> marked done where it stands, with its measurement. Two things are deliberately
+> not finished: the six items in **§5.5**, recorded and not scheduled, and the
+> four remaining **open questions in §10**, which are product, device and data
+> questions rather than work — one of them, `halal_only`, **needs an answer
+> before the flag is offered to real users**. §8's pages are edited but **not
+> deployed**: the owner ships the legal copy.
 
 **Scope approved 2026-09-11**, one question at a time — the nine answers are
 in §2. Each decision in §11 locks as its phase lands, not before, and the two
