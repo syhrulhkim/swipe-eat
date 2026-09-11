@@ -104,7 +104,9 @@ Out, but not always for good: when fewer than `p_limit` unswiped rows are left,
 `get_deck` tops the deck up with **passes** whose `swiped_at` is more than three
 days old — `swipes.updated_at`, so a re-pass restarts the clock (D135). A like
 never comes back: only a pass gets a second showing, and only once the
-catalogue has run dry.
+catalogue has run dry. Both buckets are read off one scoring pass and sorted
+together, unseen cards first, so topping up costs a filter rather than a second
+run of the ranker (D142).
 
 | Signal | Weight | How |
 |---|---|---|

@@ -264,7 +264,7 @@ Add a bounding-box predicate on latitude and longitude plus one btree over the
 pair, and keep haversine as the exact filter inside the box. PostGIS stays out
 of scope (D9); this is the cheap version of the same idea.
 
-### 6.2 The deck stops carrying the whole catalogue (D142)
+### 6.2 The deck stops carrying the whole catalogue (D142 — done 2026-09-11)
 
 Three things in one migration, all in `get_deck`:
 
@@ -280,7 +280,15 @@ Three things in one migration, all in `get_deck`:
   `set search_path` re-raises Supabase's `function_search_path_mutable` advisor
   warning on all three, which D142 accepts on the record the way D109 accepted
   its own warning.
-- `rows 300` misinforms the planner by 166×.
+- `rows 300` misinforms the planner about a function that returns up to 1,607.
+
+Landed in `20260911140000_the_deck_ranks_once_and_sorts_on_identity`. Measured
+on the live project at 576 candidates: **52 ms → 37 ms**, 3,725 → 2,673 shared
+buffers, with the exhaustion path no longer ranking twice. Equivalence checked
+before and after on three argument sets and, with the touch trigger disabled
+inside a rolled-back transaction, on the resurfacing branch: the same ids in the
+same order every time. The three `function_search_path_mutable` warnings are now
+in the advisor output and are accepted by name.
 
 ### 6.3 A stranger stops being able to vote (D143 — done 2026-09-11)
 

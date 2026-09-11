@@ -50,7 +50,9 @@ skill:
 - Every policy names its roles with a `to` clause.
 - An index on every foreign key and every RLS-filtered column — with one
   deliberate exception, `friendships.requester_id`, noted in §7.
-- `security definer` functions always pin `set search_path = ''`.
+- `security definer` functions always pin `set search_path = ''`. The three
+  *invoker* arithmetic helpers deliberately do not, because a SET clause stops
+  Postgres inlining a SQL function — see D142.
 
 ## 2. Table map
 
@@ -239,11 +241,11 @@ cron job. See [TikTok-Video.md](TikTok-Video.md).
 
 | Function | Signature | Notes |
 |---|---|---|
-| `get_deck` | `(p_limit int, p_latitude float8, p_longitude float8, p_seed bigint, p_radius_km int, p_local_hour int) → setof restaurants` | The deck. Rows come back in serve order — callers must not re-sort |
+| `get_deck` | `(p_limit int, p_latitude float8, p_longitude float8, p_seed bigint, p_radius_km int, p_local_hour int) → setof restaurants` | The deck. Rows come back in serve order — callers must not re-sort. Ranks once, sorts on `(bucket, score, id)`, and joins the columns back after the limit (D142) |
 | `deck_scored` | `(p_latitude, p_longitude, p_seed, p_radius_km, p_local_hour) → table(restaurant_id, score, distance_km, swiped_at, liked)` | The scoring core `get_deck` and `get_top_picks` share |
 | `get_top_picks` | `(p_limit int, p_latitude, p_longitude) → setof restaurants` | `get_deck`'s first query, small limit, no exhaustion fallback. Server caps at 20 |
-| `deck_jitter` | `(p_id bigint, p_seed bigint) → float8` | Immutable per-session exploration noise |
-| `haversine_km` | `(lat1, lng1, lat2, lng2) → float8` | Immutable. Distance without PostGIS — D9 |
+| `deck_jitter` | `(p_id bigint, p_seed bigint) → float8` | Immutable per-session exploration noise. Inlinable: no `search_path` pin (D142) |
+| `haversine_km` | `(lat1, lng1, lat2, lng2) → float8` | Immutable. Distance without PostGIS — D9. Inlinable: no `search_path` pin (D142) |
 | `nearest_restaurant_km` | `(p_latitude, p_longitude) → float8` | How far the nearest place is, for the "nothing nearby" copy |
 | `tiktok_video_id` | `(video_url text) → bigint` | Immutable. Parses the post id, which increases with post time — the freshness signal |
 
@@ -457,6 +459,15 @@ swipes — or triggers that write a table the user cannot. Eight are executable
 by `authenticated` and `get_ngap_count` by `anon` as well; the advisor warns
 about each, and each warning is accepted for the reason written into its
 migration (D109, D129).
+
+**Three `security invoker` functions deliberately have no pin.**
+`haversine_km`, `tiktok_video_id` and `deck_jitter` gave theirs up in D142:
+Postgres will not inline a SQL function carrying a SET clause, so the pin cost
+a function call per row per term across the whole catalogue. They read no
+table, so there is no definer's privilege to borrow, and every name in them
+resolves out of `pg_catalog`, which is searched first whenever the path does
+not name it. The advisor's three `function_search_path_mutable` warnings are
+theirs, and are accepted.
 
 ## 4. RLS
 
