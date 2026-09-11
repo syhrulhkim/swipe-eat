@@ -132,4 +132,25 @@ class RestaurantRepository {
         params: {'p_restaurant_id': restaurantId}).timeout(_timeout);
     return (result as num?)?.toInt() ?? 0;
   }
+
+  /// The stars this restaurant has from the caller and their friends (D147).
+  ///
+  /// No RPC and no friendship join: the `reviews` read policy already answers
+  /// "who may see this row", so a plain select returns exactly the rows this
+  /// user is allowed to read. Rows with no rating are the seeded catalogue
+  /// snippets, which this surface is not about.
+  Future<List<RestaurantReview>> friendReviews(int restaurantId) async {
+    final rows = await _client
+        .from('reviews')
+        .select('author_name, body, rating')
+        .eq('restaurant_id', restaurantId)
+        .not('rating', 'is', null)
+        .order('created_at', ascending: false)
+        .limit(20)
+        .timeout(_timeout);
+
+    return [
+      for (final row in rows) RestaurantReview.fromJson(row),
+    ];
+  }
 }

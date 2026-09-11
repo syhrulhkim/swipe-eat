@@ -128,19 +128,29 @@ class RestaurantReview {
   const RestaurantReview({
     required this.author,
     required this.text,
+    this.rating,
   });
 
   factory RestaurantReview.fromJson(Map<String, dynamic> json) {
     return RestaurantReview(
       author: json['author_name'] as String? ?? 'Reviewer',
       text: json['body'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toInt(),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{'author_name': author, 'body': text};
+    return <String, dynamic>{
+      'author_name': author,
+      'body': text,
+      if (rating != null) 'rating': rating,
+    };
   }
 
   final String author;
   final String text;
+
+  /// 1–5 when a person left one (D147). Null on the seeded catalogue snippets,
+  /// which are a body and nothing else.
+  final int? rating;
 }

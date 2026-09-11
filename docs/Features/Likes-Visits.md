@@ -225,10 +225,9 @@ deleted once no install predates the migration.
   prompt, and `swipes.visited_at` still fills up, but nothing shows it back to
   the user. The design does not ask for a Visited list; the wishlist's eaten
   half is the nearest thing it has.
-- **Reviews have no read surface.** They are written now (D147) and they feed
-  `restaurants.rating`, but no screen shows a friend's stars back to anyone —
-  the detail page dropped its review card in the redesign and has not been
-  given a new one.
+- **Reviews are read in one place only.** The detail page shows what your
+  friends said (D147); nothing surfaces your own reviews back to you as a list,
+  and nothing shows a friend that you rated a place until they open it.
 - `visited_at` is a single timestamp, so a second visit overwrites the first —
   no visit history.
 - ~~**Planned is inert**~~ — resolved 2026-09-06 by

@@ -16,6 +16,7 @@ import '../data/restaurant_repository.dart';
 import '../data/tiktok_player_factory.dart';
 import '../domain/opening_hours.dart';
 import '../models/dish.dart';
+import '../models/restaurant.dart';
 import '../models/restaurant_detail_data.dart';
 import '../state/likes_controller.dart';
 import '../state/visit_prompt_controller.dart';
@@ -24,6 +25,7 @@ import 'detail/detail_cta_bar.dart';
 import 'detail/detail_hero.dart';
 import 'detail/dish_list.dart';
 import 'detail/facts_strip.dart';
+import 'detail/friend_reviews.dart';
 import 'detail/friends_bite_row.dart';
 import 'tiktok_player.dart';
 
@@ -94,6 +96,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
   /// unanswered fact is a hidden tile, not a zero.
   int? _ngapCount;
 
+  /// The caller's own review and their friends' (D147). Empty until the read
+  /// lands, and empty for good on almost every restaurant.
+  List<RestaurantReview> _reviews = const [];
+
   bool _settingDate = false;
 
   int get _id => widget.data.id;
@@ -126,6 +132,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
     });
     unawaited(_wishlist.ensureLoaded());
     unawaited(_loadNgapCount());
+    unawaited(_loadReviews());
     unawaited(_friends.loadWhoLiked(_id));
   }
 
@@ -154,6 +161,21 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
   void _onControllerChanged() {
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  /// Silent on failure for the same reason as the ngap count: a block that
+  /// draws nothing when there is nothing to say cannot report a failure
+  /// without inventing a state the design does not have.
+  Future<void> _loadReviews() async {
+    try {
+      final reviews = await _repository.friendReviews(_id);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _reviews = reviews);
+    } on Object catch (error) {
+      debugPrint('Friend reviews load failed: $error');
     }
   }
 
@@ -420,6 +442,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
                       if (data.details.trim().isNotEmpty)
                         AboutParagraph(text: data.details),
                       FriendsBiteRow(people: _friends.whoLiked(_id)),
+                      FriendReviews(reviews: _reviews),
                     ],
                   ),
                 ),

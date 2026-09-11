@@ -13,9 +13,11 @@ import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/restaurants/data/tiktok_player_factory.dart';
 import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
 import 'package:swipe_eat/features/restaurants/models/dish.dart';
+import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant_detail_data.dart';
 import 'package:swipe_eat/features/restaurants/presentation/detail/dish_list.dart';
 import 'package:swipe_eat/features/restaurants/presentation/detail/facts_strip.dart';
+import 'package:swipe_eat/features/restaurants/presentation/detail/friend_reviews.dart';
 import 'package:swipe_eat/features/restaurants/presentation/detail/friends_bite_row.dart';
 import 'package:swipe_eat/features/restaurants/presentation/restaurant_detail_page.dart';
 import 'package:swipe_eat/features/restaurants/presentation/restaurant_detail_route.dart';
@@ -572,6 +574,35 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(tester.getSize(find.byType(FriendsBiteRow)), Size.zero);
+    });
+
+    testWidgets('says nothing about reviews when there are none',
+        (tester) async {
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(
+        tester.getSize(find.byType(FriendReviews)),
+        Size.zero,
+        reason: 'a heading over no reviews would claim your friends were asked',
+      );
+    });
+
+    testWidgets("shows a friend's stars and their line", (tester) async {
+      _restaurants.friendReviewRows[_detailData().id] = const [
+        RestaurantReview(
+          author: 'Mei Kee Tan',
+          text: 'Worth the queue',
+          rating: 4,
+        ),
+      ];
+      useViewport(tester, const Size(390, 844));
+      await _pumpDetailPage(tester, _detailData());
+
+      expect(find.text('What your friends said'), findsOneWidget);
+      expect(find.text('Mei Kee Tan'), findsOneWidget);
+      expect(find.text('Worth the queue'), findsOneWidget);
+      expect(find.bySemanticsLabel('4 out of 5'), findsOneWidget);
     });
 
     testWidgets('one friend, at 320 px and double text', (tester) async {

@@ -114,6 +114,14 @@ class FakeRestaurantRepository implements RestaurantRepository {
   Future<int> ngapCount(int restaurantId) async =>
       ngapCounts[restaurantId] ?? 0;
 
+  /// What the `reviews` policy would hand back: the caller's own review and
+  /// their friends' (D147).
+  final Map<int, List<RestaurantReview>> friendReviewRows = {};
+
+  @override
+  Future<List<RestaurantReview>> friendReviews(int restaurantId) async =>
+      friendReviewRows[restaurantId] ?? const [];
+
   @override
   Future<Set<int>> laterIds() async {
     if (failLater) {

@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Friends.md](Friends.md), [Swipe-Deck.md](Swipe-Deck.md), [Restaurant-Data.md](Restaurant-Data.md), [Wishlist.md](Wishlist.md), [TikTok-Video.md](TikTok-Video.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
 # Restaurant detail
@@ -108,6 +108,19 @@ widget from the names rather than passed in, so no call site can put a
 different sentence on the same faces; the stack draws `kAvatarStackMax` (3)
 faces and the caption counts them all.
 
+### What your friends said (D147)
+
+Under the faces sits `FriendReviews` — the stars and lines left by people whose
+reviews this user may read. Same shape of rule as the row above it: empty draws
+**nothing**, a failed read logs and leaves it empty, and there is no loading
+state.
+
+It needs no friendship join and no RPC. `RestaurantRepository.friendReviews`
+is a plain select on `reviews`, and the table's read policy already answers who
+may see a row — the caller's own and their accepted friends'. Rows with no
+rating are the seeded catalogue snippets and are filtered out in the query, not
+in the widget.
+
 ## 6. The two actions
 
 **Directions** opens the platform's maps app and records the trip through
@@ -167,8 +180,10 @@ photo, because one controller cannot be mounted in two WebViews.
 
 ## 9. What left the screen
 
-Reviews. With six reviews across 1,607 rows the "Top review" card was empty on
-almost every restaurant, and `SCREENS.md` puts reviews nowhere in the redesign.
+The "Top review" card. With six scraped reviews across 1,607 rows it was empty
+on almost every restaurant, and `SCREENS.md` puts reviews nowhere in the
+redesign. What came back in its place (D147) is not that card: it is what
+**your friends** said, which is empty for a different reason and a better one.
 The hero thumbnail strip and the "More photos" / "Location" cards went with the
 rebuild — the hero is one photo now, and the location is a distance in the meta
 line plus a Directions button.
@@ -180,6 +195,9 @@ line plus a Directions button.
 - **Friends is empty on almost every row** — the graph is live, but there are
   no friendships in the catalogue's data yet, so the row draws nowhere.
 - **No wait time**, and no plan to collect one.
+- **Reviews are friends-only by design**, so the section is empty for anyone
+  with no friends on Swipe Eat — which today is everyone. The public number
+  those stars feed is the restaurant's average rating in the meta line.
 - The design's **share** button is not built: there is nothing to share to yet.
 
 ## 11. Decision log

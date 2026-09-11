@@ -646,9 +646,11 @@ a button that renames itself to **Post it** once a star is lit. Six tests
 (`visit_prompt_test.dart`); the client asks the backend for a plan prompt
 **once per app run**, since `_maybeAskAboutVisit` fires on every resume.
 
-One thing this does not do: **show a review back to anyone.** The detail page
-dropped its review card in the redesign, and a friend's stars have no surface
-yet. Recorded in [Likes-Visits](../Features/Likes-Visits.md) §6.
+The read surface is on the detail page, under the friends row: `FriendReviews`,
+stars and a line per person, silent when empty. It needs no friendship join and
+no RPC — a plain select on `reviews` returns exactly what the policy allows, so
+the fence is enforced in one place rather than mirrored in a query. Two more
+tests there.
 
 ## 8. Compliance (D148 — done 2026-09-11, not deployed)
 
@@ -739,7 +741,8 @@ translation to a one-sided market.
    much §4.3 can ever be worth — and now costs them: since D138 a row with no
    hours ranks 0.08 below one known to be open, so poor coverage is no longer
    merely a missing chip.
-5. ~~**What a review is, exactly.**~~ **Answered 2026-09-11: 1–5 stars,
+5. ~~**What a review is, exactly.**~~ **Built 2026-09-11 as D147** — the answer
+   below is what shipped, read surface included. **Answered 2026-09-11: 1–5 stars,
    visible to friends, and `restaurants.rating` becomes the average of those
    stars.** So §7.4 builds a star scale rather than thumbs, a friends-visible
    reviews block on the detail screen, and a write path that moves the rating
