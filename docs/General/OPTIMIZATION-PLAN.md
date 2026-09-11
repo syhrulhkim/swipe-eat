@@ -288,7 +288,7 @@ and two new additive terms bounded at ±0.08 and ≤ 0.05 × position.
 
 ## 5. Phase 2 — Frontend
 
-### 5.1 The drag stops rebuilding the deck
+### 5.1 The drag stops rebuilding the deck (done 2026-09-11)
 
 `swipe_deck.dart:436-447` drives `onPanUpdate` through `setState`. Every pointer
 event — 60 to 120 a second on the app's core gesture — rebuilds the header, the
@@ -300,6 +300,28 @@ Move the drag offset into a `ValueNotifier<Offset>` and keep the cards in the
 builder's `child:`, the pattern the fly-out already uses. Hoist
 `distanceLabelFor` and `players.warm` out of `build()` while there — a side
 effect in `build()` is a bug waiting for a rebuild that does not come.
+
+**Done.** `_dragOffset` is now a getter/setter pair over a
+`ValueNotifier<Offset>`, so all twelve existing read and write sites are
+unchanged, and both `AnimatedBuilder`s listen to
+`Listenable.merge([_motionController, _drag])` instead of the controller
+alone. `onPanUpdate` loses its `setState`; every other `setState` stays,
+because `_motionType` gates the gesture callbacks in `build` and a change to
+it does need a rebuild. The cards were already in the builders' `child:`.
+
+**The hoist was deliberately not done.** Its whole argument was the per-frame
+rebuild: `distanceLabelFor` runs a Vincenty calculation and `players.warm`
+mutates the LRU, twice each per build. With the drag no longer rebuilding, the
+deck builds on load, on advance and on a controller notification — a handful
+of times a session, where it used to be 120 a second. Moving the warm out of
+`build` means moving the player lifecycle, which is a change worth making on
+its own evidence, not as a rider.
+
+**No widget test.** `SwipeDeck` has never been mountable in the harness — the
+suite tests `DeckHeader`, `DeckActionBar` and `SwipeCard` separately for that
+reason — and an attempt to mount it for this hung `flutter_tester` outright
+rather than failing. The change adds no branch: it moves where a repaint is
+requested from.
 
 ### 5.2 Tabs load when they are first seen (D140)
 

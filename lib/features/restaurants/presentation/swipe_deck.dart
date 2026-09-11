@@ -64,7 +64,14 @@ class _SwipeDeckState extends State<SwipeDeck>
   StreamSubscription<String>? _messages;
   StreamSubscription<String>? _likeMessages;
 
-  Offset _dragOffset = Offset.zero;
+  /// The live drag, in its own notifier so a pointer move repaints the card
+  /// without rebuilding the deck. `onPanUpdate` fires 60–120 times a second on
+  /// the app's core gesture, and a `setState` there rebuilt the header, the
+  /// action bar and both cards — each of which hosts a WebView.
+  final ValueNotifier<Offset> _drag = ValueNotifier<Offset>(Offset.zero);
+
+  Offset get _dragOffset => _drag.value;
+  set _dragOffset(Offset value) => _drag.value = value;
 
   Offset _animationStartOffset = Offset.zero;
   Offset _animationEndOffset = Offset.zero;
@@ -89,6 +96,11 @@ class _SwipeDeckState extends State<SwipeDeck>
 
       _motionController.reset();
     });
+
+  /// Everything the card's pose is derived from. The two [AnimatedBuilder]s
+  /// listen to this rather than to the controller alone, so a drag reaches the
+  /// same builders the fly-out already used, without a rebuild.
+  late final Listenable _motion = Listenable.merge([_motionController, _drag]);
 
   @override
   void initState() {
@@ -136,6 +148,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     unawaited(_messages?.cancel());
     unawaited(_likeMessages?.cancel());
     _motionController.dispose();
+    _drag.dispose();
     if (_ownsController) {
       _deck.dispose();
     }
@@ -399,7 +412,7 @@ class _SwipeDeckState extends State<SwipeDeck>
 
   Widget _buildBehindCard(RestaurantCard next) {
     return AnimatedBuilder(
-      animation: _motionController,
+      animation: _motion,
       // The card itself is passed as `child` so it is built once, not on every
       // tick — it can host a WebView.
       child: SwipeCard(
@@ -436,14 +449,14 @@ class _SwipeDeckState extends State<SwipeDeck>
       onPanUpdate: gesturesLocked
           ? null
           : (details) {
-              setState(() {
-                if (_dragOffset == Offset.zero) {
-                  _deck.warmUpcomingPlayers();
-                }
-                _motionController.stop();
-                _motionType = _SwipeMotionType.idle;
-                _dragOffset += details.delta;
-              });
+              // No `setState`: the notifier below repaints the card's pose on
+              // its own, and `_motionType` is already idle here — the gesture
+              // is locked whenever it is not.
+              if (_dragOffset == Offset.zero) {
+                _deck.warmUpcomingPlayers();
+              }
+              _motionController.stop();
+              _dragOffset += details.delta;
             },
       onPanEnd: gesturesLocked
           ? null
@@ -474,7 +487,7 @@ class _SwipeDeckState extends State<SwipeDeck>
               });
             },
       child: AnimatedBuilder(
-        animation: _motionController,
+        animation: _motion,
         builder: (context, child) {
           // Read live from the controller: values captured in build() would
           // hold still for the whole animation.
