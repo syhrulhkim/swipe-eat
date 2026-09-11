@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../data/tiktok_player_factory.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../data/restaurant_repository.dart';
@@ -19,6 +20,7 @@ class RestaurantDetailRoute extends StatefulWidget {
     super.key,
     required this.restaurantId,
     this.initialData,
+    this.lentPlayer,
     this.repository,
   });
 
@@ -26,6 +28,11 @@ class RestaurantDetailRoute extends StatefulWidget {
   final int? restaurantId;
 
   final RestaurantDetailData? initialData;
+
+  /// The deck's warmed player, when this route was opened from a card holding
+  /// one (D150). The page then mounts that clip instead of loading its own,
+  /// and does not release it — the deck still owns it.
+  final Future<TikTokPlayerHandle>? lentPlayer;
 
   /// Injected by tests; in the app the route builds its own.
   final RestaurantRepository? repository;
@@ -92,7 +99,11 @@ class _RestaurantDetailRouteState extends State<RestaurantDetailRoute> {
     if (data != null) {
       // The page reads its ngap count through the same repository the route
       // loaded the row with, so a test wires one fake and gets both.
-      return RestaurantDetailPage(data: data, repository: _repository);
+      return RestaurantDetailPage(
+        data: data,
+        repository: _repository,
+        tiktokPlayerFuture: widget.lentPlayer,
+      );
     }
 
     if (_loading) {

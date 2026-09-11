@@ -16,6 +16,7 @@ import '../features/friends/presentation/invite_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
 import '../features/plans/presentation/plan_date_page.dart';
 import '../features/plans/presentation/plan_page.dart';
+import '../features/restaurants/data/tiktok_player_factory.dart';
 import '../features/restaurants/models/restaurant_detail_data.dart';
 import '../features/restaurants/presentation/restaurant_detail_route.dart';
 import '../features/settings/presentation/settings_page.dart';
@@ -201,14 +202,19 @@ GoRouter createRouter(AuthController authController) {
         path: '/restaurant/:id',
         builder: (context, state) {
           final payload = state.extra;
+          final map = payload is Map<String, dynamic> ? payload : null;
+          // The deck lends the player it already warmed rather than letting
+          // the page build a second WebView for the same clip (D150). Only a
+          // push from a live card carries one; a deep link never does.
+          final lent = map?[kLentPlayerKey];
 
           return RestaurantDetailRoute(
             restaurantId: int.tryParse(state.pathParameters['id'] ?? ''),
             // A tap from a card carries the whole restaurant with it, so the
             // page opens with no fetch. A link carries only the id.
-            initialData: payload is Map<String, dynamic>
-                ? RestaurantDetailData.fromPayload(payload)
-                : null,
+            initialData:
+                map == null ? null : RestaurantDetailData.fromPayload(map),
+            lentPlayer: lent is Future<TikTokPlayerHandle> ? lent : null,
           );
         },
       ),

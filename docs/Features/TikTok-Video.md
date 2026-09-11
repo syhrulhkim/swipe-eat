@@ -139,6 +139,19 @@ nullable URL straight through instead of branching.
 Only the **foreground** card mounts a WebView; the card behind it shows a
 static thumbnail. Two videos never run at once.
 
+And the detail screen does not build a sixth one. Opening a restaurant from
+the deck hands the warmed handle over in the router's `extra` map, under
+`kLentPlayerKey`, and the card drops its own `WebViewWidget` for as long as
+the loan is out — one controller cannot be mounted in two of them, and the
+card is invisible under an opaque route anyway (D150). The page knows it is
+borrowing, so it does not release what it did not create. A deep link carries
+no handle and the page loads its own, exactly as before.
+
+`peek` is the cache's non-creating lookup, used for the loan and for reading a
+clip's sound state at the moment of a swipe (D149) — it starts nothing and
+does not count as a use, so asking about a card on its way out cannot evict
+the card arriving behind it.
+
 ## 4. Display modes
 
 `TikTokFraming { card, hero, fullscreen }`, in `tiktok_player.dart`. TikTok's
@@ -262,6 +275,7 @@ restaurants, what most cards show permanently.
 | D4 | Video is embedded via TikTok's own player in a WebView, never downloaded or re-hosted — their developer terms require it. | locked 2026-08-22 |
 | D37 | `restaurants.video_url` is the stable identity of a row and is never rewritten. | locked 2026-08-22 |
 | D38 | A player handle carries an explicit load status; a WebView that fails silently must be able to offer a retry. | locked 2026-08-29 |
+| D150 | The deck **lends** its warmed player to the detail screen rather than letting it build a second WebView for the same clip; the card gives its own view up while the loan is out, and the borrower never releases what it did not create. | locked 2026-09-11 |
 | D39 | The player cache is bounded at 5 — above the 3-warmed + 2-mounted working set, so the watched player is never evicted. | locked 2026-08-29 |
 | D40 | Evicted players are navigated to a blank page, because webview_flutter 4.x has no `dispose`. | locked 2026-08-29 |
 | D41 | Only the foreground card mounts a WebView; the card behind shows a thumbnail. | locked 2026-08-22 |

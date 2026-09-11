@@ -111,6 +111,11 @@ class RestaurantDetailData {
       priceFrom == null ? null : 'From ${formatRinggit(priceFrom!)}';
 }
 
+/// Where a lent `TikTokPlayerHandle` future rides in the router's `extra`
+/// map (D150). Not part of the data — [RestaurantDetailData.fromPayload]
+/// reads named fields and ignores it — just a seat in the same vehicle.
+const String kLentPlayerKey = 'tiktokPlayer';
+
 extension RestaurantCardDetailPayload on RestaurantCard {
   /// The card as the router's `extra` map, so the detail page opens with the
   /// content already on screen instead of refetching it.

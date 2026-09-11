@@ -358,11 +358,27 @@ Pinned by `dashboard_bottom_nav_test.dart`: no `NearbyTab` or `CalendarTab` in
 the tree at launch, the calendar mounts when its tab is first tapped, and it is
 still there after the user goes back to the deck.
 
-### 5.3 The detail screen reuses the player it already has
+### 5.3 The detail screen reuses the player it already has (D150 — done 2026-09-11)
 
 `restaurant_detail_route.dart:95` → `restaurant_detail_page.dart:110` creates a
 sixth WebView for the clip already playing behind it. Hand the detail screen the
 existing handle.
+
+**Done**, and the page needed no change: `RestaurantDetailPage` already took a
+`tiktokPlayerFuture` and already knew not to release a player it did not
+create — the route simply never passed one. The handle now rides in the
+router's `extra` map under `kLentPlayerKey`, put there by `_openDetail` and
+pulled out by the `/restaurant/:id` builder.
+
+The one real constraint: a `WebViewController` cannot be mounted in two
+`WebViewWidget`s, and the deck's card stays alive under the route. So the card
+gives its clip up for the length of the loan — `SwipeCard.videoLent`, the same
+shape as `DetailHero.videoHiddenForFullscreen`, which is this exact trade made
+once already. Nobody sees the photo it falls back to: the route above it is
+opaque.
+
+Pinned by `swipe_card_test.dart` — a lent card paints no player and no sound
+pill.
 
 ### 5.4 The map's filter sheet stops drawing twice (done 2026-09-11)
 

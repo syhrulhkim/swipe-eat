@@ -112,6 +112,7 @@ Future<void> pumpCard(
   WidgetTester tester,
   RestaurantCard data, {
   bool isBehind = false,
+  bool videoLent = false,
   VoidCallback? onTap,
   VoidCallback? onOpenDetail,
 }) async {
@@ -133,6 +134,7 @@ Future<void> pumpCard(
               tiktokPlayerFuture: data.videoUrl == null
                   ? null
                   : Completer<TikTokPlayerHandle>().future,
+              videoLent: videoLent,
               isBehind: isBehind,
               clock: eightPm,
             ),
@@ -427,6 +429,18 @@ void main() {
         isBehind: true,
       );
 
+      expect(find.text('Tap for sound'), findsNothing);
+    });
+
+    testWidgets('a lent player takes the clip with it (D150)', (tester) async {
+      await pumpCard(
+        tester,
+        card(videoUrl: 'https://tiktok.test/v/1'),
+        videoLent: true,
+      );
+
+      // One controller cannot be mounted in two WebViews, so while the detail
+      // screen holds this card's player the card shows its photo instead.
       expect(find.text('Tap for sound'), findsNothing);
     });
 

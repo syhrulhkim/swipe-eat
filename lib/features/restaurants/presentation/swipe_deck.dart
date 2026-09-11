@@ -70,6 +70,9 @@ class _SwipeDeckState extends State<SwipeDeck>
   /// action bar and both cards — each of which hosts a WebView.
   final ValueNotifier<Offset> _drag = ValueNotifier<Offset>(Offset.zero);
 
+  /// The card whose player the detail screen is holding, if any (D150).
+  int? _lentCardId;
+
   Offset get _dragOffset => _drag.value;
   set _dragOffset(Offset value) => _drag.value = value;
 
@@ -243,13 +246,32 @@ class _SwipeDeckState extends State<SwipeDeck>
 
   /// A tap anywhere on the card: the restaurant's own screen, handed the card
   /// so it paints before the row is refetched.
-  void _openDetail(RestaurantCard card) {
+  Future<void> _openDetail(RestaurantCard card) async {
     // The deck card stays mounted under the opaque detail route. If its clip
     // was unmuted it would keep playing audio behind a hero showing the same
     // clip, so the card's player goes back to silent on the way out.
     _muteCurrentClip();
 
-    context.push('/restaurant/${card.id}', extra: card.toDetailPayload());
+    // And then it hands the player over rather than letting the detail build
+    // a second WebView for the clip already loaded here (D150). The card gives
+    // its clip up while the loan is out, because one controller cannot be
+    // mounted twice — invisible, since the route it is lending to covers it.
+    final lent = _deck.players.peek(card.videoUrl);
+    if (lent != null) {
+      setState(() => _lentCardId = card.id);
+    }
+
+    await context.push<void>(
+      '/restaurant/${card.id}',
+      extra: <String, dynamic>{
+        ...card.toDetailPayload(),
+        if (lent != null) kLentPlayerKey: lent,
+      },
+    );
+
+    if (mounted && _lentCardId != null) {
+      setState(() => _lentCardId = null);
+    }
   }
 
   Widget _buildActionBar() {
@@ -420,8 +442,8 @@ class _SwipeDeckState extends State<SwipeDeck>
         data: next,
         isBehind: true,
         distanceText: _deck.distanceLabelFor(next),
-        onTap: () => _openDetail(next),
-        onOpenDetail: () => _openDetail(next),
+        onTap: () => unawaited(_openDetail(next)),
+        onOpenDetail: () => unawaited(_openDetail(next)),
         tiktokPlayerFuture: _deck.players.warm(next.videoUrl),
       ),
       builder: (context, child) {
@@ -548,9 +570,10 @@ class _SwipeDeckState extends State<SwipeDeck>
           key: ValueKey(current.id),
           data: current,
           distanceText: _deck.distanceLabelFor(current),
-          onTap: () => _openDetail(current),
-          onOpenDetail: () => _openDetail(current),
+          onTap: () => unawaited(_openDetail(current)),
+          onOpenDetail: () => unawaited(_openDetail(current)),
           tiktokPlayerFuture: _deck.players.warm(current.videoUrl),
+          videoLent: _lentCardId == current.id,
         ),
       ),
     );

@@ -148,6 +148,12 @@ reloads and the clip does not restart. D4 still holds — the message is the
 interface TikTok publishes, not a script into their page (D122; see
 [TikTok-Video.md](TikTok-Video.md) §2).
 
+Opened from the deck, the hero plays **the deck's own player**, handed over in
+the router's `extra` (D150) — the clip is already loaded, so the hero shows it
+without the second-long black rectangle a fresh WebView costs, and the phone
+holds one player instead of two. The page owns a player only when it built one
+itself, which is what a deep link still does, and only then does it release it.
+
 The hero frames the clip with `TikTokFraming.hero` — the deck card's 0.07 nudge
 but **no cover**, at a flat 1.03 — where the card uses `.card` and covers its
 box. The hero is barely taller than it is wide, and covering a 9:16 clip in

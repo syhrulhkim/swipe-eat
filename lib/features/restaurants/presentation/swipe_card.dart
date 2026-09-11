@@ -24,6 +24,7 @@ class SwipeCard extends StatefulWidget {
     required this.onTap,
     required this.onOpenDetail,
     this.tiktokPlayerFuture,
+    this.videoLent = false,
     this.isBehind = false,
     this.clock = OpeningHours.kualaLumpurNow,
   });
@@ -38,6 +39,12 @@ class SwipeCard extends StatefulWidget {
   final VoidCallback onOpenDetail;
 
   final Future<TikTokPlayerHandle>? tiktokPlayerFuture;
+
+  /// True while another screen holds this card's player. One controller
+  /// cannot be mounted in two `WebView`s, so the card falls back to its photo
+  /// for as long as the detail screen has it — the same trade the detail hero
+  /// makes for the fullscreen route (D150).
+  final bool videoLent;
 
   final bool isBehind;
 
@@ -179,6 +186,7 @@ class _SwipeCardState extends State<SwipeCard> {
   /// Whether this card is showing a clip — the front card, with a video.
   bool get _showsVideo =>
       !widget.isBehind &&
+      !widget.videoLent &&
       widget.data.videoUrl != null &&
       widget.data.videoUrl!.isNotEmpty;
 
