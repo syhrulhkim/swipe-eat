@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swipe_eat/features/plans/presentation/calendar_tab.dart';
+import 'package:swipe_eat/features/nearby/presentation/nearby_tab.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/auth/state/auth_controller.dart';
 import 'package:swipe_eat/features/dashboard/presentation/dashboard_bottom_nav.dart';
@@ -546,7 +548,7 @@ void main() {
       final handle = tester.ensureSemantics();
       await _pumpLiveNav(tester);
 
-      await tester.tap(find.bySemanticsLabel('Nearby'));
+      await tester.tap(find.bySemanticsLabel('Nearby').last);
       // Walk the whole tween: the pill is narrower than its content for most
       // of it, which is what the clip is for.
       for (var step = 0; step < 8; step++) {
@@ -626,6 +628,40 @@ void main() {
       expect(_visibleTabIndex(tester), 3);
       expect(_drawnLabels(tester), ['Calendar']);
       expect(_pillColor(tester, 3), kAccentEmber);
+      expect(tester.takeException(), isNull);
+
+      handle.dispose();
+    });
+
+    testWidgets('a tab nobody has opened is not mounted, and stays after it is',
+        (tester) async {
+      useViewport(tester, _phoneViewport);
+      final handle = tester.ensureSemantics();
+      await _pumpDashboard(tester);
+
+      // D140: five tabs mounted at launch meant five sets of `initState`
+      // fetches, four of them for screens nobody had opened.
+      expect(find.byType(NearbyTab, skipOffstage: false), findsNothing);
+      expect(find.byType(CalendarTab, skipOffstage: false), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Calendar'));
+      await tester.pump();
+      await tester.pump(kMotionDuration);
+      // One more frame: the reveal is deliberately deferred, so a tab's
+      // `initState` does not fire inside the shell's own build.
+      await tester.pump();
+
+      expect(_visibleTabIndex(tester), 3);
+      expect(find.byType(CalendarTab, skipOffstage: false), findsOneWidget);
+      expect(find.byType(NearbyTab, skipOffstage: false), findsNothing);
+
+      // Back to the deck: the calendar stays mounted, which is the whole
+      // reason the stack is indexed rather than swapped.
+      await tester.tap(find.bySemanticsLabel('Swipe'));
+      await tester.pump();
+      await tester.pump(kMotionDuration);
+
+      expect(find.byType(CalendarTab, skipOffstage: false), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       handle.dispose();

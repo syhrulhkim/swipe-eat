@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../core/ui/design_tokens.dart';
 import '../../auth/state/auth_controller.dart';
@@ -267,9 +268,24 @@ class _DashboardShellState extends State<_DashboardShell>
   }
 
   void _onPlansChanged() {
-    if (mounted) {
-      setState(() {});
+    if (!mounted) {
+      return;
     }
+    // A tab that mounts on first reveal (D140) runs its `initState` inside a
+    // build, and a controller that answers there notifies synchronously. This
+    // shell is that tab's ancestor and has already been built this frame, so
+    // marking it dirty now is an error rather than a late rebuild — the only
+    // thing needed is to want the rebuild one frame later.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+      return;
+    }
+    setState(() {});
   }
 
   void _setSelectedIndex(int index) {
@@ -291,6 +307,8 @@ class _DashboardShellState extends State<_DashboardShell>
         selectedIndex: _selectedIndex,
         onSelected: _setSelectedIndex,
       ),
+      // The four tabs behind the deck are wrapped so they mount the first
+      // time they are looked at (D140) — see [_RevealOnce].
       // An IndexedStack, not a swap: rebuilding a tab on every visit would
       // re-deal the deck and refetch the map each time the user glanced at
       // another tab. The switch itself is instant, so the fade below is what
@@ -313,17 +331,36 @@ class _DashboardShellState extends State<_DashboardShell>
                   // the map.
                   isActive: _selectedIndex == 0,
                 ),
-                NearbyTab(
-                  authController: widget.authController,
-                  handoff: widget.handoff,
+                _RevealOnce(
+                  key: const ValueKey('tab-1'),
+                  revealed: _selectedIndex == 1,
+                  child: NearbyTab(
+                    authController: widget.authController,
+                    handoff: widget.handoff,
+                  ),
                 ),
-                LikesTab(plans: _plans),
-                CalendarTab(controller: _plans, tabRequests: _tabRequests),
-                ProfileTab(
-                  authController: widget.authController,
-                  stats: ProfileStats(
-                    plansKept: _plans.stats.plansKept,
-                    streakWeeks: _plans.stats.streakWeeks,
+                _RevealOnce(
+                  key: const ValueKey('tab-2'),
+                  revealed: _selectedIndex == 2,
+                  child: LikesTab(plans: _plans),
+                ),
+                _RevealOnce(
+                  key: const ValueKey('tab-3'),
+                  revealed: _selectedIndex == 3,
+                  child: CalendarTab(
+                    controller: _plans,
+                    tabRequests: _tabRequests,
+                  ),
+                ),
+                _RevealOnce(
+                  key: const ValueKey('tab-4'),
+                  revealed: _selectedIndex == 4,
+                  child: ProfileTab(
+                    authController: widget.authController,
+                    stats: ProfileStats(
+                      plansKept: _plans.stats.plansKept,
+                      streakWeeks: _plans.stats.streakWeeks,
+                    ),
                   ),
                 ),
               ],
@@ -332,5 +369,58 @@ class _DashboardShellState extends State<_DashboardShell>
         ],
       ),
     );
+  }
+}
+
+/// Holds a tab back until it is first looked at, then keeps it forever.
+///
+/// The `IndexedStack` below mounts every tab at launch, which is what stops a
+/// glance at the map re-dealing the deck — but it also means `initState` runs
+/// for five tabs during the cold start, and four of them fetch. `get_nearby`,
+/// `get_liked_restaurants`, `wishlist_items`, `get_friends` and
+/// `get_friend_requests` all went out for screens nobody had opened.
+///
+/// So: an empty box until `revealed` first goes true, and the real child from
+/// then on, mounted for the rest of the session exactly as before (D140). The
+/// child widget is still *constructed* on every build — that is a couple of
+/// field assignments, and it buys the call sites reading as they did.
+class _RevealOnce extends StatefulWidget {
+  const _RevealOnce({
+    super.key,
+    required this.revealed,
+    required this.child,
+  });
+
+  final bool revealed;
+  final Widget child;
+
+  @override
+  State<_RevealOnce> createState() => _RevealOnceState();
+}
+
+class _RevealOnceState extends State<_RevealOnce> {
+  late bool _seen = widget.revealed;
+
+  @override
+  void didUpdateWidget(_RevealOnce oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_seen || !widget.revealed) {
+      return;
+    }
+    // A frame later, not in this build. Tabs fetch from `initState`, and a
+    // controller that answers synchronously would call `setState` on the
+    // dashboard while the dashboard is still building it — which is an error,
+    // not a style preference. The tab shows an empty box for exactly one
+    // frame, behind a fade that lasts rather longer than that.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_seen) {
+        setState(() => _seen = true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _seen ? widget.child : const SizedBox.shrink();
   }
 }

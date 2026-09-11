@@ -323,7 +323,7 @@ reason — and an attempt to mount it for this hung `flutter_tester` outright
 rather than failing. The change adds no branch: it moves where a repaint is
 requested from.
 
-### 5.2 Tabs load when they are first seen (D140)
+### 5.2 Tabs load when they are first seen (D140 — done 2026-09-11)
 
 `dashboard_page.dart:300-330` uses an `IndexedStack`, which is right: it is what
 stops the deck re-dealing every time the user glances at another tab. The
@@ -333,6 +333,30 @@ problem is what the tabs do in `initState`. All five mount at launch, so
 trips on the cold-start path, three of them wasted.
 
 Load on first reveal instead. Keep the tabs mounted; move the fetch.
+
+**Done**, and more cheaply than "move the fetch": a 25-line `_RevealOnce`
+wrapper around the four tabs behind the deck renders an empty box until its
+index is first selected, then the real tab for the rest of the session. No tab
+had to change, and "mounted once revealed, mounted forever" is the same
+promise the `IndexedStack` was already making.
+
+Two things the first attempt got wrong, both worth the words:
+
+- **The reveal is deferred by one frame.** Tabs fetch from `initState`, and a
+  controller that answers synchronously — `PlansController` does, once the
+  dashboard has loaded it — notifies while the framework is building that tab.
+  The shell is its ancestor and was built earlier in the same frame, so
+  marking it dirty is an error, not a late rebuild. The wrapper schedules the
+  reveal in a post-frame callback, and `_onPlansChanged` defers its own
+  `setState` when a build is in flight. The tab shows an empty box for one
+  frame, behind a fade that lasts a good deal longer.
+- **An unselected tab is offstage**, so `find.byType` skips it. The test pins
+  the behaviour with `skipOffstage: false`, which is the difference between
+  "not mounted" and "not painted".
+
+Pinned by `dashboard_bottom_nav_test.dart`: no `NearbyTab` or `CalendarTab` in
+the tree at launch, the calendar mounts when its tab is first tapped, and it is
+still there after the user goes back to the deck.
 
 ### 5.3 The detail screen reuses the player it already has
 
