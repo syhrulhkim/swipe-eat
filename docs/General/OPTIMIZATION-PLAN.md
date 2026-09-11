@@ -206,7 +206,7 @@ repo files. Live never had it — both were applied by rewriting the stored
 definition, which keeps the attribute — so this was a replay-from-empty bug
 only. Both files are corrected in place.
 
-### 4.3 Open now (D138)
+### 4.3 Open now (D138 — done 2026-09-11)
 
 `deck_scored` already resolves `local_hour` in Asia/Kuala_Lumpur and uses it for
 nothing but `morning_mode`. `opens_at`, `closes_at` and `closed_dow` exist, the
@@ -222,6 +222,31 @@ are unknown, **−0.08** when it is known to be closed.
 delete 89% of the catalogue. That is the D119 lesson, already paid for once.
 
 0.08 only registers once the jitter is at 0.25, which is why this follows §4.1.
+
+**Landed** in `20260911190000_a_place_that_is_shut_ranks_like_it`, as written.
+`is_open_at` is called per candidate row from `deck_scored`'s `candidates`
+CTE, against a moment `ctx` now resolves: `now()` in production, and that hour
+of today in Kuala Lumpur when a caller pins `p_local_hour`, so one argument
+steers both this term and morning mode. Verified by pinning it — at 03:00 the
+top sixty hold 25 rows with hours, at 12:00 they hold 47.
+
+Over a real 522-card 30 km deck (109 open, 44 shut, 369 with no hours), the
+top sixty:
+
+| | Open | Shut | Hours unknown |
+|---|---|---|---|
+| Before | 24 | 13 | 23 |
+| After | **42** | **5** | 13 |
+
+The rows known to be shut mostly leave, which is the point; the rows with no
+hours pay for it, which is the honest cost. They rank below a place known to
+be open and above one known to be shut, both of which are true statements —
+the third line moves when hours coverage moves, not when the weight shrinks
+(§10.4).
+
+`is_open_at` is plpgsql, so it cannot be inlined and runs once per candidate:
+31.5 ms mean → 33.6 ms over 20 runs. Two milliseconds for a term the user can
+act on.
 
 ### 4.4 A pass comes back gently (D139)
 
@@ -532,7 +557,9 @@ translation to a one-sided market.
    device question. Needs a device before it can be promised.
 4. **Where ratings and hours come from.** §7.4 starts collecting ratings from
    people who actually went, but 1,424 rows still have no hours, which caps how
-   much §4.3 can ever be worth.
+   much §4.3 can ever be worth — and now costs them: since D138 a row with no
+   hours ranks 0.08 below one known to be open, so poor coverage is no longer
+   merely a missing chip.
 5. **What a review is, exactly.** Three answers §7.4 cannot invent for itself:
    the scale (thumbs, or 1–5), whether one person's review is visible to anyone
    but them, and whether `restaurants.rating` becomes a blend of real reviews or

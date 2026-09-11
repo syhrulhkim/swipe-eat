@@ -115,7 +115,15 @@ run of the ranker (D142).
 | Rating | 0.15 | `least(rating, 5) / 5`, **only when `rating > 0`** |
 | Taste | 0.25 | A block: 0.60 × the cuisine's **like rate** for this user, `(likes + 2 × prior) / (swipes + 2)` over deck swipes only, with prior 1 for an onboarding pick and 0 otherwise (D136), +0.25 when `morning_mode` and the local hour is before 11 and the place is breakfasty, +0.15 scaled by how close its spice level sits to the profile's `spice_bias` |
 | Dietary | 0.10 | The place carries a tag the profile asked for |
+| Open now | **±0.08** | `is_open_at` in Asia/Kuala_Lumpur: +0.08 open, −0.08 known to be shut, **0 when the hours are unknown** — which is 88% of the catalogue, and a term that read that null as "closed" would punish a gap in the data (D138) |
 | Exploration | 0.175 **+ 0.075** | `deck_jitter(id, seed)`. The extra 0.075 is added **when the row is unrated**, so an unrated row hands the rating's weight to exploration instead of being scored as a zero. Halved by D137 once the clustering it was hiding had an explicit fix |
+
+Open-now is never a filter. 1,424 of the 1,605 active rows have no hours at
+all, so filtering would delete the catalogue — D119 is the receipt for that
+lesson. Over a real 522-card 30 km deck the term moves the top sixty from 24
+open / 13 shut / 23 unknown to **42 / 5 / 13**: the rows known to be shut
+mostly leave, and the rows with no hours pay for it. That last line is a data
+problem, not a weight problem.
 
 Every deck swipe also writes two columns nothing reads yet: `dwell_ms`, how
 long the card sat on top, and `unmuted`, whether its clip had sound on at the

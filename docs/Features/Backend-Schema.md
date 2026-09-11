@@ -611,8 +611,9 @@ production.
 - **A `ratings` aggregate trigger** — `rating` is scraped, not computed.
 - **User-authored reviews** — `reviews.user_id` is a hook with no write path.
 - ~~**Price and opening-hours columns**~~ — built 2026-09-05 (D91). The columns
-  exist, `is_open_at` powers `get_nearby`'s `open_now`, and `deck_scored`
-  applies the budget ceiling. What is out of scope now is *more coverage*: only
+  exist, `is_open_at` powers `get_nearby`'s `open_now` and, since D138,
+  `deck_scored`'s ±0.08 open-now term, and `deck_scored` applies the budget
+  ceiling. What is out of scope now is *more coverage*: only
   the captions that carry hours or a price can fill them.
 - **Realtime** — nothing is collaborative yet; group dining would be first.
 
