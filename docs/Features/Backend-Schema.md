@@ -91,7 +91,7 @@ skill:
 | `details` | `text` not null `''` | |
 | `brand_color` | `text` not null `'#141922'` | Hex; the client parses to `Color`. Falls back to a neutral panel grey when unreadable |
 | `rating` | `numeric(2,1)` not null `0` | **Only 2 rows are non-zero, and both are inactive.** No dealt card has a rating. See [Restaurant-Data.md](Restaurant-Data.md) |
-| `latitude` / `longitude` | `double precision` not null | `0,0` means "unknown" — 474 rows are still there |
+| `latitude` / `longitude` | `double precision` not null | `0,0` means "unknown" — 474 rows are still there. Indexed as a pair, partial on `is_active`, for the bounding box both distance queries filter through (D141) |
 | `video_url` | `text` | The TikTok post. The stable identity of a row; never rewritten |
 | `is_active` | `boolean` not null `true` | |
 | `created_at` | `timestamptz` not null `now()` | |
@@ -599,7 +599,7 @@ production.
 
 ## 8. Out of scope
 
-- **PostGIS** — `haversine_km` is enough at this row count (D9).
+- **PostGIS** — `haversine_km` behind a bounding box and an ordinary btree is enough at this row count (D9, D141).
 - **A `ratings` aggregate trigger** — `rating` is scraped, not computed.
 - **User-authored reviews** — `reviews.user_id` is a hook with no write path.
 - ~~**Price and opening-hours columns**~~ — built 2026-09-05 (D91). The columns

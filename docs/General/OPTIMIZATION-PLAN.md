@@ -252,7 +252,7 @@ name.
 
 ## 6. Phase 3 — Database structure
 
-### 6.1 Distance stops being a full scan (D141)
+### 6.1 Distance stops being a full scan (D141 — done 2026-09-11)
 
 There is **no geographic index of any kind** in the project — no PostGIS, no
 earthdistance, no cube, no GiST, nothing. `haversine_km` is a function call in a
@@ -263,6 +263,25 @@ sequential scans of the whole catalogue.
 Add a bounding-box predicate on latitude and longitude plus one btree over the
 pair, and keep haversine as the exact filter inside the box. PostGIS stays out
 of scope (D9); this is the cheap version of the same idea.
+
+Landed in `20260911150000_the_box_before_the_circle`, one partial index on
+`(latitude, longitude) where is_active` plus the predicate in `deck_scored` and
+`get_nearby`. `search_restaurants` was left alone: the audit found it has no
+production caller. Measured, twenty warm calls each:
+
+| Call | Before | After |
+|---|---|---|
+| `get_nearby(3 km)` | 15.41 ms | **5.66 ms** |
+| `get_deck(30 km)` | 26.89 ms | 25.10 ms |
+| `get_deck(500 km)` | 28.00 ms | 32.13 ms |
+
+The map is the win, because its whole answer is the circle. The deck barely
+moves, because ranking is most of its work either way. At 500 km the box covers
+the catalogue and the planner takes the index anyway, paying for a scan it
+cannot narrow — no radius the app offers is near that, and a null radius skips
+the predicate entirely. The distance filter in isolation goes 3.99 ms → 0.49 ms
+at 30 km. Correctness first: 120 random origins at random radii, function row
+count against a raw haversine count, zero mismatches.
 
 ### 6.2 The deck stops carrying the whole catalogue (D142 — done 2026-09-11)
 
