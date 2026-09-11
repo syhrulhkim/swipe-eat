@@ -108,6 +108,14 @@ catalogue has run dry. Both buckets are read off one scoring pass and sorted
 together, unseen cards first, so topping up costs a filter rather than a second
 run of the ranker (D142).
 
+A resurfaced pass no longer returns at the score it left with. Above the
+three-day floor it comes back at `score × least(1, age_days / 7)` (D139), so a
+four-day-old pass is quiet and a month-old one is at full strength. The floor
+stays a hard cut rather than becoming part of the curve: a decayed score near
+zero would otherwise ride the jitter straight back to the top of a thin deck.
+On an exhausted deck whose passes ranged 4 to 33 days old, this emptied the
+top thirty of everything younger than a week.
+
 | Signal | Weight | How |
 |---|---|---|
 | Proximity | 0.30 | `2^(−km / 12)` — half-life **12 km**. ×1.5 when `nearby_focus` is on. Unknown location gets 0.5; a row with no origin to measure from gets 0 |

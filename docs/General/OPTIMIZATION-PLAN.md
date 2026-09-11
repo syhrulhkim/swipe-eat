@@ -248,7 +248,7 @@ the third line moves when hours coverage moves, not when the weight shrinks
 31.5 ms mean → 33.6 ms over 20 runs. Two milliseconds for a term the user can
 act on.
 
-### 4.4 A pass comes back gently (D139)
+### 4.4 A pass comes back gently (D139 — done 2026-09-11)
 
 Three rules, currently collapsed into one.
 
@@ -263,6 +263,21 @@ Three rules, currently collapsed into one.
   this phase — see §8.
 
 D135 already fixed the column this window measures from.
+
+**Landed** in `20260911200000_a_pass_comes_back_gently`, as written. A
+`decayed` CTE sits between `scored` and the diversity penalty, so the penalty
+counts positions in the order the user will actually see. `greatest(score, 0)`
+guards the multiply: D138's penalty can in principle take a signal-less row
+below zero, and multiplying a negative by a fraction raises it.
+
+Two checks. **A deck that is not exhausted is untouched** — two argument sets
+hash identically with the decay reverted inside a rolled-back transaction,
+which is what "only bucket 1, and bucket 0 sorts first" should mean. And on a
+genuinely exhausted deck — every one of 522 candidates passed, ages spread
+from 4 to 33 days, backdated with the `swipes_touch_updated_at` trigger
+disabled inside a rolled-back transaction — the top thirty hold **0** cards
+younger than a week where the undecayed order held 4, and the mean age of the
+thirty rises from 18.0 to 20.3 days.
 
 ### 4.5 What Phase 1 does not change
 
