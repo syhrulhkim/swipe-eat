@@ -69,6 +69,7 @@ reasoning first.
 | Understand the product and its architecture | [General/PLAN.md](General/PLAN.md) |
 | Run, build or deploy it | [General/RUNBOOK.md](General/RUNBOOK.md) |
 | See every decision in one place | [General/DECISIONS.md](General/DECISIONS.md) |
+| See what is planned next, and why | [General/OPTIMIZATION-PLAN.md](General/OPTIMIZATION-PLAN.md) |
 | Understand the database | [Features/Backend-Schema.md](Features/Backend-Schema.md) |
 | Work on the core swipe experience | [Features/Swipe-Deck.md](Features/Swipe-Deck.md) |
 | Ship to the stores | [Release/STORE.md](Release/STORE.md) |

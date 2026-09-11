@@ -1,7 +1,7 @@
 Status: ACTIVE
 Owner: Swipe Eat team
 Last updated: 2026-09-10
-Cross-references: [RUNBOOK.md](RUNBOOK.md), [DECISIONS.md](DECISIONS.md), [Features/Backend-Schema.md](../Features/Backend-Schema.md), [Features/Swipe-Deck.md](../Features/Swipe-Deck.md), [Features/Friends.md](../Features/Friends.md), [../README.md](../README.md)
+Cross-references: [RUNBOOK.md](RUNBOOK.md), [DECISIONS.md](DECISIONS.md), [OPTIMIZATION-PLAN.md](OPTIMIZATION-PLAN.md), [Features/Backend-Schema.md](../Features/Backend-Schema.md), [Features/Swipe-Deck.md](../Features/Swipe-Deck.md), [Features/Friends.md](../Features/Friends.md), [../README.md](../README.md)
 
 # Product & Architecture Plan
 
