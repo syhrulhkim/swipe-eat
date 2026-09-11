@@ -181,10 +181,12 @@ class _CalendarTabState extends State<CalendarTab> {
           coverUrl: entry.value.first.coverUrl,
           planCount: entry.value.length,
           // Each plan can bring friends; the grid shows one cream pip per
-          // unique friend involved that day.
+          // unique friend still coming that day. Declined guests are left out,
+          // the same rule the row's avatar stack applies.
           friendCount: {
             for (final plan in entry.value)
-              for (final member in plan.members) member.userId,
+              for (final member in plan.members)
+                if (member.status != 'declined') member.userId,
           }.length,
           initials: entry.value.first.initials,
         ),

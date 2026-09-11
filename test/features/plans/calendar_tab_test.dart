@@ -547,6 +547,38 @@ void main() {
       expect(find.text('NA'), findsNothing);
     });
 
+    testWidgets('somebody who said no leaves no pip on the day either',
+        (tester) async {
+      await _pumpTab(
+        tester,
+        rows: [
+          testPlan(
+            1,
+            // Today, so the grid's only marked cell is this one: today's lone
+            // dot is drawn only on a day with no pips.
+            date: DateTime(2026, 9, 2),
+            hour: 20,
+            name: 'Warung Kak Ros',
+            members: const [
+              PlanMember(userId: 'aiman', status: 'going'),
+              PlanMember(userId: 'nadia', status: 'declined'),
+            ],
+          ),
+        ],
+      );
+
+      // One ember pip for the plan and one cream pip for Aiman. Nadia said no,
+      // so she is absent from the grid exactly as she is from the faces.
+      final pips = find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration! as BoxDecoration).shape == BoxShape.circle &&
+            widget.constraints?.maxWidth == kCalendarDotSize,
+      );
+      expect(pips, findsNWidgets(2));
+    });
+
     testWidgets('the count is right before the faces arrive', (tester) async {
       // The line is read off `plan.members`, which the plan itself carries, so
       // a roster that never lands costs the faces and nothing else.
