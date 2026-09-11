@@ -400,9 +400,10 @@ one so a cached deck says the same thing a fresh one would.
 | State | Shown |
 |---|---|
 | Loading | Skeleton, not a spinner over an empty deck |
-| Exhausted | `"No more cards"` — nothing else; there is no rewind to offer |
+| Exhausted | `"No more cards"`, plus what Reload actually does — it brings back places skipped a few days ago — and **Widen the search**, which opens the discovery sheet that owns the radius (D144). There is still no rewind to offer |
 | Error | Message + retry, sequenced through `_loadGeneration` |
 | Stale | The deck plus a visible staleness label |
+| Rules leave nothing | Names the rule that emptied the deck, and offers **Change the rules** beside Reload — the same tap, for the same reason (D144) |
 | Nothing in radius | Uses `nearest_restaurant_km` to say how far the nearest place actually is |
 
 ## 8. Known gaps

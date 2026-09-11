@@ -376,8 +376,12 @@ class _SwipeDeckState extends State<SwipeDeck>
           eyebrow: 'Nothing dealt',
           title: 'Your rules leave nothing here',
           subtitle: '${_sentenceList(rules)} rules out everything we know '
-              'about nearby. Loosen one in Settings and the deck fills again.',
+              'about nearby. Loosen one and the deck fills again.',
           actionLabel: 'Reload',
+          // The same tap, for the same reason: the sentence names the rule,
+          // so the screen that owns the rule should be next to it (D144).
+          secondaryActionLabel: 'Change the rules',
+          onSecondaryAction: () => unawaited(_openFilters()),
           art: AppMotion.pin,
         );
       }
@@ -399,8 +403,16 @@ class _SwipeDeckState extends State<SwipeDeck>
       return _messageCard(
         eyebrow: 'That is everyone',
         title: 'No more cards',
-        subtitle: 'Reload to keep swiping.',
+        // Say what Reload does (D144). Places the user skipped a few days ago
+        // come back, and an unexplained reappearance is exactly what reads as
+        // a bug. And the honest reason a deck runs out is almost always the
+        // radius, so the sheet that owns it is one tap from the sentence
+        // saying so.
+        subtitle: 'Reload brings back places you skipped a few days ago. '
+            'Widening the search finds new ones.',
         actionLabel: 'Reload deck',
+        secondaryActionLabel: 'Widen the search',
+        onSecondaryAction: () => unawaited(_openFilters()),
         art: AppMotion.heart,
       );
     }

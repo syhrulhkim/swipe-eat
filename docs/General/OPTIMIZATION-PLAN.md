@@ -494,7 +494,7 @@ deliberately.
 
 ## 7. Phase 4 — Features
 
-### 7.1 The end of the deck gets exits (D144)
+### 7.1 The end of the deck gets exits (D144 — done 2026-09-11)
 
 The screen exists: `swipe_deck.dart:363` renders "That is everyone" / "No more
 cards" / "Reload to keep swiping" with a single Reload action. Recycling old
@@ -510,6 +510,14 @@ Two changes, per the owner's answer:
   An unexplained reappearance is precisely what reads as a bug.
 
 Wishlist and Make-a-plan exits were offered and not taken.
+
+**Done**, in `swipe_deck.dart`, and it cost nothing structural: `_messageCard`
+already took a secondary action that nothing passed. The exhausted card now
+reads "Reload brings back places you skipped a few days ago. Widening the
+search finds new ones." with **Widen the search** opening the discovery sheet.
+The rules-emptied state gets **Change the rules** beside its Reload, on the
+same argument — its sentence already named the rule, and the screen that owns
+the rule was two taps away through the header.
 
 This is the one-sided market's honest answer to a like limit: the session ends
 because you have seen everything near you, not because you spent an allowance.
@@ -637,11 +645,16 @@ translation to a one-sided market.
    much §4.3 can ever be worth — and now costs them: since D138 a row with no
    hours ranks 0.08 below one known to be open, so poor coverage is no longer
    merely a missing chip.
-5. **What a review is, exactly.** Three answers §7.4 cannot invent for itself:
-   the scale (thumbs, or 1–5), whether one person's review is visible to anyone
-   but them, and whether `restaurants.rating` becomes a blend of real reviews or
-   stays the imported number with user reviews kept beside it. **Asked before
-   §7.4 starts**, not during.
+5. ~~**What a review is, exactly.**~~ **Answered 2026-09-11: 1–5 stars,
+   visible to friends, and `restaurants.rating` becomes the average of those
+   stars.** So §7.4 builds a star scale rather than thumbs, a friends-visible
+   reviews block on the detail screen, and a write path that moves the rating
+   column from imported-and-dead to earned. Two things that answer brings with
+   it and the plan did not have before: friend visibility means `reviews` needs
+   an RLS policy shaped like the friendship one, and a user-written line that
+   other people can read is the app's first piece of user-generated content
+   that leaves its author — which the store listing and the privacy page both
+   have to say.
 6. **`halal_only` is a wall, not a filter.** Found while measuring §4.2: with
    the flag on, the one real profile has **8** candidates inside 30 km and has
    already swiped all of them, so its deck is empty. `is_halal` is set on a
