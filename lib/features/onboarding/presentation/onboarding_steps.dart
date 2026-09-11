@@ -40,7 +40,9 @@ class OnboardingYouStep extends StatelessWidget {
           child: CircleAvatar(
             radius: 42,
             backgroundColor: kSurfacePanel,
-            backgroundImage: url == null ? null : NetworkImage(url),
+            backgroundImage: url == null
+                ? null
+                : ResizeImage(NetworkImage(url), width: cachePx(context, 84)),
             child: url != null
                 ? null
                 : const Icon(

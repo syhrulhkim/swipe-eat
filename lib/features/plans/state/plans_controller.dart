@@ -207,8 +207,12 @@ class PlansController extends ChangeNotifier {
         debugPrint('Marking past plans kept failed: $error');
       }
 
-      final rows = await _repository.list(from: firstOfMonth(today));
-      final stats = await _repository.stats(today);
+      // Two reads with nothing between them: one round trip, not two. The
+      // flip above has to land first, because both of these read its result.
+      final (rows, stats) = await (
+        _repository.list(from: firstOfMonth(today)),
+        _repository.stats(today),
+      ).wait;
       if (generation != _generation) {
         return;
       }

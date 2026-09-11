@@ -56,7 +56,13 @@ class FriendAvatar extends StatelessWidget {
             : Border.all(color: border, width: borderWidth),
         image: url == null
             ? null
-            : DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
+            : DecorationImage(
+                image: ResizeImage(
+                  NetworkImage(url),
+                  width: cachePx(context, size),
+                ),
+                fit: BoxFit.cover,
+              ),
       ),
       alignment: Alignment.center,
       child: url != null

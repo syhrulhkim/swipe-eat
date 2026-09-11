@@ -49,7 +49,7 @@ class WishlistPage extends StatefulWidget {
 
 class _WishlistPageState extends State<WishlistPage> {
   late final WishlistController _controller =
-      widget.controller ?? WishlistController();
+      widget.controller ?? WishlistController.instance;
   final TextEditingController _input = TextEditingController();
 
   late final PlansController _plans = widget.plans ?? PlansController.instance;
@@ -57,9 +57,6 @@ class _WishlistPageState extends State<WishlistPage> {
   late final FriendsController _friends =
       widget.friends ?? FriendsController.instance;
 
-  /// True only when this page made the controller, so an injected one outlives
-  /// the route the way its owner expects.
-  late final bool _ownsController = widget.controller == null;
 
   /// The last error already shown, so one failure raises one snackbar rather
   /// than a fresh one on every rebuild.
@@ -98,9 +95,6 @@ class _WishlistPageState extends State<WishlistPage> {
   void dispose() {
     _controller.removeListener(_onControllerChanged);
     _input.dispose();
-    if (_ownsController) {
-      _controller.dispose();
-    }
     super.dispose();
   }
 

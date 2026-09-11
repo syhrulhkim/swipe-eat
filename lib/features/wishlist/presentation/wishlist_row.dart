@@ -118,6 +118,7 @@ class _Thumb extends StatelessWidget {
         ? const ColoredBox(color: kSurfacePanel)
         : Image.network(
             photo,
+            cacheWidth: cachePx(context, kWishThumbSize),
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) =>
                 const ColoredBox(color: kSurfacePanel),

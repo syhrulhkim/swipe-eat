@@ -14,6 +14,13 @@ class WishlistController extends ChangeNotifier {
   WishlistController({WishlistRepository? repository})
       : _repository = repository ?? WishlistRepository();
 
+  /// The one copy the app shares. The detail page and the Wishlist screen used
+  /// to each build their own and refetch the whole list per open; one list,
+  /// loaded once, is what every other account-scoped controller here does.
+  /// Emptied on sign-out by [LikesController.reset], which already watches
+  /// auth for the same reason.
+  static final WishlistController instance = WishlistController();
+
   final WishlistRepository _repository;
 
   List<WishlistItem> _items = const [];

@@ -66,7 +66,10 @@ people, and four options are agreed on faster than 1 440.
 calendar records intent, and intent that survived to the day counts. The flip
 is server-side, in `mark_plan_kept()`, and the client calls it on every load
 before it lists (`PlansController.refresh`). A failed flip is not a failed
-load: the calendar is still readable and the next launch fixes the status.
+load: the calendar is still readable and the next launch fixes the status. The
+flip goes first because the list and the stats both read its result; those two
+then go out **together** (`(list, stats).wait`, D151) — the refresh is two
+round trips, not three.
 
 **Since D147 the assumption gets checked.** It stays an assumption — the flip
 happens on load, unprompted — but the next launch after a plan's day asks *did

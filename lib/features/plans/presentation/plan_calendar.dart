@@ -361,7 +361,10 @@ class _PlannedThumb extends StatelessWidget {
           image: cover == null || cover.isEmpty
               ? null
               : DecorationImage(
-                  image: NetworkImage(cover),
+                  image: ResizeImage(
+                    NetworkImage(cover),
+                    width: cachePx(context, kCalendarDaySize),
+                  ),
                   fit: BoxFit.cover,
                 ),
         ),

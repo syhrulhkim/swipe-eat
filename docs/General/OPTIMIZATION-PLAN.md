@@ -398,7 +398,7 @@ the map's copy had drifted. It now holds the written row and applies it once, in
 `finally`, exactly as the deck does. Pinned by
 `test/features/nearby/nearby_discovery_apply_test.dart`.
 
-### 5.5 Carried, not yet scheduled
+### 5.5 Carried — settled 2026-09-11 (D151)
 
 Recorded with file and line in the audit, worth doing but not in this round:
 image decode sizing (13 sites, no `cacheWidth` anywhere), no disk image cache,
@@ -407,6 +407,17 @@ the wishlist refetched per detail open, three sequential RPCs in
 keystroke, and the Bites grid's `get_liked_restaurants` fetching 200 rows with
 every review body and dish row attached to paint a grid that shows a photo and a
 name.
+
+**Three done, three declined, all six settled.**
+
+| Item | Outcome |
+|---|---|
+| Image decode sizing | **Done.** `cachePx(context, size)` on the ten small sites; `ResizeImage` where the image is a `DecorationImage`. The card, the hero and the sign-in cover are left at source size — that *is* their paint size. |
+| Wishlist refetched per detail open | **Done.** `WishlistController.instance`, emptied on sign-out through `LikesController.reset`. One list per run instead of one per bookmark. |
+| Three sequential RPCs in `plans.refresh()` | **Done.** Two round trips: the flip, then `(list, stats).wait`. Both reads depend on the flip, so it cannot join them. |
+| The two `ListView(children:)` sites | **Declined — the audit was wrong.** `ListView(children:)` uses `SliverChildListDelegate`, which builds elements lazily; only visible rows are laid out. What a keystroke costs is constructing tens of `PersonRow` *objects*, which is not a cost. A builder would be a diff with no measurement behind it. |
+| Bites grid over-fetch | **Declined for now.** `dishes` has 0 rows and all 6 `reviews` sit on inactive restaurants, so the two embeds add two empty arrays per row today. A narrow column list would also have to drop `details`, which the detail screen shows when it is opened from the grid with its payload. Worth taking the day either table has rows. |
+| Disk image cache | **Declined for now.** `cached_network_image` is a dependency, and the case for it is a cold-start measurement nobody has taken. |
 
 ## 6. Phase 3 — Database structure
 

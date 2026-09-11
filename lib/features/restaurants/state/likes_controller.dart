@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../wishlist/data/wishlist_repository.dart';
+import '../../wishlist/state/wishlist_controller.dart';
 import '../data/restaurant_repository.dart';
 import '../data/swipe_repository.dart';
 import '../models/restaurant.dart';
@@ -325,6 +326,9 @@ class LikesController extends ChangeNotifier {
   /// signed in then.
   void reset() {
     _generation++;
+    // The wishlist is account state too, and it has no auth watcher of its
+    // own; this is the one place sign-out is already observed.
+    WishlistController.instance.reset();
     _liked = const [];
     _likedIds = <int>{};
     _laterIds = <int>{};

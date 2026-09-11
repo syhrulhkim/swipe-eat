@@ -194,6 +194,7 @@ class _Blob extends StatelessWidget {
                   )
                 : Image.network(
                     coverUrl,
+                    cacheWidth: cachePx(context, size),
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) =>
                         TikTokThumbnailPlaceholder(

@@ -154,6 +154,7 @@ not the row number.
 | D58 | Repositories resolve `Supabase.instance` per call, not in their constructor, so widgets are testable without an initialised client. | [Frontend/STACK](../Frontend/STACK.md) | locked 2026-08-29 |
 | D59 | Catches name their exception type; `AuthRepository` maps each to an actionable sentence. | [Frontend/STACK](../Frontend/STACK.md) | locked 2026-08-29 |
 | D60 | Platform-channel dependencies are constructor-injected with defaults, because `flutter test` has no implementation for them. | [Frontend/STACK](../Frontend/STACK.md) | locked 2026-08-29 |
+| D151 | **The wishlist is one shared instance, independent reads go out together, and a small thumbnail decodes at the size it is painted.** The three of §5.5's six carried items that were worth a diff. `WishlistController.instance` replaces a fresh controller per detail open and per Wishlist screen, so the list loads once per run and is emptied by `LikesController.reset` — the one place sign-out is already observed — rather than growing an auth watcher of its own. `PlansController.refresh` awaits `(list, stats).wait` after the one write both depend on. Every small `Image.network` passes `cacheWidth: cachePx(context, size)` and every small `DecorationImage` wraps `ResizeImage`; the full-bleed card and hero are left alone because their paint size is their source size. **Three were not worth one.** The two `ListView(children:)` sites: `SliverChildListDelegate` already builds elements lazily, so the per-keystroke cost is constructing tens of widget objects, not laying them out — the audit's claim was wrong. The Bites grid's "over-fetch": with `dishes` at 0 rows and all 6 `reviews` on inactive restaurants, the two embeds add two empty arrays per row today, and a narrow column list would drop `details`, which the detail screen shows; worth doing when either table has rows. A disk image cache: a new dependency, waiting on a cold-start measurement. | [Frontend/STACK](../Frontend/STACK.md) | locked 2026-09-11 |
 | D101 | **Superseded by D126 2026-09-10.** The map is `flutter_map` with a **constructor-injected** `TileProvider`. The OpenStreetMap default is development only under their usage policy; production swaps a URL template, and tests pass a fake so the suite never reaches the network. | [Nearby-Map](../Features/Nearby-Map.md) | locked 2026-09-05 |
 
 ## Design system
@@ -223,6 +224,6 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D150**;
+   ID must keep meaning the same thing. The highest ID in use is **D151**;
    D144–D148 are reserved by
    [OPTIMIZATION-PLAN.md](OPTIMIZATION-PLAN.md) and land as their phases do.

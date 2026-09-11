@@ -620,7 +620,10 @@ class _Avatar extends StatelessWidget {
         image: photo == null
             ? null
             : DecorationImage(
-                image: NetworkImage(photo),
+                image: ResizeImage(
+                  NetworkImage(photo),
+                  width: cachePx(context, kProfileAvatarSize),
+                ),
                 fit: BoxFit.cover,
               ),
       ),

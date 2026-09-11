@@ -78,8 +78,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
       widget.repository ?? RestaurantRepository();
 
   late final WishlistController _wishlist =
-      widget.wishlist ?? WishlistController();
-  late final bool _ownsWishlist = widget.wishlist == null;
+      widget.wishlist ?? WishlistController.instance;
 
   late final FriendsController _friends =
       widget.friends ?? FriendsController.instance;
@@ -141,9 +140,6 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
     LikesController.instance.removeListener(_onControllerChanged);
     _wishlist.removeListener(_onControllerChanged);
     _friends.removeListener(_onControllerChanged);
-    if (_ownsWishlist) {
-      _wishlist.dispose();
-    }
     if (_ownsPlayer) {
       final player = _playerFuture;
       if (player != null) {

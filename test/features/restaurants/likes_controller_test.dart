@@ -7,6 +7,8 @@ import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
 import 'package:swipe_eat/features/wishlist/models/wishlist_item.dart';
 
 import '../wishlist/fake_wishlist_repository.dart';
+import 'package:swipe_eat/features/wishlist/state/wishlist_controller.dart';
+
 import 'fake_restaurant_repositories.dart';
 
 /// Drives the controller's auth subscription without a Supabase singleton.
@@ -239,6 +241,19 @@ void main() {
       expect(controller.isLoaded, isFalse);
       expect(controller.liked, isEmpty);
       expect(controller.isLiked(7), isFalse);
+    });
+
+    test('takes the shared wishlist down with it', () {
+      // The wishlist has no auth watcher of its own; sign-out reaches it
+      // through here. A page that mounted it before would otherwise show the
+      // last account's places to the next one.
+      final wishlist = WishlistController.instance;
+      expect(wishlist.isLoaded, isFalse, reason: 'nothing else loads it here');
+
+      controller.reset();
+
+      expect(wishlist.isLoaded, isFalse);
+      expect(wishlist.items, isEmpty);
     });
 
     test('a refresh already in flight cannot publish into the next account',

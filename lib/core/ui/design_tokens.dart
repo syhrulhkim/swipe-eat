@@ -1372,6 +1372,15 @@ const double kPickedBarStackWidth = 340;
 /// row and anywhere else people are counted rather than chosen.
 const double kAvatarSize = 32;
 
+/// The decode width for an image painted at [logicalPx] on this screen.
+///
+/// `Image.network` with no `cacheWidth` decodes the source at its own size —
+/// a 1200 px photo becomes ~7 MB of pixels in the image cache to paint a 40 dp
+/// thumbnail. Every small-thumbnail site passes this so the cache holds what is
+/// drawn, not what was uploaded. Rounded up: a decode one pixel short blurs.
+int cachePx(BuildContext context, double logicalPx) =>
+    (logicalPx * MediaQuery.devicePixelRatioOf(context)).ceil();
+
 /// `.person .avatar{width:44px}` — the face on a row you can tap. It is
 /// [kMinTapTarget] on purpose: the row's height comes from its avatar, so the
 /// target is the picture.

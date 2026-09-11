@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Friends.md](Friends.md), [Likes-Visits.md](Likes-Visits.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
 # Wishlist
@@ -133,7 +133,11 @@ WishlistPage  →  WishlistController  →  WishlistRepository  →  wishlist_it
 - **`WishlistController`** is optimistic throughout: every toggle, add, remove
   and clear paints first and writes second, and puts the old state back with a
   message if the write is refused. A checklist that waits for a server before
-  ticking feels broken.
+  ticking feels broken. It is **one shared instance** since D151
+  (`WishlistController.instance`): the page and the restaurant screen used to
+  each build their own, so every detail open refetched the whole list to answer
+  one bookmark. The list loads once per run now and is emptied on sign-out
+  through `LikesController.reset`, the one place auth is already watched.
 - **`WishlistPage`** owns its scaffold (`kBackgroundDark` + `ScreenGlow` +
   `SafeArea`), not `DashboardTabShell` — it is pushed, so it has a back button
   where a tab has a title. It also holds a `FriendsController` (injected, else

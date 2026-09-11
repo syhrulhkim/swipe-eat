@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](../General/RUNBOOK.md), [Tests/CONVENTIONS.md](../Tests/CONVENTIONS.md)
 
 # Frontend Stack & Conventions
@@ -112,6 +112,16 @@ Conventions the controllers follow:
   `Supabase.instance` per call rather than in their constructor, so a page can
   be built in a test without an initialised client — and the failure belongs to
   the request, where it can be caught and retried.
+- **Account state is one shared instance.** `LikesController.instance`,
+  `FriendsController.instance`, `PlansController.instance`,
+  `WishlistController.instance` (since D151 — the detail page and the Wishlist
+  screen each used to build their own and refetch the list per open). Pages
+  take the instance as a constructor default and tests inject a fake. Sign-out
+  reaches them all through `LikesController.reset`, which is the one place the
+  auth stream is watched.
+- **Independent reads go out together.** `PlansController.refresh` awaits
+  `(list, stats).wait` after the one write both depend on, not one after the
+  other. Two RPCs with nothing between them is one round trip, not two.
 
 ## 4. Routing
 
@@ -190,6 +200,18 @@ undo the redesign (D8):
   next to the files.
 - **Lottie** — `assets/lottie/`, a few KB each. Deliberately small and
   abstract: a spinner, a heart, a location pulse. Not illustrations.
+
+Network images are not assets, but the one rule about them lives here: **a
+small thumbnail decodes at the size it is painted.** `Image.network` with no
+`cacheWidth` decodes the source at its own size — a 1200 px photo is ~7 MB of
+pixels in the image cache to paint a 40 dp thumbnail, and the cache is 100 MB.
+Every small site (avatars, wishlist and dish thumbs, plan logos, calendar
+rings, map pins, the Bites tile) passes `cacheWidth: cachePx(context, size)`,
+or wraps a `NetworkImage` in `ResizeImage` where it is a `DecorationImage`
+(D151). Full-bleed photos — the card, the hero — are left alone: their paint
+size is the source size. There is still **no disk cache**; a cold start
+re-downloads every thumbnail. `cached_network_image` is the fix, and it is a
+dependency, so it waits for a cold-start measurement that says it is worth one.
 
 ## 8. Out of scope
 

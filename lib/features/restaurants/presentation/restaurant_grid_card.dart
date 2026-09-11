@@ -91,6 +91,12 @@ class RestaurantGridCard extends StatelessWidget {
                     else
                       Image.network(
                         photoUrl,
+                        // A two-column tile: half the screen is an upper
+                        // bound, and over is safe where under would blur.
+                        cacheWidth: cachePx(
+                          context,
+                          MediaQuery.sizeOf(context).width / 2,
+                        ),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return TikTokThumbnailPlaceholder(

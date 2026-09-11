@@ -408,6 +408,7 @@ class _PickedSummary extends StatelessWidget {
                 ? null
                 : Image.network(
                     cover,
+                    cacheWidth: cachePx(context, kWishThumbSize),
                     fit: BoxFit.cover,
                     errorBuilder: (context, _, __) => const SizedBox.shrink(),
                   ),

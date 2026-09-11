@@ -753,6 +753,7 @@ class _PlanLogo extends StatelessWidget {
               )
             : Image.network(
                 cover,
+                cacheWidth: cachePx(context, kPlanLogoSize),
                 fit: BoxFit.cover,
                 width: kPlanLogoSize,
                 height: kPlanLogoSize,
