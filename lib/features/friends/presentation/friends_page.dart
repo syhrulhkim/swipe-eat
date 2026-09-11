@@ -6,9 +6,11 @@ import '../../../core/ui/app_buttons.dart';
 import '../../../core/ui/app_spacing.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../dashboard/presentation/dashboard_widgets.dart';
+import '../data/contacts_reader.dart';
 import '../data/friends_repository.dart';
 import '../models/friend.dart';
 import '../state/friends_controller.dart';
+import 'find_friends_sheet.dart';
 import 'person_row.dart';
 
 /// Where the You tab's "Friends · 38" goes.
@@ -21,10 +23,15 @@ import 'person_row.dart';
 /// is the slot that widget was given for exactly this screen. A row with
 /// buttons on it is not itself a button, so none of these rows tap.
 class FriendsPage extends StatefulWidget {
-  const FriendsPage({super.key, this.friends});
+  const FriendsPage({super.key, this.friends, this.readContacts});
 
   /// Injected by tests; in the app the shared instance is used.
   final FriendsController? friends;
+
+  /// How the find-friends sheet reads the address book (D145). Injected for
+  /// the same reason it is in onboarding: `flutter test` has no permission
+  /// sheet to answer (D60).
+  final ContactsReader? readContacts;
 
   @override
   State<FriendsPage> createState() => _FriendsPageState();
@@ -89,6 +96,19 @@ class _FriendsPageState extends State<FriendsPage> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
+        // Onboarding tells a user who matched nobody that they can add
+        // friends later from the You tab. This is later (D145).
+        AppSecondaryButton(
+          label: 'Find friends from contacts',
+          icon: Icons.contacts_rounded,
+          expand: true,
+          onPressed: () => unawaited(showFindFriendsSheet(
+            context,
+            friends: _friends,
+            readContacts: widget.readContacts,
+          )),
+        ),
+        const SizedBox(height: AppSpacing.md),
         Expanded(child: _list(context)),
       ],
     );
@@ -129,12 +149,13 @@ class _FriendsPageState extends State<FriendsPage> {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Text(
-            // Not "when somebody in your contacts joins": contacts are
-            // matched once, during sign-up, and nothing re-scans them. The
-            // only two ways a name lands on this page are a request you sent
-            // and a request somebody sent you, so those are what it says.
-            'Nobody yet. Requests you send and requests you get both land '
-            'here.',
+            // Not "when somebody in your contacts joins": nothing re-scans
+            // the address book on its own, then or now. Since D145 there is
+            // a third way a name lands here — the button above, which checks
+            // contacts when the user asks it to — so the sentence says that
+            // instead of implying names arrive by themselves.
+            'Nobody yet. Check your contacts above, or wait for a request to '
+            'come in.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kTextFontFamily,

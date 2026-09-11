@@ -522,7 +522,7 @@ the rule was two taps away through the header.
 This is the one-sided market's honest answer to a like limit: the session ends
 because you have seen everything near you, not because you spent an allowance.
 
-### 7.2 Find friends from `/friends` (D145)
+### 7.2 Find friends from `/friends` (D145 — done 2026-09-11)
 
 The app already promises this. `onboarding_steps.dart:671` tells a user who
 matched nobody *"You can add friends later from the You tab"*, and nothing there
@@ -541,6 +541,18 @@ Two copy obligations: the privacy line (D127, D128) appears here verbatim, and
 the empty state at `friends_page.dart:133` — "contacts are matched once, during
 sign-up, and nothing re-scans them" — becomes false the moment this ships and
 must be rewritten. No automatic re-scan: the owner chose the explicit row.
+
+**Done**, in `find_friends_sheet.dart` plus a row on `FriendsPage`. Both copy
+obligations are met: the privacy line is `OnboardingFriendsStep.privacyLine`
+itself rather than a second copy of the words, and the empty state now reads
+"Nobody yet. Check your contacts above, or wait for a request to come in."
+`Friends.md`'s "matched once, at sign-up" paragraph is rewritten on the same
+grounds.
+
+`readContacts` is injected into the page the way onboarding injects it (D60),
+which is what lets the test drive the whole sequence: three tests cover the row
+appearing in an empty book, a match-tick-send round trip that asserts only
+hashes left the device, and a contact taken off the list not being asked.
 
 ### 7.3 Autoplay (D146)
 

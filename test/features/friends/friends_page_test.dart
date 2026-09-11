@@ -6,6 +6,7 @@ import 'package:swipe_eat/features/friends/data/friends_repository.dart';
 import 'package:swipe_eat/features/friends/presentation/friends_page.dart';
 import 'package:swipe_eat/features/friends/presentation/person_row.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
+import 'package:swipe_eat/features/onboarding/presentation/onboarding_steps.dart';
 
 import '../../support/widget_test_support.dart';
 import 'fake_friends_repository.dart';
@@ -40,6 +41,7 @@ Future<_Harness> _pumpPage(
   FakeFriendsRepository? repository,
   Size viewport = _phoneViewport,
   TextScaler textScaler = TextScaler.noScaling,
+  Future<List<String>> Function()? readContacts,
 }) async {
   useViewport(tester, viewport);
   final backing = repository ?? _fullBook();
@@ -55,7 +57,7 @@ Future<_Harness> _pumpPage(
         data: MediaQuery.of(context).copyWith(textScaler: textScaler),
         child: child!,
       ),
-      home: FriendsPage(friends: controller),
+      home: FriendsPage(friends: controller, readContacts: readContacts),
     ),
   );
   await tester.pumpAndSettle();
@@ -66,6 +68,81 @@ Future<_Harness> _pumpPage(
 void main() {
   setUpAll(() => HttpOverrides.global = ImageHttpOverrides());
   tearDownAll(() => HttpOverrides.global = null);
+
+  group('FriendsPage finds friends from contacts', () {
+    testWidgets('the row is there whether or not anybody is', (tester) async {
+      await _pumpPage(tester, repository: FakeFriendsRepository());
+
+      // The empty state used to imply names only ever arrive on their own.
+      expect(find.text('Find friends from contacts'), findsOneWidget);
+      expect(
+        find.textContaining('Check your contacts above'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('reads, matches, ticks everybody, and sends', (tester) async {
+      final book = FakeFriendsRepository(
+        matches: [
+          testFriend('m1', name: 'Hafiz Omar'),
+          testFriend('m2', name: 'Siti Nurul'),
+        ],
+      );
+      final harness = await _pumpPage(
+        tester,
+        repository: book,
+        readContacts: () async => ['+60123456789', '0111234567'],
+      );
+
+      await tester.tap(find.text('Find friends from contacts'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Find friends from contacts').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hafiz Omar'), findsOneWidget);
+      // The privacy promise reads exactly as it does in onboarding.
+      expect(find.text(OnboardingFriendsStep.privacyLine), findsOneWidget);
+
+      // Both matched, both ticked, and the raw numbers never left.
+      expect(harness.repository.sentHashes.single.length, 2);
+      expect(find.text('Send 2 requests'), findsOneWidget);
+
+      await tester.tap(find.text('Send 2 requests'));
+      await tester.pumpAndSettle();
+
+      expect(
+        harness.repository.actions.map((a) => a.$1).toList(),
+        ['m1', 'm2'],
+      );
+      expect(find.text('2 requests sent.'), findsOneWidget);
+    });
+
+    testWidgets('a contact taken off the list is not asked', (tester) async {
+      final book = FakeFriendsRepository(
+        matches: [
+          testFriend('m1', name: 'Hafiz Omar'),
+          testFriend('m2', name: 'Siti Nurul'),
+        ],
+      );
+      final harness = await _pumpPage(
+        tester,
+        repository: book,
+        readContacts: () async => ['+60123456789'],
+      );
+
+      await tester.tap(find.text('Find friends from contacts'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Find friends from contacts').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Siti Nurul'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send 1 request'));
+      await tester.pumpAndSettle();
+
+      expect(harness.repository.actions.map((a) => a.$1).toList(), ['m1']);
+    });
+  });
 
   group('FriendsPage lists', () {
     testWidgets('titles itself and offers a way back', (tester) async {

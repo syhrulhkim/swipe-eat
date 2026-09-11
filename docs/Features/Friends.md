@@ -78,13 +78,25 @@ What happens on a tap of **Find friends from contacts**:
    comparing. It writes nothing, logs nothing, and keeps nothing: the array
    lives for the length of one statement (D128).
 
-**Contacts are matched once, at sign-up.** `Find friends from contacts` is a
-button on the onboarding step and nowhere else: `/friends` has no
-contact-import entry, and nothing re-scans the address book later. That is why
-the friends page's empty copy says "Requests you send and requests you get both
-land here" rather than promising something when a contact joins — the two ways
-a name lands there are the only two there are. A re-scan from `/friends` is a
-reasonable thing to want and is not built.
+**Contacts are matched when the user asks, and never on their own.** Since
+D145 `Find friends from contacts` is a button in two places: the onboarding
+step, and a row at the top of `/friends` that opens `FindFriendsSheet` — the
+same read → match → tick → send sequence, reachable whenever the user wants
+it. Onboarding already promised this ("You can add friends later from the You
+tab"); until D145 nothing there did it.
+
+The sheet reuses the **controller**, not the onboarding widget: that step's
+three states are wired to a wizard draft and its Continue button, and a widget
+serving both would answer to two owners. What is genuinely shared is
+`FriendsController.matchContacts`, which hashes on the way past, and
+`OnboardingFriendsStep.privacyLine`, quoted verbatim — a privacy promise
+worded two ways is two promises (D127, D128).
+
+Nothing re-scans the address book in the background, then or now. The friends
+page's empty copy changed to match: it used to say "Requests you send and
+requests you get both land here", which was the whole truth when the button did
+not exist; it now says "Nobody yet. Check your contacts above, or wait for a
+request to come in."
 
 **What the pepper is for.** Not hiding the number from the server, which could
 grind a peppered hash of every Malaysian mobile in an afternoon. It is so that
