@@ -3,6 +3,7 @@ import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/restaurants/data/deck_cache.dart';
 import 'package:swipe_eat/features/restaurants/data/restaurant_repository.dart';
 import 'package:swipe_eat/features/restaurants/data/swipe_repository.dart';
+import 'package:swipe_eat/features/restaurants/data/visit_prompt_cache.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant.dart';
 
 /// A minimal but real [Restaurant] for list/like fixtures.
@@ -192,6 +193,59 @@ class FakeSwipeRepository implements SwipeRepository {
     }
     markVisitedCalls.add(restaurantId);
   }
+
+  /// Every answer handed to [recordVisitAnswer], in call order (D147).
+  final List<VisitAnswerCall> visitAnswers = [];
+
+  /// What [nextVisitPrompt] hands back. Null is "no past plan to ask about".
+  PendingVisit? planPrompt;
+
+  @override
+  Future<void> recordVisitAnswer({
+    required int restaurantId,
+    required bool went,
+    int? rating,
+    String? body,
+    int? planId,
+  }) async {
+    if (failMarkVisited) {
+      throw Exception('visit answer refused');
+    }
+    visitAnswers.add(
+      VisitAnswerCall(
+        restaurantId: restaurantId,
+        went: went,
+        rating: rating,
+        body: body,
+        planId: planId,
+      ),
+    );
+  }
+
+  @override
+  Future<PendingVisit?> nextVisitPrompt({
+    required String userId,
+    required DateTime today,
+  }) async {
+    return planPrompt;
+  }
+}
+
+/// One call to [FakeSwipeRepository.recordVisitAnswer].
+class VisitAnswerCall {
+  const VisitAnswerCall({
+    required this.restaurantId,
+    required this.went,
+    this.rating,
+    this.body,
+    this.planId,
+  });
+
+  final int restaurantId;
+  final bool went;
+  final int? rating;
+  final String? body;
+  final int? planId;
 }
 
 /// Wires the two fakes together so they behave like one backend: a recorded

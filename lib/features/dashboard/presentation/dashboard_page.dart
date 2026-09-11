@@ -215,11 +215,15 @@ class _DashboardShellState extends State<_DashboardShell>
 
   Future<void> _recordVisitAnswer(
     PendingVisit pending,
-    VisitAnswer answer,
+    VisitPromptResult answer,
   ) async {
     try {
-      if (answer == VisitAnswer.went) {
-        await _visitPrompts.confirm(pending);
+      if (answer.went) {
+        await _visitPrompts.confirm(
+          pending,
+          rating: answer.rating,
+          note: answer.note,
+        );
       } else {
         await _visitPrompts.dismiss(pending);
       }
@@ -240,11 +244,17 @@ class _DashboardShellState extends State<_DashboardShell>
       return;
     }
 
-    if (!mounted || answer != VisitAnswer.went) {
+    if (!mounted || !answer.went) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${pending.name} marked as visited.')),
+      SnackBar(
+        content: Text(
+          answer.rating == null
+              ? '${pending.name} marked as visited.'
+              : 'Thanks — your friends can see that.',
+        ),
+      ),
     );
   }
 

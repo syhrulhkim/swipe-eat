@@ -12,6 +12,7 @@ class PendingVisit {
     required this.restaurantId,
     required this.name,
     required this.openedAt,
+    this.planId,
   });
 
   factory PendingVisit.fromJson(Map<String, dynamic> json) {
@@ -21,6 +22,7 @@ class PendingVisit {
       name: json['name'] as String? ?? '',
       openedAt: DateTime.tryParse(json['opened_at'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      planId: (json['plan_id'] as num?)?.toInt(),
     );
   }
 
@@ -29,13 +31,20 @@ class PendingVisit {
   final String name;
 
   /// When the maps app was opened — the clock the prompt's timing runs on.
+  /// For a plan-shaped prompt (D147) it is the day the plan was for.
   final DateTime openedAt;
+
+  /// The plan this question is about, when it came from one rather than from
+  /// the directions button. Null means a walk-in, and "I didn't go" is then
+  /// nothing but a dismissal — there is no plan to correct.
+  final int? planId;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'user_id': userId,
         'restaurant_id': restaurantId,
         'name': name,
         'opened_at': openedAt.toIso8601String(),
+        if (planId != null) 'plan_id': planId,
       };
 }
 

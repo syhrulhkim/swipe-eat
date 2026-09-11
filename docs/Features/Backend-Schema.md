@@ -60,7 +60,7 @@ skill:
 |---|---|---|
 | `restaurants` | 1,607 | The catalogue. 1,605 active, 1,606 with video, 1,133 with coordinates |
 | `restaurant_images` | 287 | Ordered gallery; also the thumbnail cache state machine |
-| `reviews` | 6 | Carousel snippets. `user_id` is a hook; no write path exists |
+| `reviews` | 6 | Six seeded carousel snippets (all on inactive restaurants), plus one row per user per place since D147: `rating` 1–5 and an optional `body`, written by `record_visit_answer` |
 | `cuisines` | 23 | Cuisine taxonomy, with `is_breakfast` and `spice_level` for ranking |
 | `cuisine_aliases` | — | Free-text alias → cuisine, so the scraper can map captions |
 | `restaurant_cuisines` | 1,607 | Join. `source` records whether a tag or a human put it there |
@@ -109,9 +109,13 @@ The last six arrived with `20260905100000_restaurant_facts_hours_price_halal_dis
 (D91) and are parsed from the caption, so their coverage is the caption's, not
 the catalogue's — see [Restaurant-Data.md](Restaurant-Data.md).
 
-`video_url` also carries a unique constraint, and `rating` is denormalized
-rather than aggregated from `reviews` — it is scraped data, not a computed
-average, so no trigger maintains it.
+`video_url` also carries a unique constraint. `rating` **was** denormalized
+scraped data — non-zero on 2 of 1 607 rows, which is why the deck's quality
+term did nothing. Since D147 it is the average of the stars in `reviews`,
+maintained by the `reviews_refresh_rating` trigger: `round(avg(rating), 1)`,
+or 0 when the last rating goes away. The trigger function is security definer
+because `restaurants` has a read policy and nothing else — no user may write
+that table, and a trigger is not a user.
 
 ### `swipes`
 
@@ -310,6 +314,8 @@ Three deliberate asymmetries (D105):
 | `record_swipe` | `(p_restaurant_id, p_liked, p_source, p_latitude, p_longitude, p_super_like, p_dwell_ms, p_unmuted) → void` | Upsert on `(user_id, restaurant_id)`. The client stopped sending `p_super_like` (D95); the parameter keeps its default. `p_dwell_ms` and `p_unmuted` were added by D149 and default to null — the old six-argument function was **dropped**, not left beside the new one, because two overloads would hand PostgREST an ambiguity |
 | `undo_swipe` | `(p_restaurant_id bigint) → void` | **Deletes** the row. Raises `42501` with no authenticated user |
 | `mark_visited` | `(p_restaurant_id bigint, p_visited boolean) → void` | Stamps or clears `visited_at` |
+| `record_visit_answer` | `(p_restaurant_id bigint, p_went boolean, p_rating smallint default null, p_body text default null, p_plan_id bigint default null) → void` | D147, the whole visit prompt in one call. `p_went` false cancels the named plan (D108 had assumed it kept) and writes nothing else; true calls `mark_visited`, and a `p_rating` on top upserts the review. Security definer: `reviews` has no write policy, because this is the only way one is written |
+| `next_visit_prompt` | `(p_today date default current_date) → table(plan_id, restaurant_id, name, plan_date)` | D147. The caller's most recent `kept` plan in the last 14 days that they have not rated. `p_today` is the phone's today, same reasoning as `mark_plan_kept` |
 | `get_swipe_stats` | `() → table(swipes_today int, streak_days int)` | The daily-limit and streak chip |
 
 ### Reads
@@ -483,7 +489,10 @@ theirs, and are accepted.
 is owner-only, and nothing in the catalogue is writable by a client at all.**
 
 Catalogue reads — `select` to `anon, authenticated`:
-`restaurants` (gated on `is_active`), `restaurant_images`, `reviews`,
+`restaurants` (gated on `is_active`), `restaurant_images`, `reviews`
+(gated on `is_active` **and**, since D147, on authorship: a row with a
+`user_id` is readable only by its author and their accepted friends; the
+seeded rows have none and stay public),
 `cuisines`, `cuisine_aliases`, `restaurant_cuisines`, `dietary_tags`,
 `restaurant_dietary_tags`, `dishes` (gated on the parent restaurant's
 `is_active`), `quiz_questions`, `quiz_options`.
@@ -609,7 +618,7 @@ production.
 
 - **PostGIS** — `haversine_km` behind a bounding box and an ordinary btree is enough at this row count (D9, D141).
 - **A `ratings` aggregate trigger** — `rating` is scraped, not computed.
-- **User-authored reviews** — `reviews.user_id` is a hook with no write path.
+- ~~**User-authored reviews**~~ — built 2026-09-11 (D147). No read surface yet: nothing shows a friend's stars back to anyone.
 - ~~**Price and opening-hours columns**~~ — built 2026-09-05 (D91). The columns
   exist, `is_open_at` powers `get_nearby`'s `open_now` and, since D138,
   `deck_scored`'s ±0.08 open-now term, and `deck_scored` applies the budget

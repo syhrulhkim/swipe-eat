@@ -1,5 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../plans/models/plan.dart' show formatPlanDate, parsePlanDate;
+import 'visit_prompt_cache.dart';
+
 /// Writes swipes to the backend. A swipe row is both signals at once: `liked`
 /// feeds the Like tab, and the row's existence is "seen" — `get_deck` will not
 /// re-serve it. Re-swiping the same restaurant upserts, so every call is safe
@@ -57,5 +60,59 @@ class SwipeRepository {
       'p_restaurant_id': restaurantId,
       'p_visited': visited,
     }).timeout(_timeout);
+  }
+
+  /// D147: the whole visit prompt in one call. "I didn't go" cancels the plan
+  /// D108 assumed was kept; "I went" stamps `visited_at`; stars and a line, if
+  /// the user left any, become the review.
+  ///
+  /// [rating] is 1–5 or null. A null [body] and an empty one mean the same
+  /// thing to the server, so the sheet does not have to decide which it sends.
+  Future<void> recordVisitAnswer({
+    required int restaurantId,
+    required bool went,
+    int? rating,
+    String? body,
+    int? planId,
+  }) async {
+    await _client.rpc<dynamic>('record_visit_answer', params: {
+      'p_restaurant_id': restaurantId,
+      'p_went': went,
+      if (rating != null) 'p_rating': rating,
+      if (body != null) 'p_body': body,
+      if (planId != null) 'p_plan_id': planId,
+    }).timeout(_timeout);
+  }
+
+  /// The plan worth asking about — the caller's most recent past plan they
+  /// have not rated — or null when there is none.
+  ///
+  /// [today] is the *phone's* today, for the same reason `mark_plan_kept`
+  /// takes one: the database clock is UTC and Kuala Lumpur is +8.
+  Future<PendingVisit?> nextVisitPrompt({
+    required String userId,
+    required DateTime today,
+  }) async {
+    final rows = await _client.rpc<dynamic>(
+      'next_visit_prompt',
+      params: {'p_today': formatPlanDate(today)},
+    ).timeout(_timeout);
+
+    if (rows is! List || rows.isEmpty) {
+      return null;
+    }
+    final row = rows.first as Map<String, dynamic>;
+    final restaurantId = (row['restaurant_id'] as num?)?.toInt();
+    if (restaurantId == null) {
+      return null;
+    }
+
+    return PendingVisit(
+      userId: userId,
+      restaurantId: restaurantId,
+      name: row['name'] as String? ?? 'that place',
+      openedAt: parsePlanDate(row['plan_date'] as String? ?? ''),
+      planId: (row['plan_id'] as num?)?.toInt(),
+    );
   }
 }

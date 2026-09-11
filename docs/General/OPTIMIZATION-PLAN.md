@@ -586,7 +586,7 @@ from D41 and D150, so this added a pill and a flag rather than a rendering
 mode. Six controller tests and one card test; `connectivity_plus` is in
 `pubspec.yaml` and in STACK.md's table.
 
-### 7.4 "Did you go? Would you go back?" (D147)
+### 7.4 "Did you go? Would you go back?" (D147 — done 2026-09-11)
 
 The owner's instruction: *if they already go, ask for review — if the feature is
 not there, develop it as good as it can.*
@@ -613,6 +613,43 @@ oversized jitter.
 Sizing and the exact write path are settled when this phase is designed; it is
 the largest item in the plan and the one most worth getting right.
 
+**Done.** Smaller than its billing, because three of the four pieces already
+existed and only needed connecting.
+
+- **`reviews` gained one column**, `rating smallint` 1–5, plus a partial unique
+  index on `(user_id, restaurant_id)` so a second visit edits the first rather
+  than stacking. No new table: the row already had the restaurant, the author
+  and the body.
+- **One RPC for the whole sheet.** `record_visit_answer(p_restaurant_id,
+  p_went, p_rating, p_body, p_plan_id)` — "I didn't go", "I went", and "I went
+  and here are four stars" are one question answered three ways. Security
+  definer, because `reviews` has no write policy: this is the only way a review
+  is written.
+- **`restaurants.rating` follows the stars by trigger**, not from the write
+  path, so a row edited or deleted by any route still leaves the column true.
+  Measured on a rolled-back transaction: two answers for one restaurant left
+  one review row, `rating` 2.0, `visited_at` stamped, and the author name
+  taken from the profile.
+- **The plan path is `next_visit_prompt(p_today)`** — the caller's most recent
+  `kept` plan in the last 14 days they have not rated. Verified against the
+  live database: a plan three days old prompted, "I didn't go" moved it to
+  `cancelled`, and the next call moved on to the next unrated plan.
+- **The fence is a policy, not a query.** An authored review is readable by its
+  author and their accepted friends; the six seeded snippets have a null author
+  and stay public. Proved by reading the same restaurant's reviews as the
+  author (1 row) and as a stranger (0). Worth recording: all six seeded rows sit
+  on **inactive** restaurants, so they were already invisible to everyone — the
+  "6 reviews across the catalogue" this plan kept citing were never on screen.
+
+The sheet is the existing one with five stars, a 280-character optional line and
+a button that renames itself to **Post it** once a star is lit. Six tests
+(`visit_prompt_test.dart`); the client asks the backend for a plan prompt
+**once per app run**, since `_maybeAskAboutVisit` fires on every resume.
+
+One thing this does not do: **show a review back to anyone.** The detail page
+dropped its review card in the redesign, and a friend's stars have no surface
+yet. Recorded in [Likes-Visits](../Features/Likes-Visits.md) §6.
+
 ## 8. Compliance (D148)
 
 The published privacy page says **"We do not ask for your contacts."** The app
@@ -625,6 +662,11 @@ but the fix is not two sentences. "What we collect" still lists an Explore map
 and "marked as visited" and says nothing about friendships, plan membership,
 plan votes, the wishlist, or the hashed phone numbers §7.2 would store — so the
 section is rewritten against the 22 tables that exist, not patched twice.
+
+D147 adds a second thing that page does not say: **a user's stars and their
+line are shown to their friends** — the app's first user-written content that
+leaves its author. The rewrite covers it, the store listing's data-safety form
+must too.
 
 Per the owner: **fix the text and the manifest, do not deploy.** The edge
 function `supabase/functions/legal/index.ts` is edited in the repo and left for

@@ -162,6 +162,14 @@ a trigger, read by `match_contacts`, returned by nothing.
 | `set_plan_vote(bigint, time, text)` | the vote row | **invoker** |
 | `get_plan_votes(bigint)` | the tally, with faces | definer (D129) |
 
+**What being friends now exposes.** Until D147 a friendship let the other side
+see your name, your avatar and which places you had liked (`friends_who_liked`,
+`get_plan_people`). It now also lets them read your **reviews** — your stars and
+your line on a place you went. That fence is a policy on `reviews` shaped like
+the one above, not an RPC: an authored row is readable by its author and their
+accepted friends, and by nobody else. See
+[Likes-Visits.md](Likes-Visits.md) §4.
+
 Behind them sit the helpers nothing on the client calls directly:
 `is_plan_member`, `sync_phone_hash` (the `after insert` trigger),
 `e164_phone_digest`, `peppered_phone_hash` and `contact_match_pepper`. All

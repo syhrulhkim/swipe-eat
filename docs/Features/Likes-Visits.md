@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Wishlist.md](Wishlist.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Restaurant-Data.md](Restaurant-Data.md)
 
 # Likes, Visits & Reviews
@@ -151,15 +151,17 @@ dashboard the one trip worth asking about on the next visit to the app.
 
 ```
 tap "Get directions"  →  recordDirections()  →  device-local cache
-        ↓
-   maps app opens
-        ↓
+        ↓                                              ↓
+   maps app opens                                      │
+                              a past plan ────────────┐│
+                              (next_visit_prompt)     ↓↓
 next app visit  →  next()  →  a ripe trip?  →  visit prompt sheet
                                                   ↓            ↓
                                             confirm()      dismiss()
                                                 ↓              ↓
-                                          mark_visited     forget it
-                                          → Visited tab
+                                     record_visit_answer   forget it, and
+                                     visited_at + stars    cancel the plan
+                                     → Visited tab         it was about
 ```
 
 Design notes worth keeping:
@@ -172,10 +174,40 @@ Design notes worth keeping:
 - Only fires when the maps app **actually opened**, not on tap.
 - `confirm()` clears the cache **only after the write lands**, so a failed call
   leaves the prompt to be asked again rather than losing the visit silently.
-- `dismiss()` records nothing. "I didn't go" is not data worth keeping; the
-  trip just stops being an open question.
+- `dismiss()` records nothing **for a walk-in**. "I didn't go" is not data
+  worth keeping when nobody ever claimed otherwise. For a plan it is: D108
+  flipped that plan to `kept` on an assumption, and this is the first evidence
+  either way, so the plan goes to `cancelled` (D147).
 - One prompt at a time — "the one trip worth asking about", not a queue the
   user has to clear.
+
+### The stars (D147)
+
+Since 2026-09-11 the same sheet also asks *how was it*: five stars and one
+optional line, both skippable. The whole answer goes in one call,
+`record_visit_answer(p_restaurant_id, p_went, p_rating, p_body, p_plan_id)` —
+"I didn't go", "I went", and "I went and here are four stars" are the same
+question answered three ways, and none of them is worth a second round trip.
+
+Three things follow from a star:
+
+1. The review lands in `reviews`, one row per person per place — a second visit
+   **edits** the first rather than stacking.
+2. `restaurants.rating` becomes the average of those stars, by trigger. The
+   column used to be an import that was non-zero on 2 of 1 607 rows, which is
+   why the deck's quality term did nothing and its unrated-row jitter did all
+   the work. From here it means *what our users say*.
+3. **Friends can read it; nobody else can.** The `reviews` read policy fences
+   an authored row behind the same accepted-pair test `friends_who_liked`
+   uses. The six seeded snippets have a null author and stay public — though
+   all six sit on inactive restaurants, so in practice nothing reads them.
+
+The question about a **plan** comes from `next_visit_prompt(p_today)`: the
+caller's most recent plan whose day has passed, which they have not rated, no
+older than **14 days**. Past that the answer is a guess, and a guess is worse
+than silence in the one place the app gets a real opinion. The lookup runs
+**once per app run** — `_maybeAskAboutVisit` fires on every resume and a plan
+does not become askable between two of them.
 
 ## 5. The likes migration
 
@@ -193,8 +225,10 @@ deleted once no install predates the migration.
   prompt, and `swipes.visited_at` still fills up, but nothing shows it back to
   the user. The design does not ask for a Visited list; the wishlist's eaten
   half is the nearest thing it has.
-- **Reviews have no surface either**, and no write path — 6 exist across the
-  whole catalogue and `reviews.user_id` is a hook only.
+- **Reviews have no read surface.** They are written now (D147) and they feed
+  `restaurants.rating`, but no screen shows a friend's stars back to anyone —
+  the detail page dropped its review card in the redesign and has not been
+  given a new one.
 - `visited_at` is a single timestamp, so a second visit overwrites the first —
   no visit history.
 - ~~**Planned is inert**~~ — resolved 2026-09-06 by
@@ -203,8 +237,7 @@ deleted once no install predates the migration.
 
 ## 7. Out of scope
 
-- **User-authored reviews.** The schema hook is ready; the write path is not
-  built.
+- ~~**User-authored reviews.**~~ Built 2026-09-11 (D147); see §4.
 - **Collections / lists** beyond Bites and the wishlist.
 - **Sharing a liked place** out of the app. The *wishlist* shares as plain
   text; a single place does not.
@@ -218,6 +251,7 @@ deleted once no install predates the migration.
 | D24 | The Liked filter sheet is client-side; the deck's discovery filters are server-side profile state. A finite owned list is a view concern. | locked 2026-08-31 |
 | D25 | Segments load lazily — a user who never opens Visited never pays for it. | locked 2026-08-31 |
 | D26 | The visit prompt only arms when the maps app actually opened, and only for signed-in users. | locked 2026-08-31 |
+| D147 | The visit prompt asks for **1–5 stars and an optional line**, and asks about a past **plan** as well as a walk-in. A review is visible to the author's friends only; `restaurants.rating` becomes the average of those stars by trigger; "I didn't go" on a plan corrects D108's assumed `kept` to `cancelled`. | locked 2026-09-11 |
 | D27 | "I didn't go" records nothing — a dismissal is not data. | locked 2026-08-31 |
 | D96 | The design's chip row replaces the Liked / Visited / Reviewed segments, and Visited and Reviewed leave the client entirely. Their RPCs and data stay. The three plan chips are one enum, not three booleans; "Wishlist →" navigates and never holds a pressed state. | locked 2026-09-05 |
 | D125 | The Bites tile is a **photo over a solid caption strip**, and its saved mark is an **ember check drawn in the photo's corner** — the wishlist row's tick, so "saved" and "done" are one family of mark. The **wishlist bookmark badge is removed**, not hidden (D84): every tile in Bites is saved, the Wishlist chip is one tap away, and a second badge in the same corner was a collision the prototype's own mask never resolved. This supersedes D79 **on the grid tile only** — a notch-revealed disc at inset 6 / radius 30 is a quarter-circle hanging off the corner, not the reference's full circle, and a notch *and* a badge in one corner would be two saved-marks. The bite stays on the detail hero and the auth blob. With the badge gone, the tab no longer refreshes on the way back from the Wishlist; `LikesController.isSavedForLater` keeps its wishlist callers and tests but has no reader in the tab. | locked 2026-09-10 |

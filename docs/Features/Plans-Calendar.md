@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Friends.md](Friends.md), [Group-Dining.md](Group-Dining.md), [Likes-Visits.md](Likes-Visits.md), [Wishlist.md](Wishlist.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md), [../Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
 
 # Plans and the Calendar
@@ -62,13 +62,19 @@ people, and four options are agreed on faster than 1 440.
 
 `plans.status` is `planned`, `kept` or `cancelled`.
 
-**A past plan is a kept plan unless it was cancelled first** (D108). There is
-no "did you go?" prompt anywhere. The calendar records intent, and intent that
-survived to the day counts — asking again a day later gets a worse answer than
-not asking. The flip is server-side, in `mark_plan_kept()`, and the client
-calls it on every load before it lists (`PlansController.refresh`). A failed
-flip is not a failed load: the calendar is still readable and the next launch
-fixes the status.
+**A past plan is a kept plan unless it was cancelled first** (D108). The
+calendar records intent, and intent that survived to the day counts. The flip
+is server-side, in `mark_plan_kept()`, and the client calls it on every load
+before it lists (`PlansController.refresh`). A failed flip is not a failed
+load: the calendar is still readable and the next launch fixes the status.
+
+**Since D147 the assumption gets checked.** It stays an assumption — the flip
+happens on load, unprompted — but the next launch after a plan's day asks *did
+you go?* through the visit prompt, and "I didn't go" moves that plan to
+`cancelled`. One question, about the most recent unrated plan within 14 days,
+asked once per app run; see [Likes-Visits.md](Likes-Visits.md) §4. So
+`plan_stats`'s "plans kept" is now a number a user can correct rather than one
+the app asserts on their behalf.
 
 Cancelling is the only way out. It is confirmed in a **bottom sheet, not a
 dialog** — cancelling is a decision about a row on this screen, and a sheet
@@ -391,4 +397,5 @@ point: it is a way to look at S6 with a full month on it, not a seed.
 | D134 | Voting gets a screen the design does not draw. "They'll get a vote on the time" is written on S4's switch and no S-numbered screen ever collects one, so `/plans/:id` is invented rather than derived — the smallest surface that makes the switch's promise true. It takes the Calendar card's tap and hands the restaurant back from its own header, so the plan does not need a second affordance nobody would find. | locked 2026-09-09 |
 | D132 | A plan member may see the other members, through a policy scoped by `is_plan_member` — the same definer helper the rest of the plan policies lean on, so it adds no recursion. | locked 2026-09-06 |
 | D133 | Time voting needs no new schema. A member upserts their own `plan_time_votes` row under the policies Phase 7 already wrote, the tally is a group-by the client does over rows it may read, and locking a time is the owner updating `plans.plan_time` through `PlansRepository.setTime`. The only thing missing was a read that could put a name next to a vote, which is what `get_plan_votes` is. | locked 2026-09-06 |
+| D147 | The visit prompt asks about a past plan, and "I didn't go" corrects D108's assumed `kept` to `cancelled`. | locked 2026-09-11 |
 | D110 | A plan's time is one of five fixed chips — 12:30, 18:30, 20:00, 21:30, Late — not a time picker. "Late" is a label with no hour, which is why `plan_time` is nullable, and it sorts last within a day. | locked 2026-09-06 |

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../data/swipe_repository.dart';
 import '../data/visit_prompt_cache.dart';
 import 'likes_controller.dart';
@@ -46,31 +48,79 @@ class VisitPromptController {
     );
   }
 
+  /// The plan-shaped question, looked up once per run. Null once it has been
+  /// answered, or when the backend had none to give.
+  PendingVisit? _planPrompt;
+  bool _planPromptLoaded = false;
+
   /// The trip to ask about now, or null when there is none ripe.
+  ///
+  /// The device's own trips come first — they are free to read and the
+  /// freshest thing the user can answer for. A past plan (D147) is the
+  /// fallback, fetched **once per app run**: `_maybeAskAboutVisit` runs on
+  /// every resume, and a plan does not become askable between two of them.
   Future<PendingVisit?> next() async {
     final userId = _authEvents.currentUserId;
     if (userId == null) {
       return null;
     }
-    return _cache.nextPrompt(userId);
+
+    final fromDevice = await _cache.nextPrompt(userId);
+    if (fromDevice != null) {
+      return fromDevice;
+    }
+
+    if (!_planPromptLoaded) {
+      _planPromptLoaded = true;
+      try {
+        _planPrompt = await _swipes.nextVisitPrompt(
+          userId: userId,
+          today: DateTime.now(),
+        );
+      } on Object catch (error) {
+        // No question is a fine outcome; an error here must not reach a launch.
+        debugPrint('Visit prompt lookup failed: $error');
+      }
+    }
+
+    return _planPrompt?.userId == userId ? _planPrompt : null;
   }
 
-  /// The user says they went: stamp `visited_at` and retire the question.
+  /// The user says they went: stamp `visited_at`, keep the stars and the line
+  /// if they left any (D147), and retire the question.
   ///
   /// The cache is cleared only after the write lands, so a failed call leaves
   /// the prompt to be asked again rather than losing the visit silently.
-  Future<void> confirm(PendingVisit visit) async {
-    await _swipes.markVisited(restaurantId: visit.restaurantId);
-    await _cache.clear(
-      userId: visit.userId,
+  Future<void> confirm(PendingVisit visit, {int? rating, String? note}) async {
+    await _swipes.recordVisitAnswer(
       restaurantId: visit.restaurantId,
+      went: true,
+      rating: rating,
+      body: note,
+      planId: visit.planId,
     );
+    await _retire(visit);
   }
 
-  /// The user says they did not go. Nothing to record — the trip simply stops
-  /// being an open question.
-  Future<void> dismiss(PendingVisit visit) {
-    return _cache.clear(
+  /// The user says they did not go. For a walk-in there is nothing to record —
+  /// the trip simply stops being an open question. For a plan there is: D108
+  /// flipped it to `kept` on an assumption, and this is the first evidence.
+  Future<void> dismiss(PendingVisit visit) async {
+    if (visit.planId != null) {
+      await _swipes.recordVisitAnswer(
+        restaurantId: visit.restaurantId,
+        went: false,
+        planId: visit.planId,
+      );
+    }
+    await _retire(visit);
+  }
+
+  Future<void> _retire(PendingVisit visit) async {
+    if (identical(visit, _planPrompt)) {
+      _planPrompt = null;
+    }
+    await _cache.clear(
       userId: visit.userId,
       restaurantId: visit.restaurantId,
     );
