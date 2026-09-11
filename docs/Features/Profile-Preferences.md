@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Onboarding-Taste.md](Onboarding-Taste.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Account-Deletion-Legal.md](Account-Deletion-Legal.md)
 
 # Profile, Preferences & Discovery Filters
@@ -59,18 +59,39 @@ Below that, in the design's order:
    per person, Default radius. Each row opens a bottom sheet carrying the same
    control the first run used, writes optimistically and reverts with a
    SnackBar on failure.
-4. **Friends and Settings**, two ghost buttons side by side. The first reads
+4. **Playback** — one row, **Videos autoplay**: Always / On Wi-Fi only /
+   Never. See below.
+5. **Friends and Settings**, two ghost buttons side by side. The first reads
    `Friends · <n>` — drawn even at zero, because "Friends · 0" is the truth
    about a new account — and pushes `/friends`; the count comes from
    `FriendsController`. See [Friends.md](Friends.md).
 
-**"Videos autoplay" is not shown.** The design lists it, but
-`tikTokPlayerUrl` hard-codes `autoplay=1` and `muted=0` — which in TikTok's
-player means "leave the volume control usable", not "start with sound"; the
-clip is silenced by posting `mute` through the `x-tiktok-player` API on page
-load, and the "Tap for sound" pill posts `unMute` (D89, D122) — and the app has no
-connectivity package, so neither "Wi-Fi only" nor "Never" could be honoured. A
-setting that does nothing is worse than an absent one (D106).
+**"Videos autoplay" is shown since D146.** It was omitted for five days
+because nothing could honour it (D106): `tikTokPlayerUrl` hard-codes
+`autoplay=1` and `muted=0` — which in TikTok's player means "leave the volume
+control usable", not "start with sound"; the clip is silenced by posting `mute`
+through the `x-tiktok-player` API on page load, and the "Tap for sound" pill
+posts `unMute` (D89, D122) — and the app had no connectivity package, so
+neither "Wi-Fi only" nor "Never" could be answered. `connectivity_plus` answers
+it, so the setting now exists and the deck obeys it:
+
+- **Always** (the default) — unchanged behaviour.
+- **On Wi-Fi only** — `AutoplayController` watches
+  `Connectivity().onConnectivityChanged` and plays only while the list carries
+  `ConnectivityResult.wifi` or `.ethernet`.
+- **Never** — the card shows its cover with a **"Tap to play"** pill; tapping
+  mounts the player for that one card.
+
+The setting lives in `shared_preferences` under `autoplay_setting`, not on the
+profile: it is a statement about *this phone's* data plan, not about taste, so
+it has no business surviving to a different device. `AutoplayController.instance`
+is the app's single copy; the deck and the You tab both listen to it, and it
+only notifies on a connectivity change when the setting is `wifi` — a Wi-Fi
+drop must not rebuild the deck for someone who chose Always.
+
+When autoplay is off the deck also stops **warming ahead**: `TikTokPlayerCache`
+is never asked for the next card, so a card the user never taps costs no
+WebView at all. See [TikTok-Video.md](TikTok-Video.md).
 
 The tab does **not** use `DashboardTabShell`: the design puts the bell on the
 same line as the title and the shell's header is a title column with nothing
@@ -310,4 +331,5 @@ Both stores require the deletion path; see
 | D105 | `halal_only`, `vegetarian` and `budget_max` are hard deck filters. Halal needs `is_halal is true` (unknown does not pass), which is why it defaults off; an unknown `price_from` **does** pass the budget ceiling. | locked 2026-09-05 |
 | D121 | D84's passport retirement is finished on the database: `deck_scored` and `search_restaurants` stop reading `profiles.passport_*`, and `set_passport` is dropped. One origin chain — the caller's fix, else the profile's stored one — shared by the deck, Explore, the Nearby map and the card's own distance label. The columns stay: ignoring data and deleting it are separate decisions. | locked 2026-09-10 |
 | D122 | "Tap for sound" drives TikTok's player through their documented `x-tiktok-player` postMessage API (`mute` / `unMute`), not through the URL. The player URL is now always `muted=0`; a clip still starts silent (D89) because the handle posts `mute` on `onPageFinished`. | locked 2026-09-10 |
-| D106 | The You tab's stats read 0 for what nothing feeds yet rather than hiding a tile, its taste rows edit in place through sheets, and "Videos autoplay" is omitted because nothing could honour it. | locked 2026-09-05 |
+| D106 | The You tab's stats read 0 for what nothing feeds yet rather than hiding a tile, its taste rows edit in place through sheets, and "Videos autoplay" is omitted because nothing could honour it. | locked 2026-09-05, autoplay clause superseded by D146 |
+| D146 | "Videos autoplay" (Always / Wi-Fi only / Never) ships, backed by `connectivity_plus`. It is device state in `shared_preferences`, not profile state, and turning it off also stops the deck warming the next card ahead. | locked 2026-09-11 |

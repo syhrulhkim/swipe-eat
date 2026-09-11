@@ -554,7 +554,7 @@ which is what lets the test drive the whole sequence: three tests cover the row
 appearing in an empty book, a match-tick-send round trip that asserts only
 hashes left the device, and a contact taken off the list not being asked.
 
-### 7.3 Autoplay (D146)
+### 7.3 Autoplay (D146 — done 2026-09-11)
 
 A three-state control in the You tab — **Always / On Wi-Fi only / Never** —
 defaulting to **Always**, because changing the default would change the product
@@ -571,6 +571,20 @@ channel for it.
 
 **Skip auto-advance.** A card that leaves on its own is a decision the user did
 not make, and every card exit here writes a row to `swipes`.
+
+**Done.** `AutoplaySetting` and `AutoplayController` (prefs-backed, Wi-Fi
+watched through an injected `Stream<bool>`), a `Playback` section in the You
+tab using the `PrefSegmented` control the spice row already uses, and three
+lines of gating in the deck: no warm ahead, no player passed, and
+`SwipeCard.autoplay` false, which paints a **Tap to play** pill where the
+sound pill would be. Pressing it asks the deck rather than building a player
+on the card, so every player still comes from the one cache that knows how to
+evict it.
+
+The estimate held — the card already had the "show the photo instead" path
+from D41 and D150, so this added a pill and a flag rather than a rendering
+mode. Six controller tests and one card test; `connectivity_plus` is in
+`pubspec.yaml` and in STACK.md's table.
 
 ### 7.4 "Did you go? Would you go back?" (D147)
 

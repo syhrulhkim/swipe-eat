@@ -25,6 +25,8 @@ class SwipeCard extends StatefulWidget {
     required this.onOpenDetail,
     this.tiktokPlayerFuture,
     this.videoLent = false,
+    this.autoplay = true,
+    this.onPlay,
     this.isBehind = false,
     this.clock = OpeningHours.kualaLumpurNow,
   });
@@ -45,6 +47,14 @@ class SwipeCard extends StatefulWidget {
   /// for as long as the detail screen has it — the same trade the detail hero
   /// makes for the fullscreen route (D150).
   final bool videoLent;
+
+  /// Whether the clip may start on its own (D146). False shows the card's
+  /// photo under a play button instead; the deck only warms a player once
+  /// [onPlay] has been pressed, so "off" costs no WebView at all.
+  final bool autoplay;
+
+  /// Pressed on that play button. Null when the card has no clip to play.
+  final VoidCallback? onPlay;
 
   final bool isBehind;
 
@@ -176,6 +186,14 @@ class _SwipeCardState extends State<SwipeCard> {
                   top: 16,
                   child: MutedHint(player: widget.tiktokPlayerFuture),
                 ),
+              // Same corner, same reasons, for the card whose clip is not
+              // playing because the user said so (D146).
+              if (_offersPlay)
+                Positioned(
+                  left: 16,
+                  top: 16,
+                  child: PlayHint(onTap: widget.onPlay),
+                ),
             ],
           ),
         ),
@@ -184,11 +202,15 @@ class _SwipeCardState extends State<SwipeCard> {
   }
 
   /// Whether this card is showing a clip — the front card, with a video.
+  bool get _hasVideo =>
+      widget.data.videoUrl != null && widget.data.videoUrl!.isNotEmpty;
+
   bool get _showsVideo =>
-      !widget.isBehind &&
-      !widget.videoLent &&
-      widget.data.videoUrl != null &&
-      widget.data.videoUrl!.isNotEmpty;
+      !widget.isBehind && !widget.videoLent && widget.autoplay && _hasVideo;
+
+  /// The front card, holding a clip nobody has asked to play yet (D146).
+  bool get _offersPlay =>
+      !widget.isBehind && !widget.videoLent && !widget.autoplay && _hasVideo;
 
   /// The clip when the card has one and is on top, its photos otherwise.
   ///

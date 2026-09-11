@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Restaurant-Data.md](Restaurant-Data.md), [Backend-Schema.md](Backend-Schema.md), [History/improvement-plan.md](../History/improvement-plan.md)
 
 # TikTok Video & Thumbnails
@@ -152,6 +152,13 @@ clip's sound state at the moment of a swipe (D149) — it starts nothing and
 does not count as a use, so asking about a card on its way out cannot evict
 the card arriving behind it.
 
+**Warming is conditional since D146.** When the user's autoplay setting says
+not to play — "Never", or "On Wi-Fi only" off Wi-Fi — the deck asks the cache
+for nothing at all: no warm-ahead, and no player for the foreground card
+either. The card shows its cover and a **"Tap to play"** pill, and only that
+tap calls `playerFor`. A whole session on mobile data can therefore cost zero
+WebViews. See [Profile-Preferences.md](Profile-Preferences.md).
+
 ## 4. Display modes
 
 `TikTokFraming { card, hero, fullscreen }`, in `tiktok_player.dart`. TikTok's
@@ -276,6 +283,7 @@ restaurants, what most cards show permanently.
 | D37 | `restaurants.video_url` is the stable identity of a row and is never rewritten. | locked 2026-08-22 |
 | D38 | A player handle carries an explicit load status; a WebView that fails silently must be able to offer a retry. | locked 2026-08-29 |
 | D150 | The deck **lends** its warmed player to the detail screen rather than letting it build a second WebView for the same clip; the card gives its own view up while the loan is out, and the borrower never releases what it did not create. | locked 2026-09-11 |
+| D146 | Autoplay is a user setting, and "off" means the deck warms nothing — not that it warms a player and pauses it. A card the user never taps costs no WebView. | locked 2026-09-11 |
 | D39 | The player cache is bounded at 5 — above the 3-warmed + 2-mounted working set, so the watched player is never evicted. | locked 2026-08-29 |
 | D40 | Evicted players are navigated to a blank page, because webview_flutter 4.x has no `dispose`. | locked 2026-08-29 |
 | D41 | Only the foreground card mounts a WebView; the card behind shows a thumbnail. | locked 2026-08-22 |

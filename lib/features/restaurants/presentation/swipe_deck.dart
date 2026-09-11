@@ -8,6 +8,7 @@ import '../../../core/ui/app_lottie.dart';
 import '../../../core/ui/design_tokens.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../profile/state/autoplay_controller.dart';
 import '../domain/meal_label.dart';
 import '../models/restaurant_card.dart';
 import '../models/restaurant_detail_data.dart';
@@ -29,6 +30,7 @@ class SwipeDeck extends StatefulWidget {
     this.controller,
     this.isActive = true,
     this.handoff,
+    this.autoplay,
   });
 
   final AuthController authController;
@@ -48,6 +50,10 @@ class SwipeDeck extends StatefulWidget {
   /// The hand-off the Nearby map's "Swipe all" publishes to. Injected so a
   /// widget test can drive it; the app wires the shared instance.
   final DeckHandoff? handoff;
+
+  /// The autoplay setting (D146). Injected so a test can turn it off without
+  /// a `SharedPreferences` round trip; the app uses the shared instance.
+  final AutoplayController? autoplay;
 
   @override
   State<SwipeDeck> createState() => _SwipeDeckState();
@@ -72,6 +78,19 @@ class _SwipeDeckState extends State<SwipeDeck>
 
   /// The card whose player the detail screen is holding, if any (D150).
   int? _lentCardId;
+
+  late final AutoplayController _autoplay =
+      widget.autoplay ?? AutoplayController.instance;
+
+  /// The card the user pressed play on, when autoplay is off (D146). One at a
+  /// time: the next card arrives silent and still, like the one before it.
+  int? _playRequestedCardId;
+
+  /// Whether this card gets a player at all. Autoplay off means no warm, no
+  /// WebView and no network for the clip — the setting is worth nothing if the
+  /// only thing it turns off is the motion.
+  bool _playsFor(RestaurantCard card) =>
+      _autoplay.playsNow || _playRequestedCardId == card.id;
 
   Offset get _dragOffset => _drag.value;
   set _dragOffset(Offset value) => _drag.value = value;
@@ -109,6 +128,8 @@ class _SwipeDeckState extends State<SwipeDeck>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_autoplay.ensureLoaded());
+    _autoplay.addListener(_onAutoplayChanged);
     _messages = _deck.messages.listen(_showMessage);
     _likeMessages = _deck.likeMessages.listen(_showMessage);
     if (_ownsController) {
@@ -150,6 +171,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_messages?.cancel());
     unawaited(_likeMessages?.cancel());
+    _autoplay.removeListener(_onAutoplayChanged);
     _motionController.dispose();
     _drag.dispose();
     if (_ownsController) {
@@ -186,6 +208,12 @@ class _SwipeDeckState extends State<SwipeDeck>
     });
 
     _motionController.forward(from: 0);
+  }
+
+  void _onAutoplayChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// A tap on Skip / Ngap / Later, which starts from a resting card rather
@@ -456,7 +484,8 @@ class _SwipeDeckState extends State<SwipeDeck>
         distanceText: _deck.distanceLabelFor(next),
         onTap: () => unawaited(_openDetail(next)),
         onOpenDetail: () => unawaited(_openDetail(next)),
-        tiktokPlayerFuture: _deck.players.warm(next.videoUrl),
+        tiktokPlayerFuture:
+            _autoplay.playsNow ? _deck.players.warm(next.videoUrl) : null,
       ),
       builder: (context, child) {
         final lift = _motionFrame().lift;
@@ -479,14 +508,16 @@ class _SwipeDeckState extends State<SwipeDeck>
     final gesturesLocked = _motionType != _SwipeMotionType.idle;
 
     return GestureDetector(
-      onPanStart: gesturesLocked ? null : (_) => _deck.warmUpcomingPlayers(),
+      onPanStart: gesturesLocked || !_autoplay.playsNow
+          ? null
+          : (_) => _deck.warmUpcomingPlayers(),
       onPanUpdate: gesturesLocked
           ? null
           : (details) {
               // No `setState`: the notifier below repaints the card's pose on
               // its own, and `_motionType` is already idle here — the gesture
               // is locked whenever it is not.
-              if (_dragOffset == Offset.zero) {
+              if (_dragOffset == Offset.zero && _autoplay.playsNow) {
                 _deck.warmUpcomingPlayers();
               }
               _motionController.stop();
@@ -584,8 +615,12 @@ class _SwipeDeckState extends State<SwipeDeck>
           distanceText: _deck.distanceLabelFor(current),
           onTap: () => unawaited(_openDetail(current)),
           onOpenDetail: () => unawaited(_openDetail(current)),
-          tiktokPlayerFuture: _deck.players.warm(current.videoUrl),
+          tiktokPlayerFuture: _playsFor(current)
+              ? _deck.players.warm(current.videoUrl)
+              : null,
           videoLent: _lentCardId == current.id,
+          autoplay: _playsFor(current),
+          onPlay: () => setState(() => _playRequestedCardId = current.id),
         ),
       ),
     );

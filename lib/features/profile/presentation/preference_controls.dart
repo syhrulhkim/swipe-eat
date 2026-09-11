@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/ui/design_tokens.dart';
 import '../../onboarding/models/onboarding_draft.dart';
+import '../models/autoplay_setting.dart';
 
 /// The three controls behind "Any rules?".
 ///
@@ -398,6 +399,44 @@ class PrefSpiceRow extends StatelessWidget {
           const SizedBox(height: 12),
           PrefSegmented<SpiceLevel>(
             options: SpiceLevel.values,
+            labelOf: (option) => option.label,
+            value: value,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The autoplay question as one card (D146): three states, and the line that
+/// says which of them costs data.
+///
+/// Not a switch, because "off" is two different answers — never, and not on
+/// somebody else's data plan — and a switch can only hold one of them.
+class PrefAutoplayRow extends StatelessWidget {
+  const PrefAutoplayRow({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final AutoplaySetting value;
+  final ValueChanged<AutoplaySetting> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return PrefRow(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const PrefRowHeader(
+            title: 'Autoplay',
+            caption: 'Clips play by themselves in the deck',
+          ),
+          const SizedBox(height: 12),
+          PrefSegmented<AutoplaySetting>(
+            options: AutoplaySetting.values,
             labelOf: (option) => option.label,
             value: value,
             onChanged: onChanged,

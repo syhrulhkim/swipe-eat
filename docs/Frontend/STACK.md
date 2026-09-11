@@ -30,6 +30,7 @@ call site could replace.
 | `shared_preferences` | ^2.5.5 | The offline caches (deck, profile, visit prompts) |
 | `url_launcher` | ^6.3.1 | Hands a maps/navigation URL to the OS; opens the legal pages |
 | `share_plus` | ^13.3.0 | Hands the wishlist to the OS share sheet as plain text |
+| `connectivity_plus` | ^6.1.0 | Tells the autoplay setting whether this is Wi-Fi or somebody's data plan (D146). Reached only through an injected `Stream<bool>`, so no test touches the channel |
 | `flutter_contacts` | ^2.3.1 | Reads phone numbers off the address book for the onboarding friends step. Numbers are normalised and hashed before they leave the device; reached only through an injected typedef, so no test touches the channel |
 | `lottie` | ^3.3.2 | The small bundled vector loops |
 | `sentry_flutter` | ^9.28.0 | Crash reporting, off unless `SENTRY_DSN` is passed |

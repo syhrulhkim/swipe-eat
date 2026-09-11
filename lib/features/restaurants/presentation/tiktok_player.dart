@@ -333,6 +333,59 @@ class MutedHint extends StatelessWidget {
   }
 }
 
+/// "Tap to play" — the same pill, for a card whose clip is not playing because
+/// the user turned autoplay off, or is on mobile data with Wi-Fi-only chosen
+/// (D146).
+///
+/// The same shape and the same corner as [MutedHint] on purpose: it occupies
+/// the slot the sound control will occupy the moment the clip starts, so the
+/// card does not rearrange itself under the thumb that just pressed it.
+class PlayHint extends StatelessWidget {
+  const PlayHint({super.key, this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      excludeSemantics: true,
+      label: 'Tap to play',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: kSurfaceDark.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(kRadiusPill),
+            border: Border.all(color: kHairline),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.play_arrow_rounded,
+                size: 16,
+                color: kTextOnPhoto,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                'Tap to play',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: kTextOnPhoto,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MutedHintButton extends StatelessWidget {
   const _MutedHintButton({required this.muted, this.onTap});
 

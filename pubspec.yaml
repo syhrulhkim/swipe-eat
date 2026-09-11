@@ -40,6 +40,10 @@ dependencies:
   # Hands the wishlist to the OS share sheet as plain text, so "where should we
   # eat" can leave the app in whatever chat the group already uses.
   share_plus: ^13.3.0
+  # Tells the autoplay setting whether this is Wi-Fi or somebody's data plan
+  # (D146). Reached only through an injected stream, so no test touches the
+  # platform channel.
+  connectivity_plus: ^6.1.0
   # Reads phone numbers off the address book for the onboarding friends step.
   # Numbers are normalised and hashed before they leave the device and the
   # list is never held past the call — see `ContactsReader` (D122). Reached

@@ -14,6 +14,8 @@ import '../../onboarding/models/onboarding_draft.dart';
 import '../../restaurants/state/likes_controller.dart';
 import '../data/profile_repository.dart';
 import 'preference_controls.dart';
+import '../models/autoplay_setting.dart';
+import '../state/autoplay_controller.dart';
 
 /// The three counts on the You tab.
 ///
@@ -43,6 +45,7 @@ class ProfileTab extends StatefulWidget {
     this.likes,
     this.friends,
     this.repository,
+    this.autoplay,
     this.stats = const ProfileStats(),
     this.notificationCount = 0,
   });
@@ -53,6 +56,9 @@ class ProfileTab extends StatefulWidget {
   final LikesController? likes;
   final FriendsController? friends;
   final ProfileRepository? repository;
+
+  /// The autoplay setting (D146). Injected by tests; the app shares one.
+  final AutoplayController? autoplay;
 
   /// Filled by a later phase. Zero is an honest answer, not a placeholder:
   /// nobody has kept a plan in an app that cannot yet make one.
@@ -71,12 +77,15 @@ class _ProfileTabState extends State<ProfileTab> {
       widget.friends ?? FriendsController.instance;
   late final ProfileRepository _repository =
       widget.repository ?? ProfileRepository();
+  late final AutoplayController _autoplay =
+      widget.autoplay ?? AutoplayController.instance;
 
   @override
   void initState() {
     super.initState();
     // The counts come from the shared likes cache, which another tab may have
     // filled already; ensureLoaded is deduplicated, so this is free when it has.
+    unawaited(_autoplay.ensureLoaded());
     unawaited(_likes.ensureLoaded().catchError((Object error) {
       debugPrint('Profile likes load failed: $error');
     }));
@@ -148,6 +157,22 @@ class _ProfileTabState extends State<ProfileTab> {
       user.copyWith(spiceLevel: value.level),
       () => _repository.updatePreferences(spiceLevel: value.level),
     );
+  }
+
+  /// A device setting, not a taste one, so it is written to the device and
+  /// never to `profiles` (D146).
+  Future<void> _editAutoplay() async {
+    final value = await _sheet<AutoplaySetting>(
+      title: 'Autoplay',
+      builder: (context, close) => PrefAutoplayRow(
+        value: _autoplay.setting,
+        onChanged: close,
+      ),
+    );
+    if (value == null) {
+      return;
+    }
+    await _autoplay.select(value);
   }
 
   Future<void> _editBudget(AppUser user) async {
@@ -254,7 +279,12 @@ class _ProfileTabState extends State<ProfileTab> {
     return AnimatedBuilder(
       // Three sources: the profile row (name, rules, radius), the likes cache
       // (the bites count) and the friends cache (the ghost button's count).
-      animation: Listenable.merge([widget.authController, _likes, _friends]),
+      animation: Listenable.merge([
+        widget.authController,
+        _likes,
+        _friends,
+        _autoplay,
+      ]),
       builder: (context, _) {
         final user = widget.authController.user;
 
@@ -314,6 +344,19 @@ class _ProfileTabState extends State<ProfileTab> {
                         onTap: () => _editRadius(user),
                       ),
                     ],
+                    const SizedBox(height: 24),
+                    // Its own section, and above the signed-in rules on
+                    // purpose: this one is about the phone, not the palate,
+                    // and it is the only row here a signed-out browse session
+                    // would also have (D146).
+                    Text('Playback', style: appSectionTitleStyle(context)),
+                    const SizedBox(height: 8),
+                    _PrefRow(
+                      label: 'Autoplay',
+                      value: _autoplay.setting.label,
+                      last: true,
+                      onTap: () => unawaited(_editAutoplay()),
+                    ),
                     const SizedBox(height: 28),
                     // The design's `.settings` grid: two ghost buttons side by
                     // side. They stack below [kSettingsGridStackWidth] rather

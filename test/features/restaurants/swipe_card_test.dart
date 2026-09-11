@@ -113,6 +113,8 @@ Future<void> pumpCard(
   RestaurantCard data, {
   bool isBehind = false,
   bool videoLent = false,
+  bool autoplay = true,
+  VoidCallback? onPlay,
   VoidCallback? onTap,
   VoidCallback? onOpenDetail,
 }) async {
@@ -135,6 +137,8 @@ Future<void> pumpCard(
                   ? null
                   : Completer<TikTokPlayerHandle>().future,
               videoLent: videoLent,
+              autoplay: autoplay,
+              onPlay: onPlay,
               isBehind: isBehind,
               clock: eightPm,
             ),
@@ -442,6 +446,28 @@ void main() {
       // One controller cannot be mounted in two WebViews, so while the detail
       // screen holds this card's player the card shows its photo instead.
       expect(find.text('Tap for sound'), findsNothing);
+    });
+
+    testWidgets('autoplay off offers the clip instead of playing it (D146)',
+        (tester) async {
+      var asked = 0;
+      await pumpCard(
+        tester,
+        card(videoUrl: 'https://tiktok.test/v/1'),
+        autoplay: false,
+        onPlay: () => asked += 1,
+      );
+
+      // The sound control belongs to a clip that is running; this one is not.
+      expect(find.text('Tap for sound'), findsNothing);
+      expect(find.text('Tap to play'), findsOneWidget);
+
+      await tester.tap(find.text('Tap to play'));
+      await tester.pump();
+
+      // The card does not start the player itself — it asks the deck, which
+      // owns the cache the player has to come from.
+      expect(asked, 1);
     });
 
     testWidgets('the card itself paints no stamps — the deck does',
