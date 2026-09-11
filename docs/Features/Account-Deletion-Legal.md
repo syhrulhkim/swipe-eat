@@ -1,6 +1,6 @@
 Status: SHIPPED
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Release/STORE.md](../Release/STORE.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [Auth.md](Auth.md)
 
 # Account Deletion & Legal Pages
@@ -41,17 +41,27 @@ auth.users
         ├── plans             (on delete cascade, and plan_members /
         │                      plan_time_votes cascade from both sides)
         ├── friendships       (on delete cascade, all three columns)
-        ├── wishlist_items.from_user_id (on delete set null)
-        └── reviews.user_id   (on delete set null)
+        ├── reviews           (on delete cascade, since D148)
+        └── wishlist_items.from_user_id (on delete set null)
 ```
 
 Every table added since — `wishlist_items`, the three plan tables, `friendships`
 and `phone_hashes` — was written into this shape rather than around it, which is
 what keeps D50 true without any code to maintain.
 
-`reviews.user_id` is `set null` rather than cascade — a review is content about
-a restaurant, not personal data to erase, so it survives its author
-anonymously. With 6 reviews and no user write path, this is theoretical today.
+**`reviews.user_id` cascades since D148.** It was `set null` (D51) for three
+weeks, on the reasoning that a review is content about a restaurant rather than
+personal data to erase — true while the table held six scraped snippets and no
+user could write one. D147 gave users the write path, and the clause inverted
+into a leak: deleting your account would leave your review standing, still
+carrying the name you wrote it under, and — since the read policy treats a null
+`user_id` as a seeded catalogue snippet — readable by *everyone* rather than
+only your friends. The rating trigger fires on the cascade, so the restaurant's
+average comes back down with the row.
+
+The only `set null` left is `wishlist_items.from_user_id`: the row belongs to
+the person who received the share, and losing the sharer's id does not leave
+anything of theirs behind.
 
 `SettingsPage` holds a `_deleting` flag so the row cannot be double-tapped and
 the UI shows the operation in flight.
@@ -99,15 +109,20 @@ declaration) and `CFBundleName` = "Swipe Eat".
 - The privacy page notes that thumbnails come from TikTok and are subject to
   TikTok's own privacy policy when they play — worth re-checking if the embed
   approach changes.
-- **The privacy page says "We do not ask for your contacts". The app now
-  does.** Onboarding step 01f offers "Find friends from contacts", the app
-  declares `NSContactsUsageDescription`, and `flutter_contacts` reads the
-  address book. Nothing is stored — the numbers are hashed on the device and
-  peppered and re-hashed on the server, and `match_contacts` writes nothing —
-  but the sentence as published is wrong, and it is a store-form claim, not
-  only prose. `supabase/functions/legal/index.ts`, the iOS privacy manifest and
-  the Play Data safety form have to move together; see
-  [Release/STORE.md](../Release/STORE.md).
+- ~~**The privacy page says "We do not ask for your contacts".**~~ Rewritten
+  2026-09-11 (D148). "What we collect" is now written against the twelve tables
+  that actually hold personal data rather than the four it used to name, and it
+  covers contacts, friendships, plans and votes, the wishlist, the two implicit
+  swipe signals (D149) and reviews (D147). Two claims were not merely missing
+  but **false** and are gone: that the app does not ask for contacts, and that
+  anonymous swipe counts survive a deletion — `swipes.user_id` has always been
+  `on delete cascade`, so nothing survives. The same wrong claim was in the
+  `delete-account` function's header comment and is corrected there too.
+- **The rewritten pages are not deployed.** Per the owner, the edge function is
+  edited in the repo and left for them to ship — nobody publishes legal copy the
+  owner has not read. Until `supabase functions deploy legal` runs, the live
+  page still carries the two false sentences. Both store forms are dashboard
+  work; see [Release/STORE.md](../Release/STORE.md).
 
 ## 5. Out of scope
 
@@ -122,6 +137,7 @@ declaration) and `CFBundleName` = "Swipe Eat".
 | ID | Decision | Status |
 |---|---|---|
 | D50 | Deleting `auth.users` is the whole deletion path; the cascade does the rest. No bespoke cleanup code to drift out of sync with the schema. | locked 2026-08-31 |
-| D51 | `reviews.user_id` is `set null`, not cascade — a review is content about a restaurant, not personal data. | locked 2026-08-22 |
+| D51 | ~~`reviews.user_id` is `set null`, not cascade — a review is content about a restaurant, not personal data.~~ | **superseded by D148 2026-09-11** |
+| D148 | The legal pages and the iOS privacy manifest are rewritten against the tables that exist, and `reviews.user_id` cascades: once a user writes a review, "it survives its author anonymously" means their name outliving their account on a row that has become world-readable. Edited, **not deployed** — the owner ships the legal copy. | locked 2026-09-11 |
 | D52 | Legal pages are an edge function, not in-app screens, because Google Play needs a URL openable with no app and no account. | locked 2026-08-31 |
 | D53 | `delete-account` keeps `verify_jwt = true` so the platform rejects unauthenticated callers before the function runs. | locked 2026-08-31 |

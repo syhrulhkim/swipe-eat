@@ -4,9 +4,15 @@
 //
 // Deleting the `auth.users` row is enough to remove every piece of personal
 // data: `profiles.id` references `auth.users (id) on delete cascade`, and every
-// user-scoped table (likes, preferences, quiz responses, …) cascades from
-// `profiles`. `swipes.user_id` is `on delete set null` by design, so aggregate
-// swipe counts survive with no link back to a person.
+// user-scoped table cascades from `profiles` — swipes, wishlist items, plans
+// and their invitations and votes, friendships, preferences, quiz responses,
+// and since D148 reviews, which were `on delete set null` while they were
+// catalogue content with an unused author hook.
+//
+// Nothing of the user survives. An earlier version of this comment claimed
+// `swipes.user_id` was `on delete set null` and that aggregate swipe counts
+// outlived the account; the constraint has always been `on delete cascade`, and
+// the privacy page no longer promises otherwise.
 //
 // Auth: verify_jwt stays on, so the platform rejects an unauthenticated call
 // before this code runs. The user id comes from the caller's own token — never

@@ -650,7 +650,7 @@ One thing this does not do: **show a review back to anyone.** The detail page
 dropped its review card in the redesign, and a friend's stars have no surface
 yet. Recorded in [Likes-Visits](../Features/Likes-Visits.md) §6.
 
-## 8. Compliance (D148)
+## 8. Compliance (D148 — done 2026-09-11, not deployed)
 
 The published privacy page says **"We do not ask for your contacts."** The app
 declares `READ_CONTACTS` on Android and `NSContactsUsageDescription` on iOS, and
@@ -677,6 +677,32 @@ Connect; those are dashboard work and no commit here can change them.
 The honest wording says what is true: phone numbers are hashed on the device
 before they are sent, the raw contact list never leaves the phone, and the
 digest is what is matched.
+
+**Done — in the repo. Nothing is published.**
+
+Reading the schema for the rewrite turned up a third wrong sentence and a real
+leak, neither of which was on this list:
+
+- **"Anonymous counts of how often a restaurant was swiped on" do not survive a
+  deletion.** `swipes.user_id` is `on delete cascade` and always has been. The
+  claim was in the privacy page *and* in `delete-account`'s own header comment,
+  which is where it presumably came from. Both are corrected.
+- **`reviews.user_id` was `on delete set null`** (D51). That was right while the
+  table held six scraped snippets. After D147 it meant: delete your account and
+  your review stays, carrying your name, and — because the new read policy
+  treats a null `user_id` as a seeded catalogue snippet — it becomes readable by
+  **everyone** instead of your friends. Reversed to cascade; the rating trigger
+  takes the average back down with the row.
+
+The rewritten "What we collect" is written against the twelve tables that hold
+personal data, not the four it used to name: location, taste, what you do with
+restaurants (including D149's dwell and sound), plans and their votes, friends,
+contacts, reviews, crash reports. `PrivacyInfo.xcprivacy` gains **Contacts** and
+**Other user content**, and its passport comment is gone. The terms page gains a
+short "What you write". `STORE.md` now lists what each store form must say.
+
+**What is left is not code.** `supabase functions deploy legal` is the owner's
+to run, and the two store forms are dashboard work.
 
 ## 9. What this plan will not do, and why
 

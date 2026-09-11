@@ -10,6 +10,13 @@
 	  Bundled SDKs (Sentry, GoogleSignIn, AuthenticationServices) ship their own
 	  manifests inside their frameworks, so only the app's own data use and API
 	  access are declared here.
+
+	  Not declared, because this build does not do it: a phone number.
+	  `AppConfig.phoneAuthEnabled` is a `bool.fromEnvironment` flag that is off
+	  unless someone passes it at build time, and the sign-in button hides
+	  itself when it is off. Turning it on means adding
+	  NSPrivacyCollectedDataTypePhoneNumber here and saying so in App Store
+	  Connect.
 	-->
 	<key>NSPrivacyTracking</key>
 	<false/>
@@ -61,8 +68,10 @@
 		</dict>
 		<dict>
 			<!-- Sent to the server to rank restaurants by distance and to draw
-			     Explore. Not stored as a location history; a manually chosen
-			     "passport" place is stored on the profile until changed. -->
+			     the map. Not stored as a location history: the profile keeps
+			     only the most recent fix, so the app still knows roughly where
+			     the user is when location is off. ("Passport", a manually
+			     chosen place, was removed by D84 and unwired by D121.) -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
@@ -87,6 +96,40 @@
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 				<string>NSPrivacyCollectedDataTypePurposeProductPersonalization</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- "Find friends" reads the address book on the device, scrambles
+			     each number into a one-way digest and sends only the digests,
+			     which `match_contacts` compares and discards. Nothing from the
+			     address book is stored, and no name or raw number leaves the
+			     phone — but the digests do leave it, so this is declared rather
+			     than argued about. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeContacts</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Reviews (D147): the stars and the optional line a user writes
+			     about a place they went. Readable by their accepted friends,
+			     under their name; the stars also feed the restaurant's public
+			     average, which carries no name. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
 		<dict>

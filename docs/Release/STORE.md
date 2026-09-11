@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Features/Account-Deletion-Legal.md](../Features/Account-Deletion-Legal.md), [Features/Auth.md](../Features/Auth.md)
 
 > Outstanding work is tracked in this doc's own "Still needed from you" section.
@@ -81,13 +81,19 @@ policies. If Swipe Eat starts collecting anything new — analytics, ads, contac
 — the pages, the iOS privacy manifest and the Play Data safety form all have to
 be updated together.
 
-> **That has already happened once, and is not yet reflected.** The app reads
-> contacts: onboarding's "Find friends from contacts" step,
-> `NSContactsUsageDescription` in `Info.plist`, `android.permission.READ_CONTACTS`
-> in the Android manifest, and `flutter_contacts` in `pubspec.yaml`. The published privacy page still says
-> "We do not ask for your contacts", `PrivacyInfo.xcprivacy` declares no contact
-> data type, and neither store form mentions it. Fix all four before uploading —
-> see the Data safety and App privacy items below.
+> **That has happened twice, and the repo is now in step — the published page
+> and the store forms are not.** The app reads contacts (onboarding's "Find
+> friends" step, the You tab's sheet, `NSContactsUsageDescription`,
+> `android.permission.READ_CONTACTS`, `flutter_contacts`), and since D147 it
+> takes **reviews**: stars and a line, shown to the author's friends under their
+> name. D148 rewrote `/legal/privacy` and `PrivacyInfo.xcprivacy` against both.
+>
+> Two things are still outstanding, and neither is a commit:
+>
+> 1. **The legal edge function is edited but not deployed.** The owner reviews
+>    the wording and ships it — `supabase functions deploy legal`. Until then the
+>    live page still says "We do not ask for your contacts", which is false.
+> 2. **Both store forms** must be filled in to match — see below.
 
 ---
 
@@ -204,18 +210,21 @@ The output lands in `build/app/outputs/bundle/release/app-release.aab` and
   do not hand over a real account.
 - **Data safety** — declare what the app actually collects. Based on the code
   today: *Name*, *Email address*, *User IDs*, *Approximate location*, *App
-  interactions* (likes/passes/saves/visited), and *Crash logs*. All are
-  collected, none are shared with third parties for advertising, all are
-  encrypted in transit, and users can request deletion — point the form at the
-  deletion URL above. This must match the privacy policy and the iOS privacy
-  manifest.
-  **Contacts need an answer too, and do not have one.** The app declares
-  `READ_CONTACTS` and reads the address book to find friends; what leaves the
-  device is a SHA-256 of each number, no names, and the server keeps nothing.
-  Work out from Play's current Data safety wording how that should be declared,
-  then make the form, the privacy page and `PrivacyInfo.xcprivacy` all say the
-  same thing. Leaving it blank is not one of the options — a declared
+  interactions* (likes/passes/saves/visited/plans/friends), *Contacts*, *Other
+  user-generated content* (reviews), and *Crash logs*. All are collected, none
+  are shared with third parties for advertising, all are encrypted in transit,
+  and users can request deletion — point the form at the deletion URL above.
+  This must match the privacy policy and the iOS privacy manifest, which
+  declare exactly this list.
+  **Contacts:** the app declares `READ_CONTACTS` and reads the address book to
+  find friends; what leaves the device is a SHA-256 of each number, no names,
+  and the server keeps nothing. `PrivacyInfo.xcprivacy` declares the Contacts
+  type anyway rather than arguing the digests out of scope (D148) — declare it
+  here the same way. Leaving it blank is not one of the options: a declared
   permission the form does not mention is what gets a submission rejected.
+  **Reviews (D147)** are the app's first user-written content that leaves its
+  author. They are shown to the author's friends under their name, and their
+  stars feed a public average that carries no name.
 - **Phone number** — declare it if `PHONE_AUTH_ENABLED` is on for the build you
   upload. It is off by default (D113), in which case there is nothing to
   declare.
@@ -234,13 +243,12 @@ The output lands in `build/app/outputs/bundle/release/app-release.aab` and
 ### 6. App Store Connect forms
 
 - **App privacy** questionnaire — must match `PrivacyInfo.xcprivacy` exactly:
-  email address, name, user id, precise location and product interaction all
-  *linked to identity*, crash data *not linked*, and **no tracking** anywhere.
-  Contacts are the open question: the app reads them, and only an irreversible
-  hash leaves the device. Decide how that is answered and write the decision
-  down, because the questionnaire, the manifest and the privacy page have to
-  agree — and today the privacy page flatly denies the app asks for contacts at
-  all.
+  email address, name, user id, precise location, product interaction,
+  **contacts** and **other user content** all *linked to identity*, crash data
+  *not linked*, and **no tracking** anywhere. The contacts question is answered
+  (D148): only an irreversible hash leaves the device and the server keeps
+  nothing, but it is declared as collected rather than argued out of scope,
+  because the alternative is a rejection over a judgement call.
 - **Contacts permission** — `NSContactsUsageDescription` is in `Info.plist` and
   names the reason. The step is skippable and the rest of the app works without
   it; make sure the reviewer can see that.
@@ -296,8 +304,8 @@ Then on a real device, in a release build:
 - `GUEST_BROWSING_ENABLED` is off for the same shape of reason: the anonymous
   provider is not enabled on the project, so the sign-up screen's "Later"
   stays hidden (D115).
-- The privacy page's contacts sentence, the iOS privacy manifest and both store
-  forms are out of step with the contact-matching feature. This one *is* a
-  blocker for the App Store's privacy questionnaire, which cannot be answered
-  truthfully and consistently until they agree — see
+- ~~The privacy page's contacts sentence and the iOS privacy manifest are out of
+  step with the contact-matching feature.~~ Rewritten 2026-09-11 (D148), against
+  contacts *and* reviews. What is left is not a code change: **deploy the legal
+  function** and fill in both store forms — see
   [Features/Account-Deletion-Legal.md](../Features/Account-Deletion-Legal.md).

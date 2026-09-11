@@ -15,7 +15,7 @@
 // has not been reviewed by a lawyer; see docs/Release/STORE.md.
 const CONTACT_EMAIL = Deno.env.get("LEGAL_CONTACT_EMAIL") ??
   "support@swipeeat.app";
-const LAST_UPDATED = "31 August 2026";
+const LAST_UPDATED = "11 September 2026";
 
 function page(title: string, body: string): Response {
   const html = `<!doctype html>
@@ -75,12 +75,36 @@ you. This page explains exactly what the app stores and why.</p>
   account. If you sign in with Google or Apple, we receive these from that
   provider instead of asking you for a password.</li>
   <li><strong>Your approximate location</strong> — used on the device and sent to
-  our server to rank restaurants by distance and to draw the Explore map. We do
-  not keep a history of where you have been. If you set a location manually
-  ("passport"), that place is stored on your profile until you change it.</li>
+  our server to rank restaurants by distance and to draw the map. The most recent
+  fix is stored on your profile so the app still knows roughly where you are when
+  you open it with location turned off. We do not keep a history of where you
+  have been.</li>
   <li><strong>Your taste choices</strong> — the cuisines and dietary tags you
-  pick, your search radius, and which restaurants you liked, passed on, saved or
-  marked as visited. This is what makes the recommendations yours.</li>
+  pick, whether you want halal-only or vegetarian places, how much spice and how
+  much money you are up for, your search radius, and your answers to the taste
+  quiz.</li>
+  <li><strong>What you do with restaurants</strong> — which you liked, passed on,
+  saved to your wishlist or marked as visited. We also store, for a swipe made on
+  the main screen, how long the card was in front of you and whether its video
+  had the sound on, because how sure you were is part of what you told us. This
+  is what makes the recommendations yours.</li>
+  <li><strong>Your plans</strong> — the restaurant, the day and the time you
+  picked, who you invited, and how the people you invited voted on the time.</li>
+  <li><strong>Your friends</strong> — who you are friends with on Swipe Eat, and
+  friend requests in either direction.</li>
+  <li><strong>Contacts, when you ask us to look</strong> — if you tap "Find
+  friends", the app reads your address book <em>on the phone</em> and scrambles
+  each phone number into a one-way code. <strong>Only those codes are sent</strong>,
+  they are compared against the accounts we know, and they are thrown away with
+  the answer. No name, no number and no address book entry ever leaves your
+  phone, and nothing from your address book is stored on our server. If you
+  verify a phone number on your own account, we store a scrambled code for
+  <em>that</em> number so people who already have it can find you.</li>
+  <li><strong>Your reviews</strong> — if you rate a place you went, we store your
+  stars and the line you wrote. <strong>Your friends on Swipe Eat can read
+  them</strong>, under your name; nobody else can. Your stars also count towards
+  the average rating shown on that restaurant, which everyone sees — a number,
+  never your name.</li>
   <li><strong>Crash and error reports</strong> — if the app crashes we send
   diagnostic data (device model, OS version, stack trace) to Sentry so we can fix
   it.</li>
@@ -91,8 +115,10 @@ you. This page explains exactly what the app stores and why.</p>
   <li>We do not sell your personal data.</li>
   <li>We do not track you across other companies' apps or websites, and we do not
   use your data for third-party advertising.</li>
-  <li>We do not ask for your contacts, photos, microphone or precise background
-  location.</li>
+  <li>We do not upload your address book. See "Contacts" above: what is sent is a
+  one-way scramble of the numbers, and it is not kept.</li>
+  <li>We do not ask for your photos, your microphone, or your location while the
+  app is closed.</li>
 </ul>
 
 <h2>Who processes your data</h2>
@@ -105,7 +131,8 @@ Sign-in with Google or Apple is handled by those companies.</p>
 
 <h2>How long we keep it</h2>
 <p>We keep your account data until you delete your account. Deleting your account
-removes your profile, preferences, likes and saved places immediately — see
+removes all of it — your profile, your preferences, your swipes, your wishlist,
+your plans, your friendships and your reviews — immediately and permanently. See
 <a href="./delete-account">Delete your account</a>.</p>
 
 <h2>Your rights</h2>
@@ -146,14 +173,17 @@ delete the account, and reply within 30 days.</p>
   <li>Your saved location and search radius.</li>
   <li>Your cuisine and dietary preferences, and your quiz answers.</li>
   <li>Every restaurant you liked, saved, passed on or marked as visited.</li>
+  <li>Your plans and the invitations and time votes attached to them.</li>
+  <li>Your friendships, and any friend requests waiting either way.</li>
+  <li>Your reviews — the stars and the line you wrote. The restaurant's average
+  is recalculated without them.</li>
+  <li>The scrambled code for your own verified phone number, if you have one.</li>
 </ul>
 <p>All of the above is deleted immediately and permanently — it cannot be
 restored, and you would start from scratch if you signed up again.</p>
 
 <h2>What is kept</h2>
 <ul>
-  <li>Anonymous counts of how often a restaurant was swiped on. These are no
-  longer linked to you or to any account once your account is deleted.</li>
   <li>Our restaurant catalogue, which is not personal data.</li>
   <li>Crash reports already sent to Sentry, which are deleted on Sentry's own
   90-day retention schedule.</li>
@@ -172,6 +202,13 @@ sources including TikTok posts by food creators and open map data. We check what
 we can, but details change and mistakes happen: confirm with the restaurant
 before you travel. Swipe Eat does not run any restaurant and does not take
 bookings or payments.</p>
+
+<h2>What you write</h2>
+<p>If you rate a place, the stars and the line you write are shown to your
+friends on Swipe Eat under your name, and your stars count towards that
+restaurant's average rating. Write about the meal, not about people; do not post
+anything unlawful, abusive or untrue. We may remove a review, and you can remove
+yours by rating the place again or by deleting your account.</p>
 
 <h2>Content from third parties</h2>
 <p>Videos are embedded from TikTok and belong to the people who posted them.
