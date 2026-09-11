@@ -536,13 +536,15 @@ production.
   fires, and the exploration jitter it trades against runs at its unrated
   weight (`0.35 + 0.15`) on **every** card, so the deck is noisier than the
   formula reads. `filter_min_rating` does not narrow the deck, it empties it.
-- **`swiped_at` is the *first* swipe, not the last.** `deck_scored` selects
-  `s.created_at as swiped_at`, and `record_swipe`'s `on conflict do update`
-  never touches `created_at` — only `updated_at` moves, through the
-  `swipes_touch_updated_at` trigger. `get_deck`'s exhaustion branch re-deals
-  rows `where d.swiped_at < now() - interval '3 days'`, so a card swiped again
-  yesterday can come back today because it was first swiped a week ago. Fix
-  pending; it wants its own migration and its own decision.
+- ~~**`swiped_at` is the *first* swipe, not the last.**~~ **Fixed 2026-09-11
+  (D135)**, migration `20260911090000_deck_scored_swiped_at_is_the_last_swipe`.
+  `deck_scored` selected `s.created_at as swiped_at` while `record_swipe`'s
+  `on conflict do update` never touches `created_at` — only `updated_at` moves,
+  through the `swipes_touch_updated_at` trigger — so `get_deck`'s exhaustion
+  branch (`where d.swiped_at < now() - interval '3 days'`) measured from the
+  first swipe ever. It now reads `s.updated_at`. The migration rewrites the
+  function from its own stored definition instead of restating it; the live
+  body and the repo file hash equal after stripping comments and whitespace.
 - **474 rows sit at `0,0`.** They are radius-invisible and distance-unrankable.
   `DeckRanker` gives them neutral half-credit offline so a missing geocode
   never locks a row out of the deck front, but the server-side radius filter

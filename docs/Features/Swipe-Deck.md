@@ -102,9 +102,9 @@ before scoring is even read.
 
 Out, but not always for good: when fewer than `p_limit` unswiped rows are left,
 `get_deck` tops the deck up with **passes** whose `swiped_at` is more than three
-days old. A like never comes back — only a pass gets a second showing, and only
-once the catalogue has run dry (see §8 for the bug in how that window is
-measured).
+days old — `swipes.updated_at`, so a re-pass restarts the clock (D135). A like
+never comes back: only a pass gets a second showing, and only once the
+catalogue has run dry.
 
 | Signal | Weight | How |
 |---|---|---|
@@ -361,14 +361,13 @@ one so a cached deck says the same thing a fresh one would.
 
 - Ranking's quality signal is inert: only 2 of 1,607 rows have a rating, and
   both of those rows are inactive.
-- **The re-surfacing window measures from the first swipe ever** — fix
-  pending. `deck_scored` reads `s.created_at as swiped_at`, and `get_deck`'s
-  exhaustion fallback resurfaces a pass once `swiped_at` is older than three
-  days. But `record_swipe`'s upsert never touches `created_at` on conflict, and
-  the `swipes_touch_updated_at` trigger maintains `updated_at` instead. So
-  re-passing a card that first came round more than three days ago does not
-  restart its clock: it qualifies for the fallback again on the very next
-  reload. The column the window wants is `updated_at`.
+- ~~**The re-surfacing window measures from the first swipe ever.**~~ **Fixed
+  2026-09-11 (D135.)** `deck_scored` read `s.created_at as swiped_at` while
+  `record_swipe`'s upsert never touches `created_at` on conflict and the
+  `swipes_touch_updated_at` trigger maintains `updated_at` instead, so
+  re-passing a card that first came round more than three days ago did not
+  restart its clock — it qualified for the exhaustion fallback again on the very
+  next reload. It now reads `s.updated_at`.
 - `swipe_card.dart`'s comment over the sound pill still says tapping it
   "reloads it with TikTok's own sound on". It does not — the reload went with
   D122. A stale comment, not stale behaviour.

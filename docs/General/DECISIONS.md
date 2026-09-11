@@ -75,6 +75,7 @@ not the row number.
 | D118 | The budget control is a **single upper limit** over a fixed RM 10 floor, as the design draws it ("Budget per person, upper limit"). A second thumb was a question nothing read: `deck_scored` filters on `budget_max` alone. The top stop releases the ceiling rather than setting a RM 100 one. The onboarding habits step no longer asks about spice either — the rules step already took that answer and `complete_onboarding` derives the bias from it (D104). | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-09-06 |
 | D105 | `halal_only`, `vegetarian` and `budget_max` are **hard** deck filters: a place the user cannot eat at is a wrong result, not a worse one. Halal requires `is_halal is true` — unknown is not good enough — which is why it is off by default, with only 27 of 1 605 live rows certified. An unknown `price_from` **passes** the budget ceiling, because 1 419 rows have no price and dropping them would empty the deck. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-09-05 |
 | D119 | `restaurant_dietary_tags` is **backfilled** from what the catalogue evidences: halal from `restaurants.is_halal is true` (27 rows), vegetarian from a place's own cuisine or its name (6 rows). The other four slugs stay empty rather than guessed. A hard filter over an empty table emptied the deck for anyone who used it, which is worse than an absent switch; guessing a dietary tag is worse still, because a false positive sends someone to eat something they do not eat. An empty deck under any rule the user set now names that rule. | [Profile-Preferences](../Features/Profile-Preferences.md) | locked 2026-09-06 |
+| D135 | A swipe is dated by **`updated_at`, not `created_at`**. `deck_scored` selected `s.created_at as swiped_at` while `record_swipe` upserts and only the `swipes_touch_updated_at` trigger moves a row, so `get_deck`'s three-day re-surfacing window measured from the *first* time a place was ever swiped: pass on somewhere you first saw last week and it came back the next morning. The migration rewrites the function from its own stored definition rather than restating it, so no other character of the ranker could drift — verified by hashing the live body against the repo file. | [Backend-Schema](../Features/Backend-Schema.md) | locked 2026-09-11 |
 
 ## Feature behaviour
 
@@ -207,4 +208,4 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D134**.
+   ID must keep meaning the same thing. The highest ID in use is **D135**.
