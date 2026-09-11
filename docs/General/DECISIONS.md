@@ -107,6 +107,7 @@ not the row number.
 | D132 | A plan member may see the other members. Phase 7 gave a guest "own membership select" only, so a guest opening the calendar saw an avatar stack of exactly one face — their own — on a dinner with five people at it. The new policy is scoped by `is_plan_member`, the same definer helper the rest of the plan policies lean on, so it adds no recursion. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
 | D133 | Time voting needs no new schema. A member upserts their own `plan_time_votes` row under the policies Phase 7 already wrote, the tally is a group-by the client does over rows it may read, and locking a time is the owner updating `plans.plan_time` through `PlansRepository.setTime`. The only thing missing was a read that could put a name next to a vote, which is what `get_plan_votes` is. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-06 |
 | D134 | Time voting gets a screen the design does not draw. "They'll get a vote on the time" is written on S4's switch and no S-numbered screen ever collects one, so `/plans/:id` is invented rather than derived — the five chips with their tallies, the roster, and the owner's button that moves the plan to the winning slot. It takes the Calendar card's tap; the restaurant is a chevron away in the plan's header. | [Plans-Calendar](../Features/Plans-Calendar.md) | locked 2026-09-09 |
+| D143 | A vote tests **plan membership**, not just caller identity. `plan_time_votes`'s insert policy only checked `user_id = auth.uid()`, so any signed-in stranger could write a row into any plan's tally with a direct PostgREST insert asking for `Prefer: return=minimal` — `set_plan_vote` was never the way in, because it ends in `returning` and Postgres applies the *select* policy to an `insert ... returning`. A stranger's row is not a read leak: it counts, so it can put a time on the owner's "Move it to" button that nobody at the dinner picked. The insert and update policies now carry the same membership expression `plan votes select` uses, `set_plan_vote` says so in words so the app gets a sentence rather than an RLS violation, and `get_plan_votes` counts only voters still on the plan, which retires any row written before this. Verified against the live project: a stranger's plain insert is refused, the owner's vote still lands, and the live function bodies hash equal to the migration file. | [Friends](../Features/Friends.md) | locked 2026-09-11 |
 
 ## TikTok player
 
@@ -208,4 +209,6 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D135**.
+   ID must keep meaning the same thing. The highest ID in use is **D143**;
+   D136–D142 and D144–D148 are reserved by
+   [OPTIMIZATION-PLAN.md](OPTIMIZATION-PLAN.md) and land as their phases do.

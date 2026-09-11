@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [Plans-Calendar.md](Plans-Calendar.md), [Onboarding-Taste.md](Onboarding-Taste.md), [Wishlist.md](Wishlist.md), [Restaurant-Detail.md](Restaurant-Detail.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [../General/DECISIONS.md](../General/DECISIONS.md), [../Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
 
 # Friends
@@ -285,10 +285,11 @@ book, which would be a claim the screen has no evidence for.
   rather than a made-up fact.
 - **Friend avatars are initials.** `profiles.avatar_url` is populated only for
   accounts that signed in with a provider that supplied one.
-- **Anybody signed in can write a vote onto any plan id, over REST.**
-  `plan_time_votes`'s insert policy is `user_id = auth.uid()` with no membership
-  check, and `set_plan_vote` is an invoker function, so the policy is the only
-  gate. The RPC itself is not the way in: it ends in `returning * into v_row`,
+- ~~**Anybody signed in can write a vote onto any plan id, over REST.**~~
+  **Fixed 2026-09-11 by D143**, kept here because the mechanism is worth
+  remembering. `plan_time_votes`'s insert policy was `user_id = auth.uid()` with
+  no membership check, and `set_plan_vote` is an invoker function, so the policy
+  was the only gate. The RPC itself is not the way in: it ends in `returning * into v_row`,
   and Postgres applies the **select** policy to an `insert ... returning`, so a
   stranger's call raises and the row is rolled back (verified 2026-09-11 against
   the live project with a throwaway table: a plain insert under a
@@ -299,10 +300,12 @@ book, which would be a claim the screen has no evidence for.
   filter the **voters** it returns, so the row appears in everybody else's tally
   with the stranger's name and avatar, counts toward the leading slot, and can
   put a time on the owner's "Move it to" button that nobody at the dinner
-  picked. Not a read leak; it corrupts the answer. The fix is a membership test
-  in the insert policy's `with check` (belt and braces: the same test in
-  `set_plan_vote`, and a voter join in `get_plan_votes`), which needs a migration
-  against the live project and is not in this pass.
+  picked. Not a read leak; it corrupts the answer. The insert and update policies
+  now carry the membership expression `plan votes select` already used,
+  `set_plan_vote` raises `42501` with a sentence rather than leaving the policy
+  to phrase the refusal, and `get_plan_votes` counts only voters still on the
+  plan. A stranger's plain insert was re-run against the live project afterwards
+  and is refused.
 
 ## 7a. What the advisors say, and why
 
@@ -348,6 +351,7 @@ measurable cost yet.
 | D129 | Every cross-user read returns exactly three columns — id, name, avatar url — through a `security definer` function. `profiles` stays owner-only; no policy is ever opened to make a name visible. | locked 2026-09-06 |
 | D130 | A friendship pair is one row in one direction, keyed `(user_lo, user_hi)` with `user_lo < user_hi`; `requester_id` records who asked and the *other* party accepts. A blocked row is the blocker's alone to update or delete, and a send into a block returns the same neutral error a genuine failure gives. | locked 2026-09-06 |
 | D131 | One `friend_request(user_id, action)` RPC rather than four functions. The five verbs are the same statement against the same primary key, and four functions would be four places to get the pair ordering wrong. Security invoker, so RLS stays the boundary. | locked 2026-09-06 |
+| D143 | A vote tests plan membership, not just caller identity. The insert and update policies on `plan_time_votes` carry the same expression `plan votes select` uses, `set_plan_vote` refuses a non-member in words, and `get_plan_votes` counts only voters still on the plan — which retires any row written before the fix without deleting it. Three layers because the old hole did not leak a read, it corrupted an answer: a stranger's row counted toward the slot the owner's "Move it to" button offers. | locked 2026-09-11 |
 
 D132 (a plan member may see the other members), D133 (time voting needs no new
 schema) and D134 (voting gets a screen the design does not draw) are the plan's

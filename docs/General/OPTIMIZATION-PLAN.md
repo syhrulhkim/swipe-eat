@@ -282,7 +282,7 @@ Three things in one migration, all in `get_deck`:
   its own warning.
 - `rows 300` misinforms the planner by 166×.
 
-### 6.3 A stranger stops being able to vote (D143)
+### 6.3 A stranger stops being able to vote (D143 — done 2026-09-11)
 
 `plan_time_votes`'s insert policy checks `user_id = (select auth.uid())` and
 nothing else. The `set_plan_vote` RPC is not the way in — it ends in
@@ -298,8 +298,13 @@ everyone else's tally with the stranger's name on it, counts toward the leading
 slot, and can put a time on the owner's "Move it to" button that nobody at the
 dinner picked. Not a read leak — it corrupts the answer.
 
-Add the membership test to the insert policy's `with check`. Belt and braces:
-the same test inside `set_plan_vote`, and a voter join in `get_plan_votes`.
+All three landed in `20260911120000_a_vote_needs_a_seat_at_the_table`: the
+membership test in the insert *and* update policies' `with check`, the same test
+inside `set_plan_vote` so the app hears a sentence rather than an RLS violation,
+and a voter filter in `get_plan_votes` that retires any row written before the
+fix without deleting it. Verified against the live project afterwards — a
+stranger's plain insert is refused, the owner's vote still lands and still shows
+in the tally, and both function bodies hash equal to the migration file.
 
 ### 6.4 Hygiene, deliberately deferred
 

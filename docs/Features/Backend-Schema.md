@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](../General/RUNBOOK.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-Preferences.md](Profile-Preferences.md), [Friends.md](Friends.md), [Plans-Calendar.md](Plans-Calendar.md), [History/backend-plan.md](../History/backend-plan.md)
 
 # Backend Schema (as built)
@@ -400,8 +400,8 @@ Added 2026-09-06 by `20260906160100_plan_people_invites_and_votes.sql`.
 | `get_plan_people` | `(p_plan_ids bigint[]) → table(plan_id bigint, user_id uuid, status text, name text, avatar_url text)` | The roster for a page of plans in one call. `security definer` — `profiles` is owner-only (D129) |
 | `invite_to_plan` | `(p_plan_id bigint, p_user_ids uuid[]) → integer` | Owner-only. Inserts `plan_members` rows at `invited`; returns how many were added |
 | `answer_plan_invite` | `(p_plan_id bigint, p_status text) → plan_members` | The invitee moves their **own** row to `going` or `declined` |
-| `set_plan_vote` | `(p_plan_id bigint, p_plan_time time default null, p_time_label text default null) → plan_time_votes` | Upserts the caller's own vote (D133) |
-| `get_plan_votes` | `(p_plan_id bigint) → table(user_id uuid, name text, avatar_url text, plan_time time, time_label text)` | `security definer`, so a vote can carry a name |
+| `set_plan_vote` | `(p_plan_id bigint, p_plan_time time default null, p_time_label text default null) → plan_time_votes` | Upserts the caller's own vote (D133), and refuses a caller who is not on the plan (D143) |
+| `get_plan_votes` | `(p_plan_id bigint) → table(user_id uuid, name text, avatar_url text, plan_time time, time_label text)` | `security definer`, so a vote can carry a name; counts only voters still on the plan (D143) |
 | `friends_who_liked` | `(p_restaurant_id bigint) → table(id uuid, name text, avatar_url text)` | The detail screen's friends row. `security definer` |
 | `get_ngap_count` | `(p_restaurant_id bigint) → bigint` | How many people have bitten a place. `security definer`, because `swipes` is owner-only; it returns a number and nothing about who |
 
@@ -483,9 +483,10 @@ Shared-by-invitation — to `authenticated`, resolved through the
 reference each other and recurse (D109): a member may select a `plan`; the
 plan's owner inserts and deletes `plan_members` rows and a member selects and
 updates their own; members select a plan's `plan_time_votes` and each writes
-only their own. `plan members see members` was added on top (D132) because
-"own membership select" alone showed a guest an avatar stack of exactly one
-face — their own — on a dinner with five people at it.
+only their own, and only into a plan they are on (D143). `plan members see
+members` was added on top (D132) because "own membership select" alone showed a
+guest an avatar stack of exactly one face — their own — on a dinner with five
+people at it.
 
 The friend graph — `friendships`, four policies to `authenticated`, one per
 verb: a user selects only rows they are in (the graph of who knows whom is not
@@ -566,14 +567,16 @@ production.
   `plans` (select). Two policies for the same role and verb are both evaluated;
   the pairs are the owner's rule and the member's rule, which is the shape D109
   and D132 chose deliberately.
-- **`plan_time_votes` takes a vote from a non-member over REST.** The insert
-  policy checks only `user_id = (select auth.uid())`, never membership. The
-  `set_plan_vote` RPC is not the way in — it ends in `returning`, and Postgres
-  applies the *select* policy to an `insert ... returning` (verified 2026-09-11
-  on a throwaway table against the live project), so a stranger's call raises.
-  A direct PostgREST insert with `Prefer: return=minimal` lands the row, and
-  `get_plan_votes` does not filter its voters, so it shows up in the members'
-  tally. See [Friends.md](Friends.md) §7 for the shape of the fix.
+- ~~**`plan_time_votes` takes a vote from a non-member over REST.**~~ **Fixed
+  2026-09-11 by D143**, migration
+  `20260911120000_a_vote_needs_a_seat_at_the_table`. The insert policy checked only
+  `user_id = (select auth.uid())`, never membership, and a direct PostgREST
+  insert with `Prefer: return=minimal` landed the row — the `set_plan_vote` RPC
+  was never the way in, because it ends in `returning` and Postgres applies the
+  *select* policy to an `insert ... returning`. The insert and update policies
+  now carry the membership expression `plan votes select` uses, and
+  `get_plan_votes` counts only voters still on the plan. See
+  [Friends.md](Friends.md) §7.
 - **`get_ngap_count` is executable by `anon`.** It is a `security definer`
   aggregate over `swipes`, granted to `anon` for the logged-out browse mode
   that does not exist yet. It returns a count and nothing about who.
