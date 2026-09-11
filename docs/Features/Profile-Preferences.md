@@ -3,7 +3,7 @@ Owner: Swipe Eat team
 Last updated: 2026-09-10
 Cross-references: [Onboarding-Taste.md](Onboarding-Taste.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Account-Deletion-Legal.md](Account-Deletion-Legal.md)
 
-# Profile, Preferences, Filters & Passport
+# Profile, Preferences & Discovery Filters
 
 > **Changed 2026-09-04.** **Passport is removed** — it appears nowhere in the
 > new design, so the model, the sheet, the tile, the stat, `setPassport` and the
@@ -31,13 +31,13 @@ shape their deck.
 
 Files: `lib/features/profile/presentation/profile_tab.dart`,
 `data/profile_repository.dart`, `data/profile_cache.dart`,
-`models/passport_destination.dart`,
 `lib/features/restaurants/presentation/discovery_filter_sheet.dart`,
 `lib/core/ui/radius_options.dart`, `lib/features/settings/presentation/settings_page.dart`.
 
 ## 1. What the tab shows
 
-Two sources, deliberately: the **profile row** (name, passport, radius) and the
+Two sources, deliberately: the **profile row** (name, the default radius, the
+diet & budget answers, the discovery filters and the stored fix) and the
 **likes** (what they have collected). Identity and behaviour are different
 reads, and the tab does not pretend one implies the other.
 
@@ -59,11 +59,16 @@ Below that, in the design's order:
    per person, Default radius. Each row opens a bottom sheet carrying the same
    control the first run used, writes optimistically and reverts with a
    SnackBar on failure.
-4. **Settings**, full width. The design's second ghost button is "Friends · N",
-   which belongs to the phase that has people in it.
+4. **Friends and Settings**, two ghost buttons side by side. The first reads
+   `Friends · <n>` — drawn even at zero, because "Friends · 0" is the truth
+   about a new account — and pushes `/friends`; the count comes from
+   `FriendsController`. See [Friends.md](Friends.md).
 
 **"Videos autoplay" is not shown.** The design lists it, but
-`tikTokPlayerUrl` hard-codes `autoplay=1` and starts at `muted=1` (the "Tap for sound" chip flips that one) (D89) and the app has no
+`tikTokPlayerUrl` hard-codes `autoplay=1` and `muted=0` — which in TikTok's
+player means "leave the volume control usable", not "start with sound"; the
+clip is silenced by posting `mute` through the `x-tiktok-player` API on page
+load, and the "Tap for sound" pill posts `unMute` (D89, D122) — and the app has no
 connectivity package, so neither "Wi-Fi only" nor "Never" could be honoured. A
 setting that does nothing is worse than an absent one (D106).
 
@@ -140,14 +145,27 @@ reinstall**, the same way `search_radius_km` already does.
 map's top-right control — carries the radius slider above the cuisine, dietary
 and rating sections, because "how far may the deck look?" is the same question
 as the rest of the sheet. It is still a separate write:
-`applyDiscoveryFilters` calls `update_search_radius` first and
-`set_discovery_filters` second, so a failed radius write leaves the filters
-untouched rather than half-applying the sheet. Settings keeps its own slider —
-the same stops, the same RPC.
+`applyDiscoveryFilters` writes the radius first, and only when it changed —
+`ProfileRepository.updateSearchRadius`, which is `update_preferences` with
+`p_radius_km` / `p_clear_radius` (there is no `update_search_radius` RPC) —
+then `set_discovery_filters` second, so a failed radius write leaves the
+filters untouched rather than half-applying the sheet. Settings keeps its own
+slider — the same stops, the same RPC.
+
+The sheet itself: `showDragHandle: true`, titled **`Discovery`**, with
+**`Clear all`** beside the title, disabled and `kTextOnPhotoMuted` while
+nothing is on. Its sections, in order, are **`Search radius`** (a discrete
+slider over `kRadiusStops = [1, 2, 5, 10, 15, 20, 30, 50, 100, null]`, its
+trailing slot carrying `radiusLabel` and its ends anchored `1 km` /
+`Any distance`), **Cuisines** and **Dietary needs** (each trailing
+`<n> chosen`, or nothing at zero rather than "0 chosen"), and the rating
+chips. The apply button reads **`Apply with no limits`**, **`Apply 1 limit`**
+or **`Apply <n> limits`**.
 
 Because the sheet sets it, the radius counts towards `AppUser.activeFilterCount`
-— the number on the button's badge. Counting is **by kind, not by chip**: five
-cuisines are one constraint, so the sheet's "Apply 2 limits" and the badge's "2"
+— the number on the button's badge. It counts **four kinds**: cuisines,
+dietary tags, a minimum rating, and a search radius. Counting is **by kind, not
+by chip**: five cuisines are one constraint, so the sheet's "Apply 2 limits" and the badge's "2"
 are always the same number. The button's zero-limit label is "Apply with no
 limits" rather than "show me everything", because halal, vegetarian and budget
 are set in Settings and still narrow the deck (D105).
@@ -163,7 +181,8 @@ and stale cards would break the promise the filter just made.
 | Minimum rating | **No.** 2 of 1,607 rows have a rating; any threshold empties the deck |
 
 The sheet says that last row out loud: pick any rating limit and a caution
-appears under the chips. The filter is left in place rather than removed —
+appears under the chips reading `Barely any place here is rated yet — a rating
+limit will empty the deck.` The filter is left in place rather than removed —
 the data is what is missing, not the feature — but a user who empties their
 own deck should be told why before they conclude the app is broken.
 
@@ -214,6 +233,20 @@ rather than writing.
 keeps `last_latitude`, `last_longitude`, `last_place_name`, `located_at` and
 `location_source` current.
 
+**The name follows the fix.** Since
+`supabase/migrations/20260910100000_update_location_name_follows_fix.sql` the
+write is `last_place_name = nullif(btrim(p_place_name), '')` — no `coalesce`
+back to the old value — and `ProfileRepository.updateLocation` always sends
+`p_place_name`, null included. A reverse geocode that comes back empty
+therefore clears the name rather than leaving the previous town standing over
+new coordinates. The deck header falls back to **`Nearby`** when there is no
+name, and says **`Location off`** when the position it has is a fallback
+rather than a fix.
+
+`AppUser.lastLatitude` / `lastLongitude` are read through
+`AuthRepository._profileColumns` on every profile load, so the deck, the card's
+distance label and the Nearby map all measure from one origin (D121).
+
 The stored fix is what lets a user who **denied or revoked** location still get
 a sensible deck — `deck_scored` falls back to it. `location_source` records how
 the fix was obtained (including `'denied'`, written by onboarding), so ranking
@@ -227,8 +260,8 @@ distance formatting is `distance_label.dart`; opening the maps app is
 ## 6. Caching
 
 `profile_cache.dart` persists the profile in `shared_preferences`, so a cold
-offline launch knows the user's name, radius and passport rather than rendering
-a blank tab. Every profile write RPC returns the whole `profiles` row, so the
+offline launch knows the user's name, default radius, diet & budget answers and
+discovery filters rather than rendering a blank tab. Every profile write RPC returns the whole `profiles` row, so the
 cache is refreshed from the write's own response and never needs a follow-up
 read (D11).
 
@@ -259,7 +292,6 @@ Both stores require the deletion path; see
 
 - **Roles and permissions.** `profiles.role` is dead weight, not a hook to
   build on.
-- **Multiple saved passport destinations** — one pin at a time.
 - **Per-session filters** that do not persist. Filters are profile state by
   design (D33).
 
@@ -268,7 +300,7 @@ Both stores require the deletion path; see
 | ID | Decision | Status |
 |---|---|---|
 | D11 | Profile write RPCs return the whole `profiles` row; the client never follows up with a read. | locked 2026-08-23 |
-| D12 | Passport resolves server-side in `deck_scored`, so the client's per-load GPS fix cannot override it. | locked 2026-08-31 |
+| D12 | ~~Passport resolves server-side in `deck_scored`, so the client's per-load GPS fix cannot override it.~~ | **superseded by D121 2026-09-10** |
 | D24 | Deck filters are server-side profile state; the Liked tab's filter sheet is client-side. | locked 2026-08-31 |
 | D33 | Discovery filters and radius live on `profiles`, not device storage, so they survive a reinstall. | locked 2026-08-31 |
 | D34 | Filters are applied in `deck_scored`'s `candidates` CTE so they bind the exhaustion fallback too, not just the fresh-cards query. | locked 2026-08-31 |
@@ -276,4 +308,6 @@ Both stores require the deletion path; see
 | D36 | The three taste switches are weights; radius and dietary tags are hard filters. | locked 2026-08-23 |
 | D104 | `spice_level` 1–4 is the stored truth; `spice_bias` is derived from it on every write. Resolves GAP-ANALYSIS §4.1. | locked 2026-09-05 |
 | D105 | `halal_only`, `vegetarian` and `budget_max` are hard deck filters. Halal needs `is_halal is true` (unknown does not pass), which is why it defaults off; an unknown `price_from` **does** pass the budget ceiling. | locked 2026-09-05 |
+| D121 | D84's passport retirement is finished on the database: `deck_scored` and `search_restaurants` stop reading `profiles.passport_*`, and `set_passport` is dropped. One origin chain — the caller's fix, else the profile's stored one — shared by the deck, Explore, the Nearby map and the card's own distance label. The columns stay: ignoring data and deleting it are separate decisions. | locked 2026-09-10 |
+| D122 | "Tap for sound" drives TikTok's player through their documented `x-tiktok-player` postMessage API (`mute` / `unMute`), not through the URL. The player URL is now always `muted=0`; a clip still starts silent (D89) because the handle posts `mute` on `onPageFinished`. | locked 2026-09-10 |
 | D106 | The You tab's stats read 0 for what nothing feeds yet rather than hiding a tile, its taste rows edit in place through sheets, and "Videos autoplay" is omitted because nothing could honour it. | locked 2026-09-05 |

@@ -47,13 +47,24 @@ saved check** — the wishlist row's 26 px ember tick, in the photo's top-right
 
 The tile splits **photo above, caption below**: the picture fills the top of
 the tile and the name and second line sit on a solid `kSurfaceDark` strip
-under it, so neither needs a scrim. The strip is sized to its text and the
+under it, so neither needs a scrim — there is no `PhotoTileScrim` and no
+`BiteNotch` on this tile any more. The strip is sized to its text and the
 photo takes the rest, which is what lets a 2× text scale grow the caption
-instead of overflowing the tile — and why the name is one line, not two.
+instead of overflowing the tile — and why the name is one line, not two. The
+tile is a clipped `Container` on `kSurfaceDark` at `kRadiusPanel`, and its
+hairline outline is a **`foregroundDecoration`**: a border in the background
+decoration would inset the square-cornered photo one pixel inside the stroke,
+and the photo would then overpaint it at every corner.
 
-The tile's second line is **"Cuisine · Neighbourhood"**, dropping the
-neighbourhood rather than dangling a separator when the row has none. The
-distance and rating that used to live there are not in the design.
+The tile's second line is **"Cuisine · Neighbourhood"** in `kCreamMuted`,
+dropping the neighbourhood rather than dangling a separator when the row has
+none. The distance and rating that used to live there are not in the design.
+The grid runs at `childAspectRatio: 0.9`.
+
+The two marks sit **inside the photo**, both inset 8: `_SavedCheck` — a 26 px
+(`kCheckCircleSize`) ember disc with a 14 px check — at the top right, and
+`_PlannedPill` at the top left. Both are `IgnorePointer` under an opaque hit
+test, so a tap on either lands on the tile rather than falling through.
 
 ### Retired
 
@@ -88,7 +99,10 @@ Three of them are one question asked three ways, so they are one
 `enum BitesPlanFilter { all, notPlanned, planned }` rather than three booleans
 that can contradict each other. Halal is a separate toggle because it narrows
 any of the three. **Wishlist →** is in neither: it navigates, and a chip that
-stays lit after taking you away is claiming to be a filter it is not.
+stays lit after taking you away is claiming to be a filter it is not. It is a
+plain `context.push('/wishlist')` and the tab **does not refresh on the way
+back** — with the bookmark badge gone (D125) there is nothing on a tile that a
+wishlist edit could change. A pull-to-refresh is the way to force one.
 
 Tapping the chosen plan chip again returns to All — without that there is no
 way out of a filter except finding All again.
@@ -109,7 +123,8 @@ which are server-side profile state
 deliberate: this is a finite list the user already owns, so filtering it is a
 view concern, not a query.
 
-A **pull down on the grid** refreshes too, and refreshes *both* caches — the
+A **pull down on the grid** refreshes too — `Could not load your bites.` on
+failure, the same string the first load uses — and it refreshes *both* caches — the
 likes behind the tiles and the calendar behind the day badges and the Planned
 chips. The tab is the two of them crossed, so reloading one would leave the
 other's stale answer on screen. Every branch of the grid is
@@ -117,18 +132,16 @@ other's stale answer on screen. Every branch of the grid is
 its viewport does not scroll, and "no bites yet" is exactly the state a user
 pulls in after saving something on another device.
 
-## 3. Unlike vs rewind
-
-Both exist and they are **not** the same operation, which is the subtlest thing
-in the schema:
+## 3. Unlike, and the rewind that is not there
 
 | Action | Write | Effect on the deck |
 |---|---|---|
 | Unlike (here) | `record_swipe(liked: false)` | The row stays. The card is never dealt again — correct, the user saw it and said no |
-| Rewind (deck) | `undo_swipe` → **deletes** the row | The card is dealable again — correct, the swipe never happened |
+| ~~Rewind (deck)~~ | ~~`undo_swipe` → **deletes** the row~~ | **No UI since D84.** The deck's action bar is Skip / Ngap! / Later, and nothing calls `undo_swipe`; it is an orphaned function in the database. |
 
-`get_deck` excludes every restaurant with *any* swipe row, which is what makes
-the distinction load-bearing. See D6.
+`get_deck` excludes every restaurant with *any* swipe row, which is what made
+the distinction load-bearing while both existed. With rewind gone, an unlike is
+final: there is no path back to a card the user has answered. See D6, D84.
 
 ## 4. The visit prompt
 
@@ -200,7 +213,7 @@ deleted once no install predates the migration.
 
 | ID | Decision | Status |
 |---|---|---|
-| D6 | Unlike writes `liked = false`; rewind deletes. Only a deleted row is dealt again. | locked 2026-08-31 |
+| D6 | Unlike writes `liked = false`; ~~rewind deletes. Only a deleted row is dealt again.~~ | **superseded in the client by D84** — rewind is gone; unlike still writes `liked = false` |
 | D13 | Badges for saved places come from a separate call, to preserve PostgREST embeds on `get_liked_restaurants`. The reasoning stands; the call is now a `wishlist_items` read rather than `get_super_liked_ids` (D94). | locked 2026-08-31 |
 | D24 | The Liked filter sheet is client-side; the deck's discovery filters are server-side profile state. A finite owned list is a view concern. | locked 2026-08-31 |
 | D25 | Segments load lazily — a user who never opens Visited never pays for it. | locked 2026-08-31 |

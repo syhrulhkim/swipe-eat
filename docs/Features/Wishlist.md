@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-10
 Cross-references: [Friends.md](Friends.md), [Likes-Visits.md](Likes-Visits.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
 # Wishlist
@@ -109,7 +109,8 @@ now has to do itself, because the pass no longer clears anything server-side.
 are still going to. It feeds `LikesController.isSavedForLater` /
 `laterCount`. Nothing in the Bites tab reads them any more — the tile's
 bookmark badge is gone (D125) — but the like/unlike flows still keep the set
-current.
+current. The Bites tab does not refresh on the way back from here either
+([Likes-Visits.md](Likes-Visits.md)).
 
 ## 4. Client shape
 
@@ -135,7 +136,8 @@ WishlistPage  →  WishlistController  →  WishlistRepository  →  wishlist_it
   ticking feels broken.
 - **`WishlistPage`** owns its scaffold (`kBackgroundDark` + `ScreenGlow` +
   `SafeArea`), not `DashboardTabShell` — it is pushed, so it has a back button
-  where a tab has a title.
+  where a tab has a title. It also holds a `FriendsController` (injected, else
+  the singleton) for the sender names.
 
 ### Sharing
 
@@ -157,6 +159,12 @@ Per `.wl*` in the prototype:
 - **Rows** — 26 px check circle, 40 px thumb at radius 12, name in the display
   face at 16, "Cuisine · Neighbourhood" under it, and a fixed 58 px column on
   the right saying where the row came from.
+- **Hint** — `Tap a place once you've eaten there`, between the add bar and
+  the list rather than as row 0, so it stays put while the list scrolls. It is
+  drawn only when the list has loaded and is not empty, and it drops itself
+  when `MediaQuery.sizeOf(context).height < 600`: on a short phone at a huge
+  text scale the fixed chrome leaves no room for the list, and the hint is the
+  cheapest thing to lose.
 - **Footer** — "Eaten ones sink to the bottom", and an ember **Clear eaten**
   that is dead while nothing is eaten.
 
@@ -181,9 +189,14 @@ the tap action re-declared because excluding drops it (D83).
 - ~~**`plannedLabel`**~~ — **live since 2026-09-06.** `WishlistPage` reads it
   from `PlansController.plannedLabelFor`, so a wishlist row with a day on it
   says "Fri 4". See [Plans-Calendar.md](Plans-Calendar.md).
-- **`from_user_id` names** — a friend row says "From a friend" rather than
-  "From Aiman", because there is no friend graph to resolve the id against
-  yet. `WishlistItem.fromUserName` is the seam.
+- ~~**`from_user_id` names**~~ — **live since the friends phase.** The page
+  resolves each sender through `FriendsController.nameFor(item.fromUserId)`
+  and hands the result down as `WishlistItem.fromUserName`, so the row reads
+  "From Aiman". The friends cache is the *only* place a name could come from,
+  so a sender who is not (or is no longer) a friend resolves to null and the
+  row falls back to "From a friend". The page listens to
+  `Listenable.merge([_controller, _friends])` and calls
+  `FriendsController.ensureLoaded()` on init. See [Friends.md](Friends.md).
 - **`source = 'friend'`** has no write path. The column and the rendering exist
   ahead of the sharing feature.
 

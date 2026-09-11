@@ -1,6 +1,6 @@
 Status: DRAFT
 Owner: Swipe Eat team
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 Cross-references: [README.md](README.md), [SCREENS.md](SCREENS.md), [NGAP-DESIGN-SYSTEM.md](NGAP-DESIGN-SYSTEM.md), [Features/Backend-Schema.md](../Features/Backend-Schema.md), [General/PLAN.md](../General/PLAN.md)
 
 # Gap Analysis — built vs. Ngap
@@ -12,6 +12,16 @@ what blocks the most.
 the hard problem is **data**. The new design asks for opening hours, prices,
 dishes, neighbourhoods and a social graph — and today's schema explicitly
 declares two of those *not buildable* because no column and no source exist.
+
+> **Status, 2026-09-10.** Most of §1 has since been closed. Hours, prices,
+> halal and neighbourhood are columns as of 2026-09-05 (§1.1, §1.2); the social
+> graph, contact matching, invites and time voting shipped 2026-09-06/09 (§1.4,
+> §1.5) — see [Features/Friends.md](../Features/Friends.md) and
+> [Features/Plans-Calendar.md](../Features/Plans-Calendar.md). What is left is
+> **coverage, not capability**: only 194 rows have hours, 186 a price, 30 a
+> halal answer, and `dishes` is still empty. The analysis below is kept as
+> written, because its reasoning is why those things were built the way they
+> were; read it against the status notes, not instead of them.
 
 ## 1. The blocking gaps
 
@@ -39,6 +49,10 @@ possible fix in the whole document: the data is already in the captions.
 
 **Needs:** an hours representation (per-weekday open/close, plus 24h and closed
 flags), a scraper change to keep what it already reads, and a backfill.
+
+**Built 2026-09-05** (D91): `hours_text`, `opens_at`, `closes_at`, `closed_dow`
+on `restaurants`, and `is_open_at()` behind `get_nearby`'s `open_now`. 194 rows
+have hours — the captions that carried them.
 
 ### 1.2 Price / budget — blocks 4 screens
 
@@ -72,7 +86,15 @@ menus are not in the captions.
 Friends (01f), Invite (05) and half of Calendar (06) and Detail (03).
 
 **Today:** none of it. `profiles` has no relationships; `profiles.role` is dead
-weight; there is no user-to-user anything in 15 tables and 16 RLS policies.
+weight; there is no user-to-user anything in the 15 tables and 16 RLS policies
+of the day (22 and 35 now).
+
+**Shipped 2026-09-06/09** — `friendships`, `phone_hashes`, contact matching,
+`/friends`, plan invites and time voting. `profiles` was **not** relaxed: every
+cross-user read is a `security definer` function returning id, name and avatar
+url and nothing else (D129), and matching is server-side on a peppered hash
+rather than on-device, because the copy that promised otherwise was rewritten
+(D127). See [Features/Friends.md](../Features/Friends.md).
 
 **Needs:**
 
@@ -135,7 +157,7 @@ Against the as-built schema in
 | `get_super_liked_ids()` | Same |
 | `cuisines.emoji` | "No emoji as food imagery" |
 | Quiz tables ×3 + `submit_quiz_answer` | Already orphaned (D55). The redesign is the moment to drop them |
-| `profiles.passport_*` ×3 + `set_passport` | Passport is absent from the new design |
+| `profiles.passport_*` ×3 + `set_passport` | Passport is absent from the new design. `set_passport` dropped 2026-09-10 (D121); the columns stay, unread |
 | `reviews` on the detail screen | Replaced by dishes. The table may survive for the "1,204 ngaps" count |
 
 ### Neighbourhoods
@@ -223,12 +245,15 @@ If that means self-hosted clips, **it violates D4 and TikTok's terms.** If it
 means the embed continues and 9:16 describes the framing, D4 is safe. This must
 be settled before any player work: it is a legal question, not a design one.
 
-Related, and **done 2026-09-04**: the player URL sets `muted=1`, so video
-starts silent as the design asks (D89). The card says "Tap for sound" rather
-than "tap to unmute", because on the card a tap opens fullscreen — which is
-where TikTok's volume control is, and D4 forbids driving it from here. Muting
-also removed a fragility: a muted autoplay is the only kind a browser engine
-honours without a gesture.
+Related, and **done 2026-09-04**: video starts silent as the design asks (D89),
+and the card says "Tap for sound". ~~The player URL sets `muted=1`, and a tap
+opens fullscreen, which is where TikTok's volume control is.~~ **Amended
+2026-09-10 by D122**: the URL always carries `muted=0` and silence is imposed by
+posting TikTok's own `mute` message on load; the pill posts `unMute` in place,
+so sound no longer costs a screen. D4 still holds — the messages are TikTok's
+documented player API, not a script driving their page. Muting on load also
+removed a fragility: a muted autoplay is the only kind a browser engine honours
+without a gesture.
 
 ### 4.4 Google-hosted fonts vs. D8 — ✅ resolved 2026-09-04
 
@@ -267,10 +292,12 @@ wire name, so this shipped without a schema change. Renaming the column stays
 a separate migration — see §2.
 
 **Still on the database:** `undo_swipe`, `get_swipe_stats`,
-`get_super_liked_ids`, `set_passport` and `profiles.passport_*` are now unused
-by the client but not dropped. Dropping them destroys data (passport pins, the
-super-like flags) and is irreversible, so it wants an explicit decision rather
-than riding along with a client change.
+`get_super_liked_ids` and `profiles.passport_*` are now unused by the client but
+not dropped. Dropping them destroys data (passport pins, the super-like flags)
+and is irreversible, so it wants an explicit decision rather than riding along
+with a client change. `set_passport` **was** dropped on 2026-09-10 — it is a
+writer, not data, and the columns it wrote were still outranking the device
+inside `deck_scored` (D121).
 
 The profile's streak — in **weeks** — is a different statistic and is not
 built; it needs plans.
@@ -359,14 +386,14 @@ Each phase is independently shippable and each unblocks the next.
 | Phase | Work | Why first |
 |---|---|---|
 | **0** | Settle §4 — the seven conflicts. Especially **4.3 (D4/legal)** and the KL-vs-Johor catalogue question | Two of these can invalidate later work entirely |
-| **1** | Opening hours: schema + keep what the scraper already parses + backfill | Cheapest real win; the data is already in the captions. Unblocks 5 screens |
+| ~~**1**~~ | ~~Opening hours: schema + keep what the scraper already parses + backfill~~ | ✅ **Delivered 2026-09-05** (D91). See [Features/Restaurant-Data.md](../Features/Restaurant-Data.md) §2a. |
 | ~~**2**~~ | ~~The design system: tokens, both fonts bundled, radii, buttons, drop eyebrows~~ | ✅ **Delivered 2026-09-04.** See [Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md) |
 | **3** | Reskin the existing five tabs in place, no new features | Ships a coherent Ngap look with today's features. **Partly delivered 2026-09-04** — see below |
 | ~~**4**~~ | ~~Price band + neighbourhood + dishes, and the new detail screen~~ | ✅ **Delivered 2026-09-06** (detail screen; dishes data still empty). See [Features/Restaurant-Detail.md](../Features/Restaurant-Detail.md) |
 | ~~**5**~~ | ~~Nearby: the map replaces the cuisine grid~~ | ✅ **Delivered 2026-09-05.** See [Features/Nearby-Map.md](../Features/Nearby-Map.md). The 474 ungeocoded rows and the missing KL catalogue are now visible rather than urgent: they simply do not pin. |
 | ~~**6**~~ | ~~Wishlist + the up-swipe rebind + retire super like~~ | ✅ **Delivered 2026-09-05.** See [Features/Wishlist.md](../Features/Wishlist.md) |
 | ~~**7**~~ | ~~Plans + Calendar (solo only, no friends)~~ | ✅ **Delivered 2026-09-06.** See [Features/Plans-Calendar.md](../Features/Plans-Calendar.md) |
-| **8** | Friends, invites, time voting, and the RLS work | Largest and riskiest; the only phase that relaxes `profiles` |
+| ~~**8**~~ | ~~Friends, invites, time voting, and the RLS work~~ | ✅ **Delivered 2026-09-06/09.** See [Features/Friends.md](../Features/Friends.md) and [Features/Plans-Calendar.md](../Features/Plans-Calendar.md). `profiles` was never relaxed — D129 did it with definer functions instead. |
 | **9** | KL catalogue scrape, if §0 decided that way | Can run in parallel from phase 1 |
 
 ### Phase 3 progress (2026-09-04)
@@ -422,8 +449,8 @@ Delivered. See [Features/Wishlist.md](../Features/Wishlist.md) and the
 
 Still Phase 3 and beyond:
 
-- **Nearby is still the cuisine grid, not a map**, and Calendar is still an
-  empty state.
+- ~~**Nearby is still the cuisine grid, not a map**, and Calendar is still an
+  empty state.~~ — **done 2026-09-05 / 2026-09-06** (phases 5 and 7).
 - **The bite on the swipe card** (D81).
 - ~~**The plan chips have no ids to filter on.**~~ — **done 2026-09-06**
   (phase 7). `PlansController` feeds `plannedRestaurantIds`, the day pill on a

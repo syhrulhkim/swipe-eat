@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-10
 Cross-references: [PLAN.md](PLAN.md), [Tests/CONVENTIONS.md](../Tests/CONVENTIONS.md), [Release/STORE.md](../Release/STORE.md), [Features/Auth.md](../Features/Auth.md)
 
 # Runbook
@@ -50,7 +50,7 @@ Apple needs no define — the button appears on Apple platforms only.
 
 ### Every configurable define
 
-All of them are read in `lib/core/config/app_config.dart`.
+All but the last are read in `lib/core/config/app_config.dart`.
 
 | Define | Default | Purpose |
 |---|---|---|
@@ -59,8 +59,25 @@ All of them are read in `lib/core/config/app_config.dart`.
 | `APP_NAME` | `Swipe Eat` | Window and task-switcher title |
 | `GOOGLE_WEB_CLIENT_ID` | none | Audience Supabase validates Google tokens against |
 | `GOOGLE_IOS_CLIENT_ID` | none | Identifies the app to the iOS Google sheet |
+| `PHONE_AUTH_ENABLED` | `false` | Shows the phone sign-in button. Needs an SMS provider in the dashboard first (D113) |
+| `GUEST_BROWSING_ENABLED` | `false` | Shows the sign-up screen's "Later". Needs the anonymous provider (D115) |
 | `SENTRY_DSN` | none | Turns on crash reporting; unset means nothing is sent |
 | `SENTRY_ENVIRONMENT` | `development` | Which deployment a report came from |
+| `LEGAL_BASE_URL` | `<SUPABASE_URL>/functions/v1/legal` | Where the public privacy / terms / deletion pages live |
+| `USE_DEV_PLANS` | `false` | Read in `lib/main.dart` and `calendar_tab.dart`, not `AppConfig` — swaps `PlansController` for `DevPlansRepository` |
+
+There are no map-tile defines: the Nearby map draws no tiles (D126).
+
+#### The Calendar dev harness
+
+```bash
+flutter run --dart-define=USE_DEV_PLANS=true
+```
+
+`lib/dev/calendar_dev_data.dart` then serves three fixed September-2026 plans in
+Kuala Lumpur, a `PlanStats` of 27 kept and a 6-week streak, and a device
+position at 3.1390, 101.6869 — enough to see the month grid's pips, the plan
+rows and the friend avatars without a populated database.
 
 ### Component demos
 
@@ -97,6 +114,11 @@ Migrations under `supabase/migrations/` mirror the remote project.
 supabase db push          # apply pending migrations
 supabase migration list   # what is applied where
 ```
+
+**The remote version numbers are not the repo's filenames.** A migration applied
+through the MCP `apply_migration` tool is stamped with that tool's version, so
+`20260910110000_retire_passport_origin.sql` is `20260910032319` on the project.
+`migration list` shows the remote numbers; match by name, not by timestamp.
 
 **A new migration goes in `supabase/migrations/` *and* through `apply_migration`
 against the remote.** Doing only one desyncs the repo from the project, and the
@@ -199,9 +221,12 @@ Signing, store forms, icons and screenshots: [Release/STORE.md](../Release/STORE
 
 ## 8. Things that need a device, not a test
 
-Three behaviours are platform-level and are not exercised by `flutter analyze`
+Four behaviours are platform-level and are not exercised by `flutter analyze`
 or `flutter test`. Smoke-test them on hardware before a release:
 
-- the card-to-fullscreen TikTok player handover,
+- the card-to-fullscreen TikTok player handover, and "Tap for sound" — the
+  mute/unmute goes through TikTok's `postMessage` API (D122), which a widget
+  test cannot drive,
 - Sentry initialisation with a real DSN,
-- the offline deck fallback, in airplane mode.
+- the offline deck fallback, in airplane mode,
+- the contacts permission and "Find friends from contacts" in onboarding.

@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-06
+Last updated: 2026-09-10
 Cross-references: [STACK.md](STACK.md), [Redesign/NGAP-DESIGN-SYSTEM.md](../Redesign/NGAP-DESIGN-SYSTEM.md), [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md), [General/PLAN.md](../General/PLAN.md)
 
 # Design System
@@ -51,12 +51,12 @@ open line and the deck card's open chip. It says "open now" and nothing else.
 
 | Token | Value | Role |
 |---|---|---|
-| `kBackgroundDeep` | `#050302` | Deepest — behind the explore map |
+| `kBackgroundDeep` | `#050302` | Deepest. Only the `lunar/` dev gallery uses it |
 | `kBackgroundDark` | `#0B0605` | The screen. **Warm black, never grey** |
 | `kSurfaceDark` | `#171010` | Cards, panels, the bottom nav |
 | `kSurfacePanel` | `#221614` | Raised elements on a card, list rows |
 | `kBrandColorFallback` | = `kSurfacePanel` | An unbranded or unparseable row |
-| `kGlass` / `kGlassStrong` | white @ 7% / 12% | Panels over photography |
+| `kGlass` / `kGlassStrong` | white @ 7% / 12% | Panels over photography — and, since 2026-09-10, the fill of `SimpleCard` and of a calendar plan row, both of which sit over the screen glow rather than over a photo |
 | `kFillOnPhoto` | black @ 35% | Controls over a photo or video |
 | `kHairline` | white @ 14% | Separates two dark surfaces |
 
@@ -88,8 +88,11 @@ Nothing hard-codes a corner; setting all five to `0` restores the
 square-cornered app, which is exactly what they were between 2026-08-31 and
 2026-09-04 (§9).
 
-`kActionButtonSize` 58 (like/pass/route), `kUtilityButtonSize` 44 (back,
-settings, more).
+`kActionButtonSize` 56 (like/pass/route), `kNgapButtonSize` 72 (the deck's one
+primary action, and the largest control in the app), `kUtilityButtonSize` 44
+(back, settings, more). The deck's bar spaces those with `kDeckActionGap` 20
+between the three columns and `kDeckActionCaptionGap` 6 between a ghost's disc
+and the word under it (§7c).
 
 ## 4. Motion and shadow
 
@@ -157,17 +160,31 @@ call site guessing at padding.
 
 ## 7. `ScreenGlow`
 
-The signature. A radial ember glow at the top of every dashboard tab, falling
-off to the background before the first third of the page.
+The signature. A radial ember glow at the top of a screen, falling off to the
+background before the first third of the page.
 
-The design's ellipse is 130% of the screen wide and 48% tall, centred on the top
-edge and lifted 6%. Flutter's `RadialGradient` is circular, so the shape is
-produced by painting into a box of that aspect and letting it overflow the sides
-rather than by distorting the gradient. It is `IgnorePointer` and sits at the
-bottom of the `Stack` — it is the one place orange appears without being
-tappable, and the exception is granted only because it never touches a control.
+The CSS gives the ellipse **radii** of 130 % of the screen width and 48 % of it
+in height, centred on the top edge and lifted 6 %. Flutter's `RadialGradient`
+is circular and sized by its *box*, so the box is twice those radii —
+`width = screen width × 2.6`, height `= width × 0.96` — centred, top at −6 %,
+and left to overflow the sides rather than distorting the gradient. Halving
+that (the pre-2026-09-10 `× 1.3`) stopped the falloff short of the screen
+edges. It is `IgnorePointer` and sits at the bottom of the `Stack` — it is the
+one place orange appears without being tappable, and the exception is granted
+only because it never touches a control.
 
-Wired into `DashboardTabShell`, so all five tabs get it.
+**Every screen paints its own, and paints exactly one.** There is no shared
+wrapper that supplies it: `DashboardTabShell` paints one (so Bites, which is
+the only tab built on the shell, gets it that way), and Calendar and You each
+paint their own because they build their own frame. Swipe and Nearby paint none
+— both are full-bleed over a card or a map, with no ground for a glow to sit
+on. The dashboard page itself paints **none**, deliberately: it used to paint
+one behind the `IndexedStack`, which doubled the glow on the three tabs that
+already had theirs.
+
+Off the dashboard it is on splash, sign-up, phone sign-in, onboarding,
+settings, the restaurant screen, the plan page, the plan date picker, the
+wishlist, friends and invite. `grep -rn 'ScreenGlow()' lib` is the list.
 
 ## 7a. The bite
 
@@ -193,16 +210,14 @@ a caption strip, and its saved mark is the ember check of §7g — a full circle
 drawn inside the photo, which a notch at inset 6 / radius 30 (a quarter-disc
 hanging off the corner) cannot be. D79 still governs the hero and the blob.
 
-**Where it is not, yet:**
+**Where it is not:**
 
 - **The swipe card.** The deck only ever deals unswiped places, so the flag
   would be false at every call site. Wiring it needs the deck to know what is
   already saved, which is plumbing rather than paint (D81).
-- **Replacing the super-like star.** The design says the notch replaces it; the
-  star means "must try" and the notch means "saved", which are different facts.
-  Retiring super like is a decision the redesign has not taken (D82). Until it
-  does, a bitten tile moves its badge row to the *left* corner so the notch
-  does not clip a button.
+- **Replacing the super-like star.** Moot since D84: the star went with the
+  feature, which is what let the tile's mark go to its specified full size
+  (D82, resolved).
 
 ## 7b. Navigation
 
@@ -267,11 +282,23 @@ fetching would be a wrong answer rather than a missing one.
 
 Three circles, centred as equals around the one that matters:
 
-| Control | Size | Fill | Gesture |
-|---|---|---|---|
-| Skip | 56 | `kSurfaceDark` + hairline | left |
-| **`AppNgapButton`** | **72** | `kCtaGradient` | right |
-| Later | 56 | `kSurfaceDark` + hairline | up |
+| Control | Size | Fill | Caption | Gesture |
+|---|---|---|---|---|
+| Skip | `kActionButtonSize` 56 | `kSurfaceDark` + hairline | `Skip` | left |
+| **`AppNgapButton`** | `kNgapButtonSize` **72** | `kCtaGradient` | — | right |
+| Later | `kActionButtonSize` 56 | `kSurfaceDark` + hairline | `Later` | up |
+
+The two ghosts each sit in a column that is a full `kNgapButtonSize` wide —
+as wide as the disc in the middle, not as wide as their own 56 — with
+`kDeckActionGap` (20) spacers between the three. That is what keeps Ngap
+dead-centre whatever the captions measure at a large text size.
+
+The caption sits `kDeckActionCaptionGap` (6) under the disc, in
+`kFontSizeMicro` (11) w600 `kCreamSecondary` at height 1.2, one line,
+ellipsised. It is wrapped in `ExcludeSemantics` — the button already announces
+itself, and a second node reading the same word makes a screen reader say every
+move twice. **Ngap carries no caption**: `AppNgapButton` carries the word
+instead of a glyph, so a third one under it would be the same word twice.
 
 `AppNgapButton` carries the **word**, not a glyph. The design forbids a bare
 heart here: "Ngap" is the product's name for the action, and a button that says
@@ -288,8 +315,13 @@ the two, and Pass/Like as wide pills. All three of those features are retired
 
 Three pieces, all floating over the map area
 ([Features/Nearby-Map.md](../Features/Nearby-Map.md)). There are **no tiles** under them
-since D126 — the pins sit on `kBackgroundDark`, and `kNearbyMapScrim` went
-with the raster it existed to darken.
+since D126 — the pins sit on `kBackgroundDark`, and the scrim token that
+existed to darken the raster was deleted with it.
+
+The filter button up there is the deck's, word for word: `Discovery settings`
+as its semantics label, `<n> filter(s) on` as its value, and an ember glyph
+whenever something is narrowing the results. One sheet, one name, one colour
+for "a filter is on".
 
 ## 7e. Preference controls
 
@@ -357,6 +389,33 @@ reads as continuing past them rather than as five things that happened to fit.
 
 Semantics: `label` + `isButton` + `hasSelectedState`, with the tap action
 re-declared beside `excludeSemantics` (D83).
+
+## 7l. Bottom sheets, and the discovery sheet's patterns
+
+`BottomSheetThemeData.dragHandleColor` is `kHairline`, set once in
+`swipe_eat_app.dart` — the same white-at-14 % that separates two dark surfaces
+everywhere else, so the handle reads as a seam rather than as a control. The
+discovery sheet asks for it with `showDragHandle: true`; nothing draws its own.
+
+Two patterns the discovery sheet establishes for any sheet that asks questions
+([Features/Profile-Preferences.md](../Features/Profile-Preferences.md) §3):
+
+- **A section label with a right-aligned trailing value.** The label on the
+  left, what the section currently answers on the right in `kAccentCream` w700
+  — `10 km`, `2 chosen`. The answer is readable without opening the control
+  under it.
+- **`_SectionCaution`** — an `info_outline_rounded` glyph at 14 px in
+  `kAccentEmber` beside `bodySmall` in `kTextOnPhotoSecondary`. It warns about
+  a choice rather than reporting an error, which is why it is the accent and
+  not a red the palette does not have.
+
+### The one on-photo exception
+
+Controls over a photo or video take `kFillOnPhoto` (black @ 35 %). The sound
+pill is the exception: `kSurfaceDark` at **82 %** alpha, `minHeight` 36, its
+border and ink going `kAccentEmber` once the sound is on. It sits over a moving
+clip that can go white at any frame, where a 35 % wash disappears — and at 36
+it is sized as a control rather than as a caption.
 
 ## 7g. The Bites tile
 
@@ -523,18 +582,29 @@ and only sometimes works is a worse answer than one that is not there.
 
 ### The plan row
 
-`.plan` is a `kSurfaceDark` card with a hairline: a 48 px logo at radius 14
-(`kPlanLogoSize`, `kRadiusPlanLogo`) carrying the cover or two initials in
-display 16 w800 (`kPlanInitialsFontSize`), the name in body w600 ellipsised,
-a `kCreamSecondary` detail line reading **"Lunch · Kepong · 6 km"**, and an
-ember time pill. Each part of the detail line is dropped rather than faked when
-it is unknown — no distance without a real fix, no neighbourhood placeholder —
-so the row never carries a dangling separator.
+`.plan` is a `kGlass` card with a hairline (glass rather than `kSurfaceDark`
+since 2026-09-10, so the screen glow reads through the rows instead of stopping
+at them): a 48 px logo at radius 14 (`kPlanLogoSize`, `kRadiusPlanLogo`)
+carrying the cover or two initials in display 16 w800 (`kPlanInitialsFontSize`),
+the name in body w600 ellipsised, a `kCreamSecondary` detail line, and an ember
+time pill.
 
-The row answers a tap (open the restaurant) and a long press (cancel). Both are
-re-declared on the semantics node beside the one-sentence label, because
-`excludeSemantics` drops them (D83). Cancelling confirms in a **bottom sheet**,
-which keeps the row on screen behind it, rather than in a dialog.
+The detail line **leads with the people** — `planPeopleLine` from
+`friend_captions.dart` — then the neighbourhood, then the distance:
+"Just you · Kepong · 8.7 km", "3 friends · 2 confirmed · Kampung Baru". Each
+part after the first is dropped rather than faked when it is unknown — no
+distance without a real fix, no neighbourhood placeholder — so the row never
+carries a dangling separator. Under it sits a `FriendAvatarStack` at
+`kAvatarSizeCompact`, showing the roster once it lands; anyone who declined is
+not drawn. The count on the line is read off the plan's own members rather than
+off the faces, so the line is right the moment the plan is and the faces appear
+a beat later without moving anything.
+
+The row answers a tap (open `/plans/:id`, the plan's own page, not the
+restaurant) and a long press (cancel). Both are re-declared on the semantics
+node beside the one-sentence label, because `excludeSemantics` drops them
+(D83). Cancelling confirms in a **bottom sheet**, which keeps the row on screen
+behind it, rather than in a dialog.
 
 ### The picked bar
 
@@ -566,9 +636,40 @@ at 46 rather than the prototype's 40. Both are deliberate: D62 allows exactly
 two button fills and one chip, and forking a control to gain 4 px is a worse
 trade than the 4 px.
 
+## 7m. Faces
+
+The vocabulary the friends phase added — [Features/Friends.md](../Features/Friends.md).
+A face is a photo, or two initials on a coloured ground.
+
+| Token | Value | For |
+|---|---|---|
+| `kAvatarSize` | 32 | A face in a stack — the detail screen's friends row, anywhere people are counted rather than chosen |
+| `kAvatarSizeRow` | 44 | A face on a row you can tap. It is `kMinTapTarget` on purpose: the row's height comes from its avatar, so the target *is* the picture |
+| `kAvatarSizeCompact` | 20 | A face on a calendar plan card, where three of them and a line of text share one line |
+| `kAvatarOverlap` | 10 | How far each face in a stack laps the one before it |
+| `kAvatarBorder` / `kAvatarBorderCompact` | 2 / 1.5 | The ring separating one face from the one behind |
+| `kAvatarInitialsFontSize` | 12 / 15 / 9 | Initials at each of the three sizes (`…Row`, `…Compact`) |
+| `kAvatarStackMax` | 3 | Faces drawn before the caption takes over the counting |
+| `kAvatarGrounds` | five pastels | The ground behind initials |
+| `kAvatarInk` | `#140A05` | The ink on any of them |
+| `kPersonCheckSize` | 26 | The tick at the end of a selectable row — the wishlist's `kCheckCircleSize`, same mark, same job |
+| `kSearchBarHeight` | 46 | The invite screen's search field |
+| `kInviteCountFontSize` | 22 | The running total beside "Send invites", in the display face |
+| `kInviteButtonMaxWidth` | 220 | How wide "Send invites" may get before it reads as a banner |
+
+**Overlap rather than a gap**: faces that touch read as a group, faces that do
+not read as a list.
+
+`kAvatarGrounds` are **not accents and the palette rules of §1 do not reach
+them**. An accent means something — ember is action, `kFresh` is open now —
+and these mean nothing at all; they are wallpaper behind two letters, picked by
+hashing the person's id so one person keeps one colour on every screen they
+appear on. They are one list rather than five named tokens precisely so nothing
+but an avatar can reach for one.
+
 ## 8. Testing
 
-`test/core/ui/design_tokens_test.dart` — 42 tests. Beyond the widget cases, the
+`test/core/ui/design_tokens_test.dart` — 49 tests. Beyond the widget cases, the
 palette itself is asserted, which is what makes a retint safe:
 
 - **Every black is warm** — more red than blue, for all four surfaces.
@@ -605,14 +706,13 @@ instances and their licences already existed. Lexend was removed in turn.
 
 ## 10. Known gaps
 
-- **The Explore, Group and Profile tab bodies are untouched.** Phase 3 changed
-  the frame around them, not their contents.
-- **The bite is on Bites tiles only** — not the swipe card (D81), and not yet
-  in place of the super-like star (D82).
+- **The bite is on the detail hero and the auth blob only** — not the swipe
+  card (D81), and no longer on the Bites tile, which carries the ember check
+  instead (D125).
 - **No light theme**, and the tokens are literal dark values rather than
   semantic pairs, so this stays a one-way door.
-- **`kBackgroundDeep` still has no user** — it is "behind the explore map" and
-  no map is built.
+- **`kBackgroundDeep` has no user in the app** — only `dev/lunar_gallery.dart`,
+  which does not ship.
 - No documented contrast audit for `kCreamMuted` over arbitrary video frames,
   which is the hardest case in the app.
 
@@ -644,9 +744,11 @@ instances and their licences already existed. Lexend was removed in turn.
 | D80 | Only the current tab is labelled. The bar spends its width on the one question the user is asking, and three independent signals — fill, ink, filled-vs-outline glyph — say which tab is current without relying on colour. | locked 2026-09-04 |
 | D96 | The design's chip row replaces the Bites segments. `AppFilterChip` is drawn at 36 and tapped at 44, and only a *selected* chip is ember — a chip that navigates never lights. | locked 2026-09-05 |
 | D81 | The bite is not wired to the swipe card. The deck deals only unswiped places, so the flag would be false everywhere — an always-false switch is dead code, not a reskin. | locked 2026-09-04 |
-| D82 | The super-like star survives the bite. "Must try" and "saved" are different facts; retiring super like is [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md) §4.5's call. A bitten tile moves its badges to the left corner instead. | open, pending §4.5 |
+| D82 | ~~The super-like star survives the bite~~ — **resolved 2026-09-04 by D84.** The star went with the feature, which is what let the tile's mark go to its specified full size. | resolved by D84 |
 | D83 | Any `Semantics` using `excludeSemantics` re-declares its own `onTap`, and an accessibility claim is asserted by driving the semantics action, never by reading the widget tree. | locked 2026-09-04 |
-| D101 | The map's `TileProvider` is constructor-injected; the OSM default is development only, and a fake keeps the widget tests off the network. | locked 2026-09-05 |
+| D101 | ~~The map's `TileProvider` is constructor-injected~~ — **superseded 2026-09-10 by D126.** The Nearby map draws no tiles at all, so there is no provider to inject; the pins sit on `kBackgroundDark`. | superseded by D126 |
+| D122 | The sound pill drives TikTok's player by postMessage, which is why it is the one on-photo control that is not `kFillOnPhoto`: it is a live control over a moving clip, so it takes an opaque ground and goes ember when the sound is on (§7l). | locked 2026-09-10 |
+| D125 | The Bites tile's saved mark is an ember check drawn inside the photo, not a notch clipped out of the tile; the wishlist bookmark badge is removed rather than hidden. Supersedes D79 on the grid tile only (§7a, §7g). | locked 2026-09-10 |
 
 | D106 | The preference controls (`.setrow`, `.switch`, `.seg`, the budget range) are one shared vocabulary across the wizard, the You tab and Settings, and each encodes "not answered yet" as a state it can draw. | locked 2026-09-05 |
 | D110 | The plan time is five fixed chips, reusing `AppFilterChip` at its own 36 px rather than forking a 40 px variant. See §7i. | locked 2026-09-06 |

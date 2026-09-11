@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-10
 Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Features/Account-Deletion-Legal.md](../Features/Account-Deletion-Legal.md), [Features/Auth.md](../Features/Auth.md)
 
 > Outstanding work is tracked in this doc's own "Still needed from you" section.
@@ -29,7 +29,7 @@ re-register:
   (Play re-signs your app, so the fingerprint users actually run is Play's, not
   yours). The OAuth client of type *iOS* needs bundle ID `com.swipeeat.app`.
   Feed the resulting ids in as `GOOGLE_WEB_CLIENT_ID` / `GOOGLE_IOS_CLIENT_ID`
-  dart-defines — see `docs/auth-setup.md`.
+  dart-defines — see [Features/Auth.md](../Features/Auth.md).
 - **Apple developer portal** → the App ID must be `com.swipeeat.app` with the
   *Sign in with Apple* capability enabled, and the Service ID / key you gave
   Supabase must point at it.
@@ -80,6 +80,14 @@ accurate description of what the app does today, written to satisfy the store
 policies. If Swipe Eat starts collecting anything new — analytics, ads, contacts
 — the pages, the iOS privacy manifest and the Play Data safety form all have to
 be updated together.
+
+> **That has already happened once, and is not yet reflected.** The app reads
+> contacts: onboarding's "Find friends from contacts" step,
+> `NSContactsUsageDescription` in `Info.plist`, `android.permission.READ_CONTACTS`
+> in the Android manifest, and `flutter_contacts` in `pubspec.yaml`. The published privacy page still says
+> "We do not ask for your contacts", `PrivacyInfo.xcprivacy` declares no contact
+> data type, and neither store form mentions it. Fix all four before uploading —
+> see the Data safety and App privacy items below.
 
 ---
 
@@ -201,6 +209,16 @@ The output lands in `build/app/outputs/bundle/release/app-release.aab` and
   encrypted in transit, and users can request deletion — point the form at the
   deletion URL above. This must match the privacy policy and the iOS privacy
   manifest.
+  **Contacts need an answer too, and do not have one.** The app declares
+  `READ_CONTACTS` and reads the address book to find friends; what leaves the
+  device is a SHA-256 of each number, no names, and the server keeps nothing.
+  Work out from Play's current Data safety wording how that should be declared,
+  then make the form, the privacy page and `PrivacyInfo.xcprivacy` all say the
+  same thing. Leaving it blank is not one of the options — a declared
+  permission the form does not mention is what gets a submission rejected.
+- **Phone number** — declare it if `PHONE_AUTH_ENABLED` is on for the build you
+  upload. It is off by default (D113), in which case there is nothing to
+  declare.
 - **Privacy policy** — the `/legal/privacy` URL.
 - **Content rating** — fill in the questionnaire honestly. Note that the app
   embeds third-party TikTok videos, which is user-generated content you do not
@@ -218,6 +236,14 @@ The output lands in `build/app/outputs/bundle/release/app-release.aab` and
 - **App privacy** questionnaire — must match `PrivacyInfo.xcprivacy` exactly:
   email address, name, user id, precise location and product interaction all
   *linked to identity*, crash data *not linked*, and **no tracking** anywhere.
+  Contacts are the open question: the app reads them, and only an irreversible
+  hash leaves the device. Decide how that is answered and write the decision
+  down, because the questionnaire, the manifest and the privacy page have to
+  agree — and today the privacy page flatly denies the app asks for contacts at
+  all.
+- **Contacts permission** — `NSContactsUsageDescription` is in `Info.plist` and
+  names the reason. The step is skippable and the rest of the app works without
+  it; make sure the reviewer can see that.
 - **Sign in with Apple** — guideline 4.8 requires it when you offer Google
   sign-in. The Dart side is already implemented (`sign_in_with_apple`), but the
   entitlement and the App ID capability are not. See the Xcode step in the first
@@ -244,6 +270,7 @@ Then on a real device, in a release build:
 - Sign up with email, confirm, sign in.
 - Google sign-in and Apple sign-in, after the console work in the first section.
 - Deny the location permission and confirm the app still opens and swipes.
+- Deny the contacts permission in onboarding and confirm the wizard finishes.
 - Settings → Account → **Delete account**, then confirm the same email can sign
   up again from scratch. This is the flow both stores check.
 
@@ -269,3 +296,8 @@ Then on a real device, in a release build:
 - `GUEST_BROWSING_ENABLED` is off for the same shape of reason: the anonymous
   provider is not enabled on the project, so the sign-up screen's "Later"
   stays hidden (D115).
+- The privacy page's contacts sentence, the iOS privacy manifest and both store
+  forms are out of step with the contact-matching feature. This one *is* a
+  blocker for the App Store's privacy questionnaire, which cannot be answered
+  truthfully and consistently until they agree — see
+  [Features/Account-Deletion-Legal.md](../Features/Account-Deletion-Legal.md).

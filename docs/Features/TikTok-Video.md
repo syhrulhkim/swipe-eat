@@ -5,35 +5,29 @@ Cross-references: [Swipe-Deck.md](Swipe-Deck.md), [Restaurant-Data.md](Restauran
 
 # TikTok Video & Thumbnails
 
-> **Changed 2026-09-10 (second pass).** "Tap for sound" never actually
-> produced sound, and the first pass below explains why it could not. TikTok's
-> `muted` parameter is not a starting volume: their docs define `muted=1` as
-> "set the default volume to 0 **and prevent the user from changing the
-> volume**", and `muted=0` as merely enabling the volume control. Reloading
-> with `muted=0` therefore gave you the same silent clip, from the top, under
-> a pill that had flipped to "Sound on". Verified against the live player:
-> under `muted=1` an `unMute` message is refused outright; under `muted=0` it
-> works every time, with no reload.
+> **How the sound works, as of 2026-09-10 (D122).** The URL is **always**
+> `muted=0`, and the pill drives the volume by posting TikTok's documented
+> `x-tiktok-player` message into the player document.
 >
-> The chip now posts TikTok's **documented** `x-tiktok-player` message
-> (`{'x-tiktok-player': true, type: 'unMute'}`) into the player document
-> (D122). The URL is always `muted=0`, and D89's "starts silent" is enforced
-> by posting `mute` from `onPageFinished` — which is also the re-apply for a
-> tap that landed while the page was still loading, since `loadRequest`
-> returns at navigation start. D4 still stands: this is the interface TikTok
-> publishes for driving their embed, not a reach into their DOM. The clip no
-> longer restarts when the sound comes on.
-
-> **Changed 2026-09-10.** "Tap for sound" is now the unmute (D89 amended).
-> Tapping the chip reloads the player with `muted=0` — TikTok's own parameter,
-> so D4 still stands: nothing is scripted into their page. The cost is that the
-> clip restarts from the top. The chip then reads "Sound on" and mutes again.
-> A tap anywhere else on the card opens the restaurant, not a fullscreen
-> player; the deck's fullscreen route is gone (the detail screen keeps its
-> own). The card also scales the clip to *cover* its box rather than by a fixed
-> 1.03, so TikTok's letterbox bars no longer show.
-
-> **Changed 2026-09-04.** The player URL sets `muted=1` (D89).
+> The `muted` parameter cannot do this job, which is why two earlier attempts
+> at "Tap for sound" produced no sound. Their docs define `muted=1` as "set the
+> default volume to 0 **and prevent the user from changing the volume**", and
+> `muted=0` as merely enabling the volume control — so `muted=1` refuses every
+> later `unMute` for the life of the page, and reloading with `muted=0` gave
+> the same silent clip, from the top, under a pill that had flipped to "Sound
+> on". Verified against the live player.
+>
+> D89's "starts silent" is now enforced by posting `mute` from
+> `onPageFinished`, which is also the re-apply for a tap that landed while the
+> page was still loading. D4 still stands: this is the interface TikTok
+> publishes for driving their embed, not a reach into their DOM. **Nothing
+> reloads**, so the clip no longer restarts when the sound comes on.
+>
+> Two other things changed the same week: a tap anywhere else on the card opens
+> the restaurant rather than a fullscreen player — the deck's fullscreen route
+> is gone, the detail screen keeps its own — and the card scales the clip to
+> *cover* its box rather than by a fixed 1.03, so TikTok's letterbox bars no
+> longer show.
 
 The video *is* the card. 1,606 of 1,607 restaurants carry a `video_url`, and
 the deck's whole premise is that you decide by watching food, not by reading a
@@ -75,9 +69,36 @@ enum TikTokPlayerStatus { loading, ready, failed }
 - `ready` — the player document finished loading.
 - `failed` — the main frame failed; **the view offers a retry**.
 
-`reload()` is both the initial load and the retry path, so it resets `status`
-rather than assuming it is still `loading`. The document is kept on the handle
-so a retry does not recompute it.
+`load()` is both the initial load and the retry path, so it resets `status`
+rather than assuming it is still `loading`. The document (`playerUrl`) is kept
+on the handle so a retry does not recompute it, next to `videoUrl` — the clip
+this player was built for.
+
+### The sound
+
+`muted` is a `ValueNotifier<bool>` on the handle, constructed **true** (D89).
+The pill reads it and `setMuted(bool)` writes it, which is why the two can
+never drift: there is one flag, not a widget's idea of one and a player's.
+
+`setMuted` returns early when nothing changes, then calls `_postMuteState()`,
+which runs
+
+```js
+window.postMessage({'x-tiktok-player':true, type:'unMute'}, '*')
+```
+
+in the page — `mute` or `unMute` off the flag — and **swallows whatever it
+throws**. The page can be gone, blank or mid-navigation, and losing the sound
+on a card the user is only looking at is not worth an error.
+
+`onPageFinished` calls the same method. That is the enforcement of D89's
+"starts silent" on any WebView where the autoplay gesture requirement is
+switched off, and it is also the re-apply for a tap that beat the page:
+`loadRequest` returns when the navigation *starts*, so the handle — and the
+pill reading it — go live while the document is still coming.
+
+`release()` sets `muted` back to true before navigating to `about:blank`, so a
+handle that is warmed again later still starts silent however it got there.
 
 `release()` stops a player without destroying it. `WebViewController` has no
 `dispose` in webview_flutter 4.x — the native view goes when the widget and the
@@ -120,18 +141,38 @@ static thumbnail. Two videos never run at once.
 
 ## 4. Display modes
 
-- **In-card** — the webview is scaled to *cover* the card (`tikTokFramingScale`
-  fits the 9:16 clip to the box, then takes the larger of the two ratios) and
-  nudged down to crop TikTok's own UI chrome out of the frame, with a top
-  gradient scrim for text legibility. The sound pill is **not** under that
-  scrim: it is the last child of the card's stack, in front of every layer, so
-  it is both legible and the thing a tap in that corner reaches.
-- **Full-screen** — plain full-bleed, opened from the detail screen's hero via
-  a fade transition, with a close button and back handling. The deck's cards no
-  longer route here; a card tap opens the restaurant.
+`TikTokFraming { card, hero, fullscreen }`, in `tiktok_player.dart`. TikTok's
+player letterboxes — it fits the 9:16 clip inside whatever box it is handed and
+pads the rest black — so the framing is a decision about how much of that
+padding the surface is willing to show.
 
-The handover between the two is one of the three behaviours that needs a device
-smoke test — it is not exercised by `flutter test`.
+| Mode | Nudge | Scale |
+|---|---|---|
+| `card` | `_kShift` 0.07 of the box height | `max(w / fittedWidth, (1 + 2·0.07) · h / fittedHeight)` |
+| `hero` | the same nudge | 1.03 |
+| `fullscreen` | none | none |
+
+- **`card`** — the clip *covers* the card, so no bars show, and it is nudged
+  down so its subject clears the title block; the scale is computed from the
+  **fitted** size rather than guessed, because the nudge exposes more padding
+  along the top. On a 360 × 620 card that lands at **1.14**, which a test pins
+  to ±0.001. A zero or non-finite box falls back to 1.03. A top gradient scrim
+  carries the text; the sound pill is **not** under it — it is the last child
+  of the card's stack, in front of every layer, so it is both legible and the
+  thing a tap in that corner reaches.
+- **`hero`** — the same nudge and a flat 1.03, deliberately **no cover**. The
+  detail hero is barely taller than it is wide, and covering a 9:16 clip in
+  that box crops it to a two-times zoom on the middle of the frame.
+- **`fullscreen`** — TikTok's player untouched: no nudge, no scale, no scrim.
+  Opened from the detail screen's hero via a fade transition, with a close
+  button and back handling. The deck's cards no longer route here; a card tap
+  opens the restaurant.
+
+`MutedHint` is **public** in `tiktok_player.dart` and shared by the card and
+the hero — the two private copies that used to live one per surface are gone.
+
+The card-to-fullscreen handover is one of the three behaviours that needs a
+device smoke test — it is not exercised by `flutter test`.
 
 ## 5. Thumbnails: the cache pipeline
 
@@ -186,9 +227,16 @@ restaurants, what most cards show permanently.
 
 ## 7. Known gaps
 
-- **No lifecycle pause.** Warm players keep their document loaded when the app
-  is backgrounded or the deck is not the visible tab. Bounded at 5, so it is a
-  ceiling rather than a leak, but it is not zero.
+- **No lifecycle pause.** A clip is **silenced, never paused**: the deck posts
+  `mute` when the Swipe tab stops being active, when the detail screen opens
+  and when a swiped card is disposed ([Swipe-Deck.md](Swipe-Deck.md) §6), but
+  the player keeps its document loaded and keeps playing. Warm players do the
+  same when the app is backgrounded. Bounded at 5, so it is a ceiling rather
+  than a leak, but it is not zero.
+- **Two stale comments about a reload that no longer happens**: the `MutedHint`
+  docstring in `tiktok_player.dart` ("The tap reloads the player unmuted") and
+  the comment over the pill in `swipe_card.dart`. The code is correct; the
+  prose above it describes the pre-D122 behaviour.
 - **287 of 1,607 rows have any image at all**, so the thumbnail pipeline is
   mostly idle and card galleries are mostly empty.
 - **`seed.sql` stores absolute production Storage URLs** whose paths embed
@@ -219,3 +267,4 @@ restaurants, what most cards show permanently.
 | D41 | Only the foreground card mounts a WebView; the card behind shows a thumbnail. | locked 2026-08-22 |
 | D42 | Thumbnail bytes are cached into Storage and `url` repointed permanently, because TikTok CDN URLs expire in ~24h. | locked 2026-08-22 |
 | D43 | The thumbnail pipeline stays inert without its vault secrets, so a fresh database cannot call production. | locked 2026-08-23 |
+| D122 | "Tap for sound" drives TikTok's player through their **documented `x-tiktok-player` postMessage API** (`mute` / `unMute`), not through the URL. Their `muted` parameter cannot do it: `muted=1` pins the volume at 0 *and refuses every later unmute for the life of the page*, and `muted=0` only unlocks the volume control — so the old reload-with-`muted=0` produced a clip that was still silent, under a pill that said "Sound on". The player URL is now always `muted=0`; a clip still starts silent (D89) because the handle posts `mute` on `onPageFinished`. This is not a breach of D4: the message is the interface TikTok publishes for driving their embed, and no reload means the clip no longer restarts from the top. | locked 2026-09-10 |

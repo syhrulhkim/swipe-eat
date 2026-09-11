@@ -1,6 +1,6 @@
 Status: ORPHANED
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-10
 Cross-references: [Backend-Schema.md](Backend-Schema.md), [General/PLAN.md](../General/PLAN.md), [History/dashboard-spec.md](../History/dashboard-spec.md)
 
 # Quiz
@@ -11,7 +11,7 @@ missed.
 
 ## 1. What exists
 
-Verified against the live database and the Flutter source on 2026-09-03.
+Verified against the live database and the Flutter source on 2026-09-10.
 
 | Object | Rows | Reached by app code? |
 |---|---|---|
@@ -22,8 +22,8 @@ Verified against the live database and the Flutter source on 2026-09-03.
 | RLS policies: `read questions`, `read options`, `own quiz responses` | 3 | No |
 
 ```
-$ grep -rn "quiz\|Quiz" lib/ --include="*.dart"
-(no matches outside lib/dev)
+$ grep -rn "quiz\|Quiz" lib/
+(no matches)
 ```
 
 The tables are fully formed — RLS on, roles named, indexes on every FK,
@@ -39,8 +39,8 @@ actually change based on the answer.
 
 The Supabase migration gave it a real schema — questions, options, per-option
 result cards with a `recommended_restaurant_id`, and recorded responses. Then
-the tab was replaced by **Group** during the redesign, and the schema was left
-behind.
+the tab was replaced during the redesign — first by Group, and now by the
+Calendar — and the schema was left behind. `quiz_responses` still holds 0 rows.
 
 The taste signal the quiz was reaching for now lives in onboarding
 (`profile_cuisines`, `profile_dietary_tags`) and feeds `deck_scored` directly,
@@ -58,15 +58,16 @@ app changes, because nothing in the app reads it. This is the recommendation —
 onboarding already does the job better.
 
 **Or build it.** The schema is waiting: multi-question quizzes, per-option
-result cards, a recommended restaurant per answer. That needs a surface, and
-the nav has no free slot — Group has index 3 now. It would have to live inside
-Explore or Profile.
+result cards, a recommended restaurant per answer. That needs a surface, and the
+nav has no free slot — the five tabs are Swipe, Nearby, Bites, Calendar and You.
+It would have to live inside the You tab, or as a route pushed over the shell.
 
 ## 4. Cost of leaving it
 
-Small but real: three tables in every schema dump and type generation, three
-RLS policies in every security review, one function in the grant audit, and a
-seed block that has to keep working. Mostly it is the cost of every reader
+Small but real: three of the database's 22 tables in every schema dump and type
+generation, three RLS policies in every security review, one of 48 functions in
+the grant audit, two `quiz_responses` indexes on the performance advisor's
+unused list, and a seed block that has to keep working. Mostly it is the cost of every reader
 having to work out — as this doc just did — whether the quiz is a feature.
 
 ## 5. Decision log

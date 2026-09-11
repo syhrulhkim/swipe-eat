@@ -1,13 +1,15 @@
 Status: Superseded 2026-09-06 by [Plans-Calendar.md](Plans-Calendar.md)
 Owner: Swipe Eat team
-Last updated: 2026-09-06
+Last updated: 2026-09-10
 Cross-references: [Friends.md](Friends.md), [Plans-Calendar.md](Plans-Calendar.md), [General/PLAN.md](../General/PLAN.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md)
 
 # Group Dining
 
 **Superseded.** Tab index 3 is the **Calendar** now — see
 [Plans-Calendar.md](Plans-Calendar.md). `group_tab.dart` is deleted and the
-empty state it held is gone with it.
+empty state it held is gone with it. The social layer this document was waiting
+on also exists now: the friend graph, invites and per-plan time voting are
+[Friends.md](Friends.md) and [Plans-Calendar.md](Plans-Calendar.md) §6a.
 
 What survives from this document is section 3 onward: the shared-deck sketch
 and its open questions are still unanswered, and still worth answering before
@@ -63,7 +65,10 @@ Nothing here is locked. Shape, roughly:
   with a group one).
 - A **result surface**: places liked by everyone, then by most, ranked.
 
-Open questions worth answering before any schema:
+Open questions worth answering before any schema. Note that question 1 and
+question 4 were written when the deck still had a **daily limit**; D84 removed
+it, so what is left of those two is only whether a group swipe retires a card
+from the solo deck:
 
 1. Does a group swipe also count as a personal swipe? If yes, a group session
    burns the daily limit and retires cards from the solo deck. If no, the same

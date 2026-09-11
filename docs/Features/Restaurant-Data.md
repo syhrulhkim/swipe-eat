@@ -1,7 +1,7 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
-Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](../General/RUNBOOK.md), [Backend-Schema.md](Backend-Schema.md), [TikTok-Video.md](TikTok-Video.md), [Explore-Search.md](Explore-Search.md)
+Last updated: 2026-09-10
+Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](../General/RUNBOOK.md), [Backend-Schema.md](Backend-Schema.md), [TikTok-Video.md](TikTok-Video.md), [Nearby-Map.md](Nearby-Map.md)
 
 # Restaurant Data Pipeline
 
@@ -141,12 +141,14 @@ expensive SKU, which is precisely the trade-off D10 declined.
 
 ## 4. Current coverage
 
+Counted against the live database on 2026-09-10.
+
 | Metric | Count | Of 1,607 |
 |---|---|---|
 | Active | 1,605 | 99.9% |
 | With a TikTok video | 1,606 | 99.9% |
 | With coordinates | 1,133 | **70.5%** |
-| With a rating | **2** | **0.1%** |
+| With a rating | **2**, both inactive | **0.1%** |
 | With any image | 287 | 17.9% |
 | With any review | 6 | 0.4% |
 | Mapped to a cuisine | 1,607 | 100% |
@@ -156,7 +158,8 @@ expensive SKU, which is precisely the trade-off D10 declined.
 | With a neighbourhood | 159 | 9.9% |
 | With a dish | 0 | 0% |
 
-Geography follows the creators scraped: concentrated in **Johor and Penang**.
+Geography follows the creators scraped: **Johor 844**, **Pulau Pinang 741**, and
+22 rows between Kedah (12), Perak (8), Kuala Lumpur (1) and Perlis (1).
 
 ## 5. Cuisine mapping
 
@@ -165,18 +168,24 @@ The `sync_restaurant_cuisines` trigger maps it through `cuisine_aliases` into
 `restaurant_cuisines`, recording `source = 'tag'` so a human override is
 distinguishable from an inferred one.
 
-All 1,607 rows are mapped across 23 cuisines, which is why Explore's grid works
-even though ratings and images do not.
+All 1,607 rows are mapped across 23 cuisines, which is what the deck's taste
+weighting and the discovery sheet's cuisine list run on — the one signal that is
+complete when ratings and images are not. `restaurant_dietary_tags` is the thin
+one: 33 rows, backfilled only from what the catalogue evidences (D119).
 
 ## 6. Known issues
 
-- **Ratings are the biggest gap in the product.** 2 rows. It kills the ranker's
-  quality signal, the rating chip, the Liked tab's rating sort, and the
-  `filter_min_rating` discovery filter. Fixing it needs a paid Places pass or a
-  different source — there is no free source with ratings.
-- **474 rows have no coordinates.** They are invisible to Explore's radius rule
-  and unrankable by distance. The deck's offline ranker grants them neutral
-  half-credit; the server-side radius filter does not.
+- **Ratings are the biggest gap in the product.** 2 rows, and both of them are
+  inactive — **no restaurant the deck can deal is rated**. It kills the ranker's
+  quality signal outright (`deck_scored`'s rating term never fires) and makes
+  the discovery sheet's `filter_min_rating` a filter that empties the deck —
+  which is why the sheet now says so in a caution line.
+  Fixing it needs a paid Places pass or a different source; there is no free
+  source with ratings.
+- **474 rows have no coordinates.** They are invisible to the radius rule the
+  deck, the Nearby map and search all share, and unrankable by distance. The
+  deck's offline ranker grants them neutral half-credit; the server-side radius
+  filter does not.
 - **Precision is uneven on the free path.** Around 474 of the Nominatim
   batch came back coarse, and ~225 rows had state mismatches — 195 of them
   Penang restaurants tagged Johor, since corrected via `negeri` and the
@@ -192,9 +201,10 @@ even though ratings and images do not.
 - **Automated writes from the extractor.** The review pass is deliberate; a
   caption parser confident enough to write unattended does not exist.
 - **A second video source.** The catalogue is defined by TikTok posts.
-- **Scraping opening hours and price.** The clock line is parsed only to
-  *terminate* the address; `restaurants` has no column for either, so the
-  filters they would enable are not buildable.
+- ~~**Scraping opening hours and price.**~~ Built 2026-09-05 (D91): §2a. What
+  stays out of scope is *chasing* the coverage — a caption that does not carry
+  hours or a price is not worth a second source, and a guessed span is worse
+  than a blank.
 - **Re-scraping for ratings.** TikTok captions do not carry them.
 
 ## 8. Decision log

@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-06
+Last updated: 2026-09-10
 Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Onboarding-Taste.md](Onboarding-Taste.md), [Account-Deletion-Legal.md](Account-Deletion-Legal.md), [Backend-Schema.md](Backend-Schema.md), [Release/STORE.md](../Release/STORE.md), [Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
 
 # Auth setup
@@ -59,6 +59,15 @@ flutter run --dart-define=PHONE_AUTH_ENABLED=true
 
 Without step 1 the button appears and every tap fails, so the two go together.
 [Release/STORE.md](../Release/STORE.md) lists it as a release-time item.
+
+**Contact matching depends on this switch.** The
+`on_auth_user_phone_verified` trigger (`after insert or update of phone,
+phone_confirmed_at`) writes a peppered digest of a **verified** number into
+`phone_hashes`, and that table is the only thing `match_contacts` compares
+against. Nothing verifies a number while phone auth is off, so `phone_hashes`
+is empty on a project whose accounts all arrived through Google, Apple or
+email — the onboarding contacts step runs, reads the address book, and
+correctly matches nobody. See [Friends.md](Friends.md) (D128).
 
 What the flow does:
 

@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 Cross-references: [Plans-Calendar.md](Plans-Calendar.md), [Onboarding-Taste.md](Onboarding-Taste.md), [Wishlist.md](Wishlist.md), [Restaurant-Detail.md](Restaurant-Detail.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [../General/DECISIONS.md](../General/DECISIONS.md), [../Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
 
 # Friends
@@ -11,7 +11,8 @@ six places in the app that ask.
 
 The feature has two screens of its own and five that borrow them:
 
-- **01f · Friends** — a step in onboarding, where contact matching happens.
+- **01f · Friends** — a step in onboarding, and the **only** place contact
+  matching happens.
 - **`/friends`** — the three lists behind the You tab's "Friends · 38": people
   waiting on your answer, people you are waiting on, and the friends
   themselves. The design draws the button and stops; this screen is that
@@ -77,6 +78,14 @@ What happens on a tap of **Find friends from contacts**:
    comparing. It writes nothing, logs nothing, and keeps nothing: the array
    lives for the length of one statement (D128).
 
+**Contacts are matched once, at sign-up.** `Find friends from contacts` is a
+button on the onboarding step and nowhere else: `/friends` has no
+contact-import entry, and nothing re-scans the address book later. That is why
+the friends page's empty copy says "Requests you send and requests you get both
+land here" rather than promising something when a contact joins — the two ways
+a name lands there are the only two there are. A re-scan from `/friends` is a
+reasonable thing to want and is not built.
+
 **What the pepper is for.** Not hiding the number from the server, which could
 grind a peppered hash of every Malaysian mobile in an afternoon. It is so that
 `phone_hashes` **at rest** is useless to somebody who walks off with a database
@@ -140,6 +149,11 @@ a trigger, read by `match_contacts`, returned by nothing.
 | `answer_plan_invite(bigint, text)` | the membership row | **invoker** |
 | `set_plan_vote(bigint, time, text)` | the vote row | **invoker** |
 | `get_plan_votes(bigint)` | the tally, with faces | definer (D129) |
+
+Behind them sit the helpers nothing on the client calls directly:
+`is_plan_member`, `sync_phone_hash` (the `after insert` trigger),
+`e164_phone_digest`, `peppered_phone_hash` and `contact_match_pepper`. All
+fifteen are live on the project as of 2026-09-10.
 
 `friend_request` is one RPC with an action rather than four functions (D131).
 Send, accept, decline, remove and block are the same statement against the same
@@ -271,17 +285,50 @@ book, which would be a claim the screen has no evidence for.
   rather than a made-up fact.
 - **Friend avatars are initials.** `profiles.avatar_url` is populated only for
   accounts that signed in with a provider that supplied one.
-- **Anybody signed in can vote on any plan id.** `plan_time_votes`'s insert
-  policy is `user_id = auth.uid()` with no membership check, and `set_plan_vote`
-  is an invoker function, so the policy is the only gate. The stranger cannot
-  read the tally back — the select policy and `get_plan_votes` both check the
-  *caller's* membership — but `get_plan_votes` does not filter the **voters**
-  it returns, so the row lands in everybody else's tally with the stranger's
-  name and avatar, counts toward the leading slot, and can put a time on the
-  owner's "Move it to" button that nobody at the dinner picked. Not a read leak;
-  it does corrupt the answer. The fix is a membership check in `set_plan_vote`
-  (and, belt and braces, a voter join in `get_plan_votes`), which needs a
-  migration against the live project and is not in this pass.
+- **Anybody signed in can write a vote onto any plan id, over REST.**
+  `plan_time_votes`'s insert policy is `user_id = auth.uid()` with no membership
+  check, and `set_plan_vote` is an invoker function, so the policy is the only
+  gate. The RPC itself is not the way in: it ends in `returning * into v_row`,
+  and Postgres applies the **select** policy to an `insert ... returning`, so a
+  stranger's call raises and the row is rolled back (verified 2026-09-11 against
+  the live project with a throwaway table: a plain insert under a
+  `with check (true)` / `using (false)` pair is allowed, the same insert with
+  `returning` is refused). A direct PostgREST insert asking for
+  `Prefer: return=minimal` skips the returning clause and lands the row. The
+  stranger still cannot read the tally back, but `get_plan_votes` does not
+  filter the **voters** it returns, so the row appears in everybody else's tally
+  with the stranger's name and avatar, counts toward the leading slot, and can
+  put a time on the owner's "Move it to" button that nobody at the dinner
+  picked. Not a read leak; it corrupts the answer. The fix is a membership test
+  in the insert policy's `with check` (belt and braces: the same test in
+  `set_plan_vote`, and a voter join in `get_plan_votes`), which needs a migration
+  against the live project and is not in this pass.
+
+## 7a. What the advisors say, and why
+
+Checked against the live project on 2026-09-10. Three findings, of which two
+are **accepted** and the third is a **known issue**:
+
+- **`phone_hashes` has RLS enabled and no policy** (security, INFO). By
+  design. Nothing selects the table: the trigger writes it and
+  `match_contacts` — a definer function — reads it. No policy means no row is
+  readable by anybody, which is the strongest form of what §1 promises.
+- **Eight security-definer functions are executable by `authenticated`**
+  (security, WARN). Also by design, and it is what §1 and D129 are built on: a
+  definer function *is* the boundary that keeps `profiles` owner-only. A policy
+  expression also runs with the querying role's privileges, so revoking
+  `is_plan_member` would make `select … from public.plans` fail outright
+  ([Plans-Calendar.md](Plans-Calendar.md) §3, D109). `get_ngap_count` is
+  additionally executable by `anon`; its only caller is
+  `RestaurantRepository.ngapCount`, from the restaurant detail page.
+- **`friendships_requester_id_fkey` is unindexed** (performance). The known
+  issue, and a small one: a delete on a `profiles` row takes a sequential scan of `friendships`,
+  which currently holds 0 rows. Worth an index before the table has size —
+  recorded here rather than fixed, because it needs a migration against the
+  live project.
+
+`friendships` carries **no rows at all** today, so none of the three has a
+measurable cost yet.
 
 ## 8. Out of scope
 

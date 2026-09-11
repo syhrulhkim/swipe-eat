@@ -1,6 +1,6 @@
 Status: SUPERSEDED 2026-09-05 by Nearby-Map.md
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-10
 Cross-references: [Nearby-Map.md](Nearby-Map.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md)
 
 # Explore & Search
@@ -54,8 +54,15 @@ exhaustion fallback, so it is the head of the same ranking. Unswiped rows only,
 which means it **thins out as the user swipes** and disappears entirely when
 empty.
 
-No coordinates are passed: the RPC resolves passport, then the stored fix,
-server-side. The server caps the limit at 20; the client asks for 10.
+No coordinates are passed: the RPC resolves the origin server-side.
+
+> **Superseded by D121 (2026-09-10).** Both `search_restaurants` and
+> `deck_scored` used to resolve the **passport pin** ahead of everything else.
+> They no longer read `profiles.passport_*` at all — the chain is
+> `coalesce(p_lat, me.last_latitude)`, the caller's fix else the stored one —
+> and `set_passport` is dropped. See
+> [Profile-Preferences.md](Profile-Preferences.md) §4 and
+> [Nearby-Map.md](Nearby-Map.md) §3. The server caps the limit at 20; the client asks for 10.
 
 Because `deck_scored`'s seed is the current date in `Asia/Kuala_Lumpur`, the
 shortlist is stable for a day and reshuffles at midnight for free.

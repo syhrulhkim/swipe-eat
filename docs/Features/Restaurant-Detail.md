@@ -22,15 +22,20 @@ Files: `lib/features/restaurants/presentation/restaurant_detail_page.dart`,
 
 | Band | What it holds | Source |
 |---|---|---|
-| **Hero** | The clip, or the first photo, or the TikTok placeholder. Two scrims, the muted hint, back + wishlist buttons, and low over the deep end the tags, the 36 px name and one meta line | `videoUrl`, `imageUrls`, `tag`, `isHalal`, `neighbourhood`, `hours`, the device fix |
+| **Hero** | The clip, or the first photo, or the TikTok placeholder. Two scrims, the sound pill, back + wishlist buttons, and low over the deep end the tags, the 36 px name and one meta line | `videoUrl`, `imageUrls`, `tag`, `isHalal`, `neighbourhood`, `hours`, the device fix |
 | **Facts** | Two tiles at most: the cheapest dish, and the ngap count | `priceFrom`, `RestaurantRepository.ngapCount` |
 | **What people bite** | The dishes, each with a thumb, a name, a description and a price | `dishes` |
 | **About** | The scraped caption, three lines with a **More** toggle | `details` |
-| **Friends** | Who else has ngap'd it | nothing yet — see §5 |
+| **Friends** | Who else has ngap'd it | `FriendsController.whoLiked` — see §5 |
 | **CTA** | A ghost **Directions** square and the gradient **Set a date** | coordinates; `LikesController` |
 
 The hero is **41 %** of the viewport (`kDetailHeroFraction`) with a 260 pt
 floor, so the clip is the same share of a small phone and a tall one.
+
+The page's body is a `Stack` of exactly two children — `ScreenGlow()` under the
+`Column` that holds the bands. The glow is painted first and everything else
+over it, which is the same order every other screen in the app uses
+([Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md) §7).
 
 ## 2. The meta line
 
@@ -84,10 +89,24 @@ and the price on the right; a dish with no price on file shows none.
 
 ## 5. Friends
 
-`FriendsBiteRow` is built and wired into the page with an empty avatar list and
-no caption, and renders **zero height** in that state. It is the shape the
-friends phase fills; until the social graph exists the screen does not claim
-anybody has been.
+`FriendsBiteRow(people: _friends.whoLiked(_id))` — a stack of faces and one
+sentence, "Aiman, Mei Kee and 4 friends ngap'd this".
+
+The page asks once, in `initState`: `FriendsController.loadWhoLiked(id)` →
+the `friends_who_liked` RPC ([Friends.md](Friends.md) §6). That call is
+**silent on failure** — it logs and leaves the list empty. The row is a nicety
+on a screen whose job is the restaurant, and an error message about friends on
+it would be louder than the thing it failed to say. There is no loading state
+for the same reason: the row simply is not there until the answer arrives, and
+`whoLiked` returns an empty list for a restaurant nobody has asked about yet.
+
+Empty is the common case, and it draws **nothing at all** —
+`friendsBiteCaption` returns null for an empty list and the row collapses to
+`SizedBox.shrink()`. A row reading "0 friends" on a place none of your friends
+have heard of would be worse than no row. The sentence is built inside the
+widget from the names rather than passed in, so no call site can put a
+different sentence on the same faces; the stack draws `kAvatarStackMax` (3)
+faces and the caption counts them all.
 
 ## 6. The two actions
 
@@ -121,11 +140,24 @@ Two different facts sit in two different places:
 
 ## 8. Video
 
-The hero plays the clip **muted** (D89) and the hint says "Tap for sound":
-tapping it reloads the player with TikTok's own `muted=0`, so the clip restarts
-with sound and D4 still holds — nothing scripts their page. The page owns its player and stops it in `dispose`; while the
-fullscreen route is up the hero falls back to its photo, because one controller
-cannot be mounted in two WebViews.
+The hero plays the clip **muted** (D89) behind a pill reading "Tap for sound".
+It is a live control, not a caption: the same public `MutedHint` the deck card
+uses, with no `IgnorePointer` over it. Tapping it posts `unMute` into TikTok's
+own player and the pill reads **"Sound on"**; tapping again mutes. Nothing
+reloads and the clip does not restart. D4 still holds — the message is the
+interface TikTok publishes, not a script into their page (D122; see
+[TikTok-Video.md](TikTok-Video.md) §2).
+
+The hero frames the clip with `TikTokFraming.hero` — the deck card's 0.07 nudge
+but **no cover**, at a flat 1.03 — where the card uses `.card` and covers its
+box. The hero is barely taller than it is wide, and covering a 9:16 clip in
+that box would crop it to a two-times zoom on the middle of the frame
+([TikTok-Video.md](TikTok-Video.md) §4).
+
+The page owns its player and stops it in `dispose`. It also keeps its **own
+fullscreen route** (`_openPlayer`, offered from the hero when there is a clip)
+— the one the deck gave up. While that route is up the hero falls back to its
+photo, because one controller cannot be mounted in two WebViews.
 
 ## 9. What left the screen
 
@@ -139,11 +171,9 @@ line plus a Directions button.
 
 - **Dishes are empty** everywhere. The section is built and untested against
   real data.
-- **Friends is empty** until phase 8.
+- **Friends is empty on almost every row** — the graph is live, but there are
+  no friendships in the catalogue's data yet, so the row draws nowhere.
 - **No wait time**, and no plan to collect one.
-- The **muted hint** is duplicated from `swipe_card.dart`, whose copy is
-  private to that file. If a third surface needs it, it belongs in
-  `core/ui/`.
 - The design's **share** button is not built: there is nothing to share to yet.
 
 ## 11. Decision log

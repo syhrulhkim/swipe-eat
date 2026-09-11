@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-10
 Cross-references: [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](../General/RUNBOOK.md), [Tests/CONVENTIONS.md](../Tests/CONVENTIONS.md)
 
 # Frontend Stack & Conventions
@@ -22,11 +22,15 @@ call site could replace.
 | `webview_flutter_wkwebview` | ^3.26.0 | Same, for iOS |
 | `geolocator` | ^14.0.2 | The device fix |
 | `geocoding` | ^5.0.0 | Reverse-geocoding a fix to a place name |
+| `flutter_map` | ^8.3.2 | The Nearby map's **camera only** — it projects a coordinate onto the screen. No tiles are drawn (D126) |
+| `latlong2` | ^0.10.1 | `flutter_map`'s coordinate type |
 | `google_sign_in` | ^7.2.0 | Native Google sheet → `signInWithIdToken` |
 | `sign_in_with_apple` | ^8.1.0 | Native Apple sheet |
 | `crypto` | ^3.0.6 | Hashes the Apple sign-in nonce |
 | `shared_preferences` | ^2.5.5 | The offline caches (deck, profile, visit prompts) |
 | `url_launcher` | ^6.3.1 | Hands a maps/navigation URL to the OS; opens the legal pages |
+| `share_plus` | ^13.3.0 | Hands the wishlist to the OS share sheet as plain text |
+| `flutter_contacts` | ^2.3.1 | Reads phone numbers off the address book for the onboarding friends step. Numbers are normalised and hashed before they leave the device; reached only through an injected typedef, so no test touches the channel |
 | `lottie` | ^3.3.2 | The small bundled vector loops |
 | `sentry_flutter` | ^9.28.0 | Crash reporting, off unless `SENTRY_DSN` is passed |
 | `cupertino_icons` | ^1.0.8 | |
@@ -44,14 +48,20 @@ lib/
     app_router.dart
   core/           what more than one feature needs
     config/       app_config.dart — every --dart-define is read here
-    location/     user_location, place_name, distance_label, open_directions
+    location/     user_location, user_position_state, place_name,
+                  distance_label, open_directions
     observability/ crash_reporting.dart
     storage/      cached_at.dart
     supabase/     single_row.dart
     ui/           the design system + lunar/ effects
-  features/       auth, onboarding, dashboard, restaurants, profile, settings
-  dev/            standalone demo entrypoints, not shipped
+  features/       auth, onboarding, dashboard, restaurants, nearby, plans,
+                  friends, wishlist, profile, settings
+  dev/            the lunar gallery and the calendar's dev fixtures, not shipped
 ```
+
+`dev/` is reached only behind a `--dart-define`: `USE_DEV_PLANS=true` swaps
+`PlansController` for the fixtures in `dev/calendar_dev_data.dart`, and
+`lunar_gallery.dart` is a standalone entrypoint.
 
 ### The four-folder feature shape
 
@@ -71,8 +81,9 @@ presentation/  →  state/  →  data/  →  models/
 | `models/` | DTOs with `fromJson` | Do I/O |
 | `domain/` | Pure logic (`deck_ranker.dart`) | Do I/O at all |
 
-`restaurants/` is the only feature with a `domain/` folder today, because it is
-the only one with logic worth testing without a fake.
+Four features carry a `domain/` folder — `restaurants/` (the deck ranker, meal
+labels, opening hours), `friends/` (the caption and headcount rules),
+`plans/` and `nearby/` — one apiece for the logic worth testing without a fake.
 
 ## 3. State management
 
@@ -89,8 +100,9 @@ Conventions the controllers follow:
   the newest request may publish; a slow earlier response cannot overwrite a
   fresher one. Any controller with a retry button needs this.
 - **Optimistic writes hold their future.** The deck's card flies out before the
-  write lands, so `recordSwipe` keeps the in-flight future per restaurant and
-  `rewind` awaits it — otherwise the undo races the insert.
+  write lands, so `recordSwipe` keeps the in-flight future per restaurant.
+  Rewind, which is what used to await it, went with D84; the held future is
+  still the pattern for any write a later action has to sequence behind.
 - **Inject the platform.** Anything reaching a platform channel is
   constructor-injected with a default (`resolvePosition` on `DeckController`,
   the location resolver on the onboarding page), because `flutter test` has no
@@ -107,12 +119,17 @@ Conventions the controllers follow:
 
 | Path | Notes |
 |---|---|
-| `/` | Redirects to whichever of splash/login/onboarding/dashboard is owed |
+| `/` | Redirects to whichever of splash/welcome/onboarding/dashboard is owed |
 | `/splash` | Held until session **and** profile both resolve |
-| `/login`, `/register` | |
+| `/login`, `/register` | Both redirect to `/welcome` — kept so old links land somewhere |
+| `/welcome` | The signed-out screen (S1) |
+| `/signup`, `/signup/phone` | |
 | `/onboarding` | While `profiles.onboarded_at` is null |
-| `/dashboard` | The five-tab shell |
+| `/dashboard` | The five-tab shell: Swipe, Nearby, Bites, Calendar, You |
 | `/settings` | |
+| `/friends` | The social graph and its requests |
+| `/wishlist` | |
+| `/plans/new`, `/plans/:id`, `/plans/:id/invite` | Make a plan, open it and vote on the time, invite to it |
 | `/restaurant/:id` | By **id**, not by a payload object |
 
 Two details that matter:
@@ -163,10 +180,13 @@ Both bundled rather than fetched, because the app serves a cached deck with no
 connection and a first offline launch that fell back to a platform font would
 undo the redesign (D8):
 
-- **Fonts** — Lexend, four static instances (400/500/600/700) cut from the
-  upstream variable font. Flutter picks a face by the declared weights and
-  cannot instance a variable axis from a `fontWeight` alone. Licence sits next
-  to the files.
+- **Fonts** — **Bricolage Grotesque** (600/700/800, the display face) and
+  **Instrument Sans** (400/500/600/700, the text face), all as static
+  instances cut from the upstream variable fonts. Flutter picks a face by the
+  declared weights and cannot instance a variable axis from a `fontWeight`
+  alone, so shipping the variable TTF silently breaks every weight above 400.
+  Lexend was removed when the two faces returned on 2026-09-04. Licences sit
+  next to the files.
 - **Lottie** — `assets/lottie/`, a few KB each. Deliberately small and
   abstract: a spinner, a heart, a location pulse. Not illustrations.
 

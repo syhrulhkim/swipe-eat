@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 Cross-references: [Friends.md](Friends.md), [Group-Dining.md](Group-Dining.md), [Likes-Visits.md](Likes-Visits.md), [Wishlist.md](Wishlist.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md), [../Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md), [../Redesign/GAP-ANALYSIS.md](../Redesign/GAP-ANALYSIS.md)
 
 # Plans and the Calendar
@@ -24,8 +24,11 @@ Files: `lib/features/plans/models/{plan.dart,plan_slot.dart}`,
 `domain/plan_labels.dart`, `data/plans_repository.dart`,
 `state/plans_controller.dart`,
 `presentation/{plan_calendar.dart,plan_date_page.dart,plan_page.dart,calendar_tab.dart}`,
-and — because a tally is a thing about friends —
-`lib/features/friends/domain/vote_tally.dart`.
+and — because a plan is a thing about friends — `friends/domain/vote_tally.dart`,
+`friends/domain/friend_captions.dart` (`planPeopleLine`, `planHeadcount`),
+`friends/presentation/friend_avatar.dart` and `friends/state/friends_controller.dart`,
+all of which `calendar_tab.dart` imports. The dev harness is
+`lib/dev/calendar_dev_data.dart`.
 Screens S4 and S6 in `docs/Redesign/assets/ngap-app-screens.html`.
 
 Migrations: `supabase/migrations/20260906090000_plans_and_plan_members.sql`
@@ -104,8 +107,9 @@ yesterday.
 ### `plan_time_votes`
 
 `(plan_id, user_id)` primary key, plus `plan_time` / `time_label` — a member's
-vote when "Bring friends" is on. Written by the Friends phase; the table exists
-now so the invite flow lands against a schema rather than beside one.
+vote when "Bring friends" is on. **Live**: `/plans/:id` upserts a member's own
+row through `set_plan_vote` and reads the tally back through `get_plan_votes`.
+Time voting needed no schema beyond this (D133).
 
 ### RLS
 
@@ -114,7 +118,17 @@ Every table has RLS on, every policy is `to authenticated` and keyed
 
 - `plans`: owner has full access; a member can select the plan.
 - `plan_members`: the plan's owner inserts and deletes rows; a member selects
-  and updates their own row.
+  and updates their own row (`own membership select` / `own membership
+  update`), **and a member may see the other members** — the `plan members see
+  members` policy added by
+  `20260906160100_plan_people_invites_and_votes.sql`, scoped by the same
+  `is_plan_member` helper so it adds no recursion. Without it a guest opening
+  the calendar saw an avatar stack of exactly one face — their own — on a
+  dinner with five people at it (D132). The two overlapping `select` policies
+  (and the two `update`s) are what the performance advisor flags as
+  `multiple_permissive_policies` — the same flag it raises on `plans`'
+  `select`. Flagged, not yet addressed; nothing has been decided about
+  merging them.
 - `plan_time_votes`: members select the plan's votes; each writes only their
   own.
 
@@ -211,7 +225,9 @@ gets a screen ("Pick a place first, then a day.") rather than a crash.
 
 What it asks, top to bottom: **"When are we going?"** · the month grid · **Time**
 · **Bring friends**. Then the `.picked` bar reads the whole answer back —
-"Fri 4 Sep · 20:00" over "Kak Ros · Just you" — and commits it.
+`pickedSummary`, "Fri 4 Sep · 20:00", over
+"`<short name>` · `With friends`" or "`<short name>` · `Just you`" depending on
+the switch — and commits it.
 
 - Past days are drawn muted and are not tappable, and their semantics node
   carries no tap action.
@@ -225,10 +241,12 @@ What it asks, top to bottom: **"When are we going?"** · the month grid · **Tim
   rather than dead: an arrow that is always there and only sometimes works is a
   worse answer than one that is not there.
 
-After a successful save the screen lands on the Calendar tab. When "Bring
-friends" was on it also says **"Invites arrive with Friends"** — `/plans/:id/invite`
-belongs to the Friends phase, the plan is already saved, and saying so plainly
-beats pushing a route that would 404.
+After a successful save the screen lands on the Calendar tab — and when "Bring
+friends" was left on it then pushes **`/plans/:id/invite`** on top of it. The
+calendar first, always: the plan is saved by then, so it is where the screen
+belongs whatever happens next, and it gives the invite screen somewhere to pop
+back to. Skip and Send both land on the plan that was just made. See
+[Friends.md](Friends.md).
 
 ## 6. The Calendar tab (S6)
 
@@ -244,17 +262,49 @@ dashboard only decides where to hang it.
   (D123). It used to sit inside a `SimpleCard`, and that card's border and
   padding narrowed the columns enough that the same widget read as a
   different calendar on the two screens the user moves between. The header
-  carries the picker's month arrows; the "This month ▾" chip and the
-  six-month bottom sheet behind it are gone. Back is offered only once there
-  is a month to go back to, since the tab lists from today forward. A planned
-  day wears the ring and its cover; more than one plan on a day adds pips
-  underneath.
+  carries the picker's month arrows — `Previous month` and `Next month`, each
+  a `_MonthArrow` whose `Semantics` is a `container: true` so a screen reader
+  hears "September 2026 Next month" as one node — and the "This month ▾" chip
+  with its six-month bottom sheet is gone. `Previous month` is **absent**
+  rather than dead on the current month, since the tab lists from today
+  forward. A planned day wears the ring and its cover.
+- **The pips under a day** count people, not plans alone: one **ember** pip
+  per plan of the user's own (`PlanDayMark.planCount`) then one **cream**
+  (`kCreamMuted`) pip per **unique friend still coming** that day
+  (`friendCount` — the set of `member.userId` across the day's plans, with
+  `status == 'declined'` left out, so somebody on two of Saturday's dinners is
+  one face's worth of pip, not two), the two capped at **three between them**
+  — past three the pips stop being countable and the section list below is the
+  honest answer. Today's ember dot is drawn only when the day has **no** pips,
+  so the dot never has to compete with them for the same slot.
+- **Declined is one rule, everywhere.** A guest who said no appears in neither
+  the day's cream pips nor the row's avatar stack, and `planHeadcount` skips
+  them too: it counts a guest for every status that is *not* `declined`, and a
+  confirmed for every `going`. So a plan with three invitations, one accepted
+  and one declined, is one cream pip, one face, and "2 friends · 1 confirmed".
+  Counting a refusal would make a plan look fuller the more it emptied.
 - **Sections**: "Today · 2 plans", "Fri 4 · 1 plan", … each row a `.plan` card
-  — 48 px logo (cover, or two initials from the name), name, and a detail line
-  reading "Lunch · Kepong · 6 km". The meal comes from the deck's own
-  `mealLabel`, so the two surfaces cannot disagree about when dinner starts.
-  The distance comes from `distanceLabelFrom` and is **left off** when no real
-  fix has landed — a made-up distance on every row is worse than no distance.
+  — 48 px logo (cover, or two initials from the name), the restaurant's name,
+  the people line under it, and the time pill on the right. The design's three
+  plan cards disagree about that second line — one of them draws faces beside
+  "Lunch · Kepong · 6 km" — and the app picks one rule for all three: who is
+  coming leads, always. `planMealLabel` still exists and still delegates to the
+  deck's `mealLabel`, so nothing here can disagree with the deck about when
+  dinner starts.
+- **The row itself** is a `Material` on `kGlass` with a `kHairline` side, at
+  `kRadiusPanel`. On the subtitle line, ahead of the text, sits a
+  `FriendAvatarStack` at `kAvatarSizeCompact` — the plan's roster from
+  `FriendsController.peopleFor(plan.id)`, with anyone who declined left out,
+  because a face on a dinner they turned down is a lie about who is going.
+- **The subtitle leads with who is coming** — `planPeopleLine` over
+  `planHeadcount(plan.members.map(status))` — then the neighbourhood, then the
+  distance, joined with ` · ` and each part dropped rather than guessed when
+  it is unknown: `Just you · Kepong · 8.7 km`, `3 friends · 2 confirmed ·
+  Kampung Baru`. A guest who declined is not counted; "confirmed" is dropped
+  entirely while nobody has answered, because "3 friends · 0 confirmed" reads
+  as a failure and "3 friends" reads as an unanswered invitation, which is
+  what it is. The distance comes from `distanceLabelFrom` with its " away"
+  trimmed, and is left off when no real fix has landed.
 - Tap a row to open the plan (`/plans/:id`); long-press to cancel. The row
   used to open the restaurant, which was the only thing a plan had to show
   before it had guests — the restaurant is now one tap further in, from the
@@ -295,10 +345,32 @@ costs one `get_plan_votes` and one `get_plan_people`.
   members: RLS only ever hands it a plan you own or belong to, so "not a
   member" and "owner" are the same answer.
 
-## 7. Data-empty today
+## 7. The dev harness
 
-- **Other people's pips.** The design draws cream pips for plans that are not
-  yours. Nothing selects another user's plans, so every pip is ember today.
+`--dart-define=USE_DEV_PLANS=true` swaps `DevPlansRepository`
+(`lib/dev/calendar_dev_data.dart`) in for the real one at startup in
+`main.dart`, with `followAuthChanges: false`, and points the tab's position
+resolver at `devUserPosition` (3.1390, 101.6869 — Kuala Lumpur) so the
+distances come out the way the prototype's do. It answers `list()` with three
+September-2026 plans:
+
+| Plan | Date · time | Where | Members |
+|---|---|---|---|
+| Chili Pan Mee 88 | 2 Sep · 12:30 | Kepong | two invited |
+| Bakar & Bara Satay | 2 Sep · 20:30 | Kajang | none — "Just you" |
+| Warung Kak Ros | 4 Sep · 20:00 | Kampung Baru | two going, one invited |
+
+`stats()` answers `PlanStats(plansKept: 27, streakWeeks: 6)`, and every write —
+`create`, `cancel`, `setTime`, `markKept` — is a no-op that returns a plausible
+value. The restaurants and the friends are fictional and the covers are the
+prototype's own Unsplash stills. **Nothing reaches the database**, which is the
+point: it is a way to look at S6 with a full month on it, not a seed.
+
+## 7a. Data-empty today
+
+- Nothing outstanding. Cream pips for other people's plans were the last gap
+  here, and the Friends phase closed it: `get_plan_people` puts a roster on
+  each plan, so `friendCount` is real.
 
 ## 8. Out of scope
 
@@ -312,8 +384,11 @@ costs one `get_plan_votes` and one `get_plan_people`.
 
 | ID | Decision | Status |
 |---|---|---|
+| D123 | The Calendar tab draws its month grid the way the date picker does: `PlanCalendarHeader` + `PlanCalendar` on the page, at the screen padding, with the picker's month arrows. The `SimpleCard` wrapper and the "This month ▾" chip's six-month bottom sheet are removed. One grid used on two screens has to *look* like one grid — the card's border and padding narrowed the columns, and the day discs drew as ellipses on a 320 pt phone while the picker's drew as circles. Arrows also beat a sheet for a tab that only ever looks a few months ahead. | locked 2026-09-10 |
 | D107 | A plan is one owner, one restaurant, one date. The triple is a unique index and the ON CONFLICT target of `create_plan`, so locking the same place in twice on one day moves the time instead of creating a second row. | locked 2026-09-06 |
 | D108 | A past plan is a kept plan unless it was cancelled first. `mark_plan_kept()` flips it server-side on load; there is no "did you go?" prompt, because the calendar records intent and intent that survived to the day counts. | locked 2026-09-06 |
 | D109 | Membership is answered by a `security definer` helper, `public.is_plan_member(bigint)`, rather than by policies that reference each other's tables and recurse. `EXECUTE` stays granted to `authenticated` because a policy expression runs with the querying role's privileges; the advisor warning that follows is accepted and explained in the migration. | locked 2026-09-06 |
 | D134 | Voting gets a screen the design does not draw. "They'll get a vote on the time" is written on S4's switch and no S-numbered screen ever collects one, so `/plans/:id` is invented rather than derived — the smallest surface that makes the switch's promise true. It takes the Calendar card's tap and hands the restaurant back from its own header, so the plan does not need a second affordance nobody would find. | locked 2026-09-09 |
+| D132 | A plan member may see the other members, through a policy scoped by `is_plan_member` — the same definer helper the rest of the plan policies lean on, so it adds no recursion. | locked 2026-09-06 |
+| D133 | Time voting needs no new schema. A member upserts their own `plan_time_votes` row under the policies Phase 7 already wrote, the tally is a group-by the client does over rows it may read, and locking a time is the owner updating `plans.plan_time` through `PlansRepository.setTime`. The only thing missing was a read that could put a name next to a vote, which is what `get_plan_votes` is. | locked 2026-09-06 |
 | D110 | A plan's time is one of five fixed chips — 12:30, 18:30, 20:00, 21:30, Late — not a time picker. "Late" is a label with no hour, which is why `plan_time` is nullable, and it sorts last within a day. | locked 2026-09-06 |

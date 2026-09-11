@@ -1,7 +1,7 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-06
-Cross-references: [Explore-Search.md](Explore-Search.md), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md), [Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
+Last updated: 2026-09-10
+Cross-references: [Explore-Search.md](Explore-Search.md) (superseded, history), [Swipe-Deck.md](Swipe-Deck.md), [Backend-Schema.md](Backend-Schema.md), [Profile-Preferences.md](Profile-Preferences.md), [Frontend/DESIGN-SYSTEM.md](../Frontend/DESIGN-SYSTEM.md)
 
 > **Changed 2026-09-10 (D126).** **The map no longer draws a map.** The
 > `TileLayer` is gone, and with it the OpenStreetMap tile server, the
@@ -35,13 +35,18 @@ Files: `lib/features/nearby/` — `data/nearby_repository.dart`,
 
 ## 1. Layout
 
-Everything floats over the tiles; the map itself is edge to edge, under the
+Everything floats over the map area; the map itself is edge to edge, under the
 status bar and behind the nav.
 
-- **Topbar** — a single **Filters** icon button, right-aligned, carrying the
-  active-filter count as a dot. There is **no Back button**: this is a tab, not
-  a pushed screen. The button opens the deck's own `showDiscoveryFilterSheet`,
-  so one sheet serves both surfaces.
+- **Topbar** — a single tune icon button, right-aligned, carrying the
+  active-filter count as a numbered badge. There is **no Back button**: this is
+  a tab, not a pushed screen. The button opens the deck's own
+  `showDiscoveryFilterSheet`, so one sheet serves both surfaces. It says what
+  the deck's button says and wears the same colour: semantics `Discovery
+  settings`, value `<n> filter on` / `<n> filters on`, and the glyph goes
+  `kAccentEmber` while anything is narrowed (fixed 2026-09-10 — the two
+  surfaces used to disagree, one calling it "Filters" and leaving the glyph
+  cream).
 - **Me-dot** — an 18 px ember circle with a 4 px `kBackgroundDark` border and a
   12 px lava-at-22% halo (`kNearbyMeHalo`), drawn at the resolved origin. The
   camera is moved so it sits at **50% across, 52% down** the map area
@@ -61,14 +66,14 @@ status bar and behind the nav.
   `right:6%;top:18%`, `left:12%;top:44%`, `right:8%;top:46%` big,
   `left:36%;top:60%`), and so does the app: `kNearbyPinSlots` holds those six
   as fractions of the map area below the status bar. When the pins arrive the
-  camera is zoomed to hold all five plus the origin — so the tiles underneath
-  are the real neighbourhood at a real scale — then moved to put the me-dot on
+  camera is zoomed to hold all five plus the origin — so the spread on screen
+  is the real neighbourhood at a real scale — then moved to put the me-dot on
   its mark, and each pin is laid into a slot by `assignPinsToSlots`
   (`domain/pin_slots.dart`): the two closest take the two big slots, and
   every pin takes the slot nearest the direction it truly lies in, so a place
   to the north-west is drawn north-west of you. The slot's coordinate is read
   back off the composed camera, so a pan or zoom carries the pins with the
-  tiles. The distance badge, not the position, is what says how far.
+  camera. The distance badge, not the position, is what says how far.
 - **No two pins overlap.** The slots are drawn for a 390 px phone; on a
   narrower one two of them can touch, so after each camera change the tab
   projects the pins to screen space and runs `spreadPins`
@@ -81,9 +86,6 @@ status bar and behind the nav.
 - **Results bar**, flush with the nav, rounded at the top only — "From RM *n*"
   (hidden when nothing names a price), "Open now *n*", and the ember
   **"Swipe all *n*"** button.
-- **A scrim** (`kNearbyMapScrim`) sits between the tiles and the markers. OSM's
-  raster tiles are a daylight map; without it the cream text on the pins has
-  nothing to sit against.
 
 Tapping a pin pushes `/restaurant/:id` with the detail payload, exactly as the
 deck and the Bites grid do (D57).
@@ -150,7 +152,8 @@ three diet & budget answers, because `get_nearby` now applies them as hard rules
 
 Resolved the way `deck_scored` resolves it, in order:
 
-1. A real device fix, through the injected resolver (D60).
+1. A real device fix, through the injected resolver (D60) — anything
+   `isFallbackUserPosition` calls a fallback does not count.
 2. The coordinates the profile stored (`profiles.last_latitude/longitude`),
    carried on `AppUser.lastLatitude/lastLongitude`. `(0, 0)` counts as unknown.
 3. Nothing — and then the map is not drawn at all. `AppEmptyState` asks
@@ -162,15 +165,28 @@ One origin drives all three of the me-dot, the camera fit and the query, so
 they can never disagree — and it is the same chain the deck uses, so the two
 screens cannot disagree with each other either.
 
-> **Changed 2026-09-10.** The **passport pin** used to head this list (D12)
-> and was read on the client, ahead of the device, through a
+> **Changed 2026-09-10 (D121).** The **passport pin** used to head this list
+> (D12) and was read on the client, ahead of the device, through a
 > `NearbyRepository.profileOrigins()` round trip. D84 retired passport, but
 > `profiles.passport_latitude/longitude` kept winning the chain here *and*
 > inside `deck_scored` — so a pin left behind before the retirement silently
 > centred one live profile's map and deck 25 km from the town the header
 > named, while the card distances were measured from the device again. Three
 > origins, one screen. The pin is out of both chains, the extra read is gone
-> (the stored pair rides on `AppUser`), and `set_passport` is dropped.
+> (the stored pair rides on `AppUser`, read through
+> `AuthRepository._profileColumns`), and `set_passport` is dropped.
+> `NearbyProfileOrigins` and `NearbyRepository.profileOrigins()` are deleted
+> with it: the repository has one method left, `fetchNearby`.
+
+The discovery sheet writes through the same controller. `applyDiscoveryFilters`
+sends the radius **first** and only when it changed —
+`ProfileRepository.updateSearchRadius` → `update_preferences` with
+`p_radius_km` / `p_clear_radius` — then `set_discovery_filters` for the
+cuisines, the dietary tags and the minimum rating. Both answers go through
+`AuthController.applyUser`, and it is that notification, not the method, that
+refetches the map. When the radius changed *and* the saved radius is not
+"any" (`searchRadiusKm != null`), `_radiusTouched` is cleared in the `finally`,
+so the sheet's radius wins over the stepper's local override.
 
 ## 4. The `get_nearby` RPC
 
@@ -223,35 +239,16 @@ carry a `select` policy for `authenticated`, `swipes` carries the owner-only
 security-invoker function reads everything it needs as the signed-in user — and
 the `swiped` subquery can only ever see the caller's own rows.
 
-## 5. Tiles
+## 5. No tiles
 
-The `TileProvider` is constructor-injected (D101, D60), so a widget test never
-opens a socket. The template and its credit come from `AppConfig`:
-
-| Define | Default | Meaning |
-|---|---|---|
-| `MAP_TILE_URL_TEMPLATE` | OSM's public server | Where the raster tiles come from |
-| `MAP_TILE_ATTRIBUTION` | `© OpenStreetMap` | The credit drawn bottom-left |
-
-The default is **development only**. OpenStreetMap's tile usage policy forbids
-a released app from pointing at their public server: no heavy use, no bulk
-downloading, and they may cut a client off without notice, which turns the map
-blank in the field. Shipping means an account with a tile host (MapTiler,
-Stadia, Mapbox, Thunderforest, or a self-hosted renderer) and both defines:
-
-```
---dart-define=MAP_TILE_URL_TEMPLATE=https://…/{z}/{x}/{y}.png?key=…
---dart-define=MAP_TILE_ATTRIBUTION='© MapTiler © OpenStreetMap'
-```
-
-The credit travels with the template because every host requires its own, and a
-template swapped without its attribution is a licence breach.
-`AppConfig.usesDevelopmentTiles` reports whether a build is still on the
-default, so "not shippable" is a value the app can read rather than a fact
-somebody has to remember (D120).
-
-The `User-Agent` is `kTileUserAgentPackageName`, matching the Android
-application id, so a blocked client is identifiable rather than anonymous.
+There is no `TileLayer`, and there is no tile configuration to get wrong: the
+`MAP_TILE_URL_TEMPLATE` / `MAP_TILE_ATTRIBUTION` defines, `AppConfig`'s tile
+fields and `usesDevelopmentTiles`, the `kTileUserAgentPackageName` user agent,
+the `© OpenStreetMap` credit, the scrim and the constructor-injected
+`TileProvider` are all removed from the code (D126). `flutter_map` is kept for
+one thing — its camera, which turns a coordinate into a screen position for the
+pins — and the ground under them is `kBackgroundDark`, the app's own surface.
+Nothing here reaches the network, so no test has to fake a tile server either.
 
 ## 6. "Swipe all *n*"
 
@@ -277,11 +274,11 @@ off the device days ago must not be credited to "Nearby · 6 places".
 well as listening to it itself, so one injected instance wires all three ends of
 the journey — publisher, dealer, and the shell that brings tab 0 forward.
 
-**Not done:** the deck header does not display `DeckController.handoffLabel`
-("Nearby · 12 places"). The only header slot is `stalenessLabel`, which renders
-in an `AppChip` with an `Icons.cloud_off_rounded` glyph; reusing it would put
-an offline icon over fresh rows, and changing that widget is outside this
-change's scope. The label is computed and exposed for whoever adds the slot.
+The deck header **does** display `DeckController.handoffLabel` ("Nearby · 6
+places"): it gets its own `AppChip` with an `Icons.near_me_rounded` glyph
+tinted `kAccentEmber`, in the same `Wrap` as the staleness chip and ahead of
+it. The two are different facts — where these cards came from, and how old they
+are — so they get different glyphs rather than one shared slot.
 
 ## 7. Data reality
 
@@ -302,8 +299,9 @@ within 3.0 km. Widen the circle." rather than naming a place.
 
 ## 8. Tests
 
-No network and no platform channels anywhere: the tile provider, the position
-resolver, the clock and the repository are all injected.
+No network and no platform channels anywhere: the position resolver, the clock
+and the repository are all injected, and with the tiles gone there is no tile
+provider left to fake.
 
 - `test/features/nearby/nearby_format_test.dart` — the radius snapping, the
   distance strings, every branch of the open line.
@@ -330,14 +328,27 @@ resolver, the clock and the repository are all injected.
   fallback drops the hand-off label** with the cards it replaces, and that each
   of the three diet & budget answers re-deals the deck.
 - `test/features/nearby/fake_nearby_repository.dart` — `implements
-  NearbyRepository` (D69), plus `FakeTileProvider` and the fixtures.
+  NearbyRepository` (D69) with the one method left on it, plus the fixtures
+  (`testPosition`, `testPlace`) and the recorded `NearbyQuery` list.
 
-## 9. Decision log
+## 9. Known issues
+
+- `NearbyController._resolveOrigin` carries **two stacked doc comments**: the
+  pre-D121 one ("The passport pin, else the device fix… resolved *here* rather
+  than inside `get_nearby`, unlike `deck_scored` (D12)") was left above the
+  replacement instead of being deleted. The behaviour is D121's; only the
+  comment lies. The header comment of
+  `supabase/migrations/20260906140000_get_nearby_diet_budget_swiped.sql` says
+  the same thing for the same reason. Comment-only, no behaviour to change.
+
+## 10. Decision log
 
 | ID | Decision | Status |
 |---|---|---|
-| D101 | The map is `flutter_map` with a **constructor-injected** `TileProvider`; the OSM default is development only under their usage policy, and production swaps a URL template. | locked 2026-09-05 |
+| D101 | ~~The map is `flutter_map` with a **constructor-injected** `TileProvider`; the OSM default is development only under their usage policy, and production swaps a URL template.~~ | **superseded by D126 2026-09-10** |
 | D102 | The map **replaces** the cuisine grid and the per-cuisine page, which are deleted rather than kept alongside it. The DB functions behind them (`get_cuisine_counts`, `get_top_picks`) are retained. | locked 2026-09-05 |
 | D103 | "Swipe all" hands the result **list** to the deck through `DeckHandoff` rather than re-querying; the deck deals what the map already fetched. | locked 2026-09-05 |
 | D116 | The map draws the **nearest five** places, sized by distance (96 px at the origin to 52 px at the radius edge), laid into the **design's six slots** with the two closest in the two big ones and each pin on its own side of the me-dot, then spread apart in screen space so no two overlap. The camera is zoomed to hold the five and moved to put the me-dot at 50%/52%. Five is what a thumb can pick between; the results bar and "Swipe all" still speak for the full fetch. The distance badge carries the truth the position no longer does. | locked 2026-09-06 |
+| D120 | ~~The map's tile template **and its attribution** are `--dart-define`s (`MAP_TILE_URL_TEMPLATE`, `MAP_TILE_ATTRIBUTION`), defaulting to OSM's public server; `AppConfig.usesDevelopmentTiles` makes "still on the development server" a value the app can read.~~ | **superseded by D126 2026-09-10** |
+| D126 | The Nearby map **draws no map tiles**. The `TileLayer`, the OpenStreetMap server, the `MAP_TILE_URL_TEMPLATE` / `MAP_TILE_ATTRIBUTION` defines, the `© OpenStreetMap` credit, the tile scrim and the injected `TileProvider` are all removed; the pins sit on `kBackgroundDark`. `flutter_map` stays for its camera, which is what projects a coordinate onto the screen. This supersedes D101 and D120 and retires the problem they described rather than solving it: OSM's public server is development-only under their own usage policy, and the alternative was a paid tile account for a background nobody asked for. | locked 2026-09-10 |
 | D117 | "Swipe all" deals only the places the caller has **not already swiped**; the pins still show all of them. `get_nearby` answers `swiped` per row, and the button counts and hands over the rest. Saying what is there is the map's job; not repeating itself is the deck's, and a hand-off of cards the deck has already shown reads as the app forgetting. | locked 2026-09-06 |

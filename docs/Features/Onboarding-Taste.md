@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-05
+Last updated: 2026-09-10
 Cross-references: [Friends.md](Friends.md), [Auth.md](Auth.md), [Swipe-Deck.md](Swipe-Deck.md), [Profile-Preferences.md](Profile-Preferences.md), [Backend-Schema.md](Backend-Schema.md)
 
 # Onboarding & the Taste Signal
@@ -14,11 +14,19 @@ Cross-references: [Friends.md](Friends.md), [Auth.md](Auth.md), [Swipe-Deck.md](
 > **Changed 2026-09-05.** **Six steps.** "Any rules?" (design 01e) now sits
 > between Taste and Habits, and the topbar is the design's: a 44 px round back
 > button, a three-state `.steps` bar, and a **Skip** on this one step. Continue
-> is a single block button in the foot. **Friends (01f) is the only design step
-> still missing** — it is the one that needs a social graph rather than a
-> column.
+> is a single block button in the foot.
+>
+> **Changed 2026-09-06 (D118).** The habits step's budget control is a single
+> upper thumb over a fixed **RM 10** floor, and its spice tile is gone — the
+> rules step already asked, and `complete_onboarding` derives `spice_bias`
+> from the answer (D104).
+>
+> **Changed with the Friends phase, 2026-09-10. Seven steps.** **01f · "Eat with people"**
+> now sits immediately after "Any rules?", and it is the only place in the app
+> that matches contacts. It is the second skippable step, which is why the
+> topbar asks about its Skip slot twice. See [Friends.md](Friends.md).
 
-The six-step wizard every account walks **exactly once**. It exists to solve
+The seven-step wizard every account walks **exactly once**. It exists to solve
 one problem: a deck ranked on nothing is a random deck, and the first session
 is the one that decides whether there is a second.
 
@@ -40,21 +48,28 @@ The seeded demo account (`demo@swipeeat.test`) has a deliberately null
 `onboarded_at`, so signing in as demo walks the wizard once and exercises this
 path.
 
-## 2. The six steps
+## 2. The seven steps
 
 | # | Step | Collects | Required? |
 |---|---|---|---|
 | 1 | You | `name` | Yes |
 | 2 | Taste | `cuisineIds`, `dietaryIds` | Yes |
 | 3 | **Any rules?** | `halal_only`, `vegetarian`, `spice_level`, `budget_min` / `budget_max` | No — and **skippable**, which is not the same thing |
-| 4 | Habits | `morning_mode`, `spice_bias`, `nearby_focus`, `radius_km` | No — every tile has a valid default |
-| 5 | Location | A fix, or an explicit refusal | No — refusal is a valid answer |
-| 6 | Three moves | Nothing — it teaches the gestures | No |
+| 4 | **Eat with people** | `friendIds` — the contacts who matched and were ticked | No — and **skippable** |
+| 5 | Habits | `morning_mode`, `nearby_focus`, `radius_km` | No — every tile has a valid default |
+| 6 | Location | A fix, or an explicit refusal | No — refusal is a valid answer |
+| 7 | Three moves | Nothing — it teaches the gestures | No |
 
-`_stepCount = 6`. The final button reads **"Show me dinner"** (D90).
+`_stepCount = 7`, with `_rulesStep = 2` and `_friendsStep = 3` (zero-based).
+The friends step sits *before* location deliberately: `_skipLocation` calls
+`_finish()` outright, so anything placed after it is silently skipped by
+everybody who declines location. The final button reads **"Show me dinner"**
+(D90); on the friends step it reads **"Add 3 friends"** once something is
+ticked, and a plain Continue at zero.
 
 `_canAdvance` gates only steps 1 and 2; everything after is always satisfiable
-because the rules, the tiles and the location itself all have valid defaults.
+because the rules, the friends step, the tiles and the location itself all have
+valid defaults.
 Back navigation never lands the user on a step the Continue button had refused.
 
 ### The topbar
@@ -63,7 +78,8 @@ Back is a 44 px `kGlass` round icon button, replaced by a 44 px spacer on step
 1 so the progress bar never shifts. The bar is the design's `.steps`: 3 px
 segments with 5 px gaps, **ember** for the current step, muted cream for the
 ones behind, hairline for the ones ahead. The right slot holds the `.textbtn`
-Skip on step 3 and a spacer everywhere else.
+Skip on the rules step **and on the friends step**, and a spacer everywhere
+else.
 
 ### Step 3 — "Any rules?", and why Skip clears rather than passes
 
@@ -71,18 +87,29 @@ This is the only step whose answers **hide** restaurants instead of reordering
 them, which is why it carries a reason under the heading ("So we never show you
 somewhere you can't eat.") and a Skip beside the bar.
 
-The budget range opens on RM 10–40, as the prototype shows it. That creates a
-trap: skipping a step that is already showing a range would silently cap a
-stranger's deck at RM 40. So **Skip clears every rule first** — the switches go
-off, the spice level goes null, and the budget goes to "no answer"
-(`p_clear_budget: true`) — and only then advances. Continue commits what is on
-screen. Spice starts with **nothing** selected, because "unanswered" and "Mild"
-are different things.
+The budget control is **one thumb** — the ceiling — over a fixed RM 10 floor,
+as the design draws it ("Budget per person, upper limit"); a second thumb was a
+question nothing read, since `deck_scored` filters on `budget_max` alone
+(D118). It opens on a range, which creates a trap: skipping a step that is
+already showing one would silently cap a stranger's deck. So **Skip clears
+every rule first** — the switches go off, the spice level goes null, and the
+budget goes to "no answer" (`p_clear_budget: true`) — and only then advances.
+Continue commits what is on screen. Spice starts with **nothing** selected,
+because "unanswered" and "Mild" are different things.
 
-The upper thumb parked at RM 100 means *no ceiling*, not RM 100: the read-out
-says "RM 10+" and `budget_max` is written null. Hiding the handful of places
-that cost more from someone who just said money is not the issue would be the
-opposite of what they answered.
+The thumb parked at `kBudgetCeiling` means *no ceiling*, not RM 100: the
+read-out says "RM 10+" and `budget_max` is written null. Hiding the handful of
+places that cost more from someone who just said money is not the issue would
+be the opposite of what they answered.
+
+### Step 4 — "Eat with people"
+
+`Find friends from contacts` reads phone numbers only, hashes them on the way
+out and matches them server-side; ticking a match and pressing Continue sends
+the requests, one after another. **Skip sends nothing and reads nothing** —
+not the address book, not a request. The step draws three states (ask,
+matched, none) where the prototype draws one. All of it is
+[Friends.md](Friends.md) §2 and §6; the wizard only holds the ticks.
 
 ### Step 2 — the cold-start taste signal
 
@@ -95,9 +122,17 @@ switches mean something: `morning_mode` and `spice_bias` are applied *through*
 the cuisine taxonomy rather than against a column on `restaurants`.
 
 Dietary tags are a **filter**, not a weight — 6 of them, and "halal" is not a
-preference to be outweighed by proximity.
+preference to be outweighed by proximity. Only two of the six carry any rows
+today: `restaurant_dietary_tags` is backfilled from what the catalogue
+evidences and holds 33 rows in total, halal and vegetarian only (D119).
 
-### Step 4 — "Not now" is an answer, not an escape
+### Step 5 — the habits tiles
+
+Morning mode, Nearby focus and the radius. **No spice tile**: the rules step
+already asked on its four-step control, and `complete_onboarding` derives
+`spice_bias` from `spice_level` (D104, D118).
+
+### Step 6 — "Not now" is an answer, not an escape
 
 Declining location records `location_source = 'denied'` and **finishes the
 wizard**. Two reasons:

@@ -1,12 +1,12 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-04
+Last updated: 2026-09-10
 Cross-references: [General/RUNBOOK.md](../General/RUNBOOK.md), [Frontend/STACK.md](../Frontend/STACK.md), [Features/Swipe-Deck.md](../Features/Swipe-Deck.md)
 
 # Testing Conventions
 
-**918 tests, all passing; `flutter analyze lib test` reports no issues**
-(verified 2026-09-04).
+**1,173 tests, all passing; `flutter analyze lib test` reports no issues**
+(verified 2026-09-10). 66 test files.
 
 ## 1. Framework
 
@@ -28,9 +28,11 @@ lib/features/restaurants/domain/deck_ranker.dart
 ```
 
 The intermediate layer folder (`domain/`, `data/`, `state/`) is dropped in the
-test path — the feature folder plus the file name is unambiguous.
+test path — the feature folder plus the file name is unambiguous. The one
+exception is `test/features/restaurants/domain/`, kept because two pure
+helpers live there and the folder is the statement that they need no fake.
 
-## 3. Coverage map (2026-09-04)
+## 3. Coverage map (2026-09-10)
 
 ```
 test/
@@ -42,22 +44,51 @@ test/
     ui/        design_tokens_test, hex_color_test, rating_label_test,
                tiktok_thumbnail_placeholder_test
   features/
-    auth/         app_user_test, auth_controller_test
+    auth/         app_user_test, auth_controller_test, phone_sign_in_page_test,
+                  sign_up_page_test, welcome_page_test
                   fake_auth_repository.dart
     dashboard/    dashboard_bottom_nav_test, dashboard_tab_shell_test,
-                  likes_tab_view_test,
+                  likes_tab_test, likes_tab_view_test,
                   restaurant_detail_page_test
-    onboarding/   onboarding_draft_test, onboarding_flow_test
+    friends/      friend_captions_test, friend_widgets_test,
+                  friends_controller_test, friends_page_test,
+                  invite_ordering_test, invite_page_test, phone_hash_test,
+                  vote_tally_test
+                  fake_friends_repository.dart
+    nearby/       nearby_controller_test, nearby_format_test,
+                  nearby_radius_stepper_test, nearby_results_bar_test,
+                  nearby_tab_test, pin_slots_test, pin_spread_test
+                  fake_nearby_repository.dart
+    onboarding/   onboarding_draft_test, onboarding_flow_test,
+                  onboarding_friends_step_test
                   fake_onboarding_repository.dart
-    profile/      fake_profile_repository.dart
-    restaurants/  deck_ranker_test, likes_controller_test,
-                  likes_migration_test, restaurant_grid_card_test,
-                  restaurant_repository_test, restaurant_test
+    plans/        calendar_tab_test, dashboard_plans_test, plan_date_page_test,
+                  plan_page_test, plans_controller_test, plans_repository_test
+                  fake_plans_repository.dart
+    profile/      preference_controls_test, profile_cache_test,
+                  profile_tab_test
+                  fake_profile_repository.dart
+    restaurants/  deck_discovery_apply_test, deck_handoff_test,
+                  deck_location_label_test, deck_ranker_test,
+                  discovery_filter_sheet_test, dish_test,
+                  likes_controller_test, likes_migration_test,
+                  restaurant_card_test, restaurant_detail_data_test,
+                  restaurant_grid_card_test, restaurant_repository_test,
+                  restaurant_test, swipe_card_test, swipe_deck_test,
+                  tiktok_player_test
+                  domain/  meal_label_test, opening_hours_test
                   fake_restaurant_repositories.dart
     settings/     settings_page_test
+    wishlist/     wishlist_controller_test, wishlist_page_test
+                  fake_wishlist_repository.dart
   support/
     widget_test_support.dart
 ```
+
+`restaurants/domain/` is the one place the mirror keeps the layer folder, and
+it is deliberate: `meal_label` and `opening_hours` are pure functions with no
+repository behind them, so the folder is the statement that there is nothing
+to fake.
 
 ### What is well covered
 
@@ -69,7 +100,7 @@ test/
 - **Controllers** — `auth_controller_test`, `likes_controller_test`.
 - **The router** — `app_router_test` covers the redirect matrix and the splash
   hold, which is the cold-start correctness property (D56).
-- **Design tokens** — 42 tests, including the palette rules themselves (warm
+- **Design tokens** — 49 tests, including the palette rules themselves (warm
   blacks, surface stacking order, one non-orange accent). That is what made the
   Ngap retint safe to land in one commit.
 - **Widget layout under stress** — `restaurant_detail_page_test` asserts no
@@ -86,11 +117,11 @@ test/
 
 | Not covered | Why it matters |
 |---|---|
-| `DeckController` | The most complex controller in the app — `_loadGeneration` sequencing, the optimistic-write/rewind race, the daily limit's unknown-count branch. `deck_ranker_test` covers the algorithm, not the orchestration |
-| `SwipeDeck` widget | Gesture thresholds (110 / −140 / `\|dx\|`), motion, the match moment |
+| `DeckController`'s load sequencing | `deck_discovery_apply_test`, `deck_location_label_test` and `deck_handoff_test` cover the sheet's two writes, the header labels and the hand-off; `_loadGeneration`'s "only the newest request may publish" is still asserted only by reading it |
+| The deck's **gestures** | `swipe_deck_test` covers `DeckHeader` and `DeckActionBar` only. The thresholds (110 / −140 / `\|dx\|`) and the 640 ms exit motion are still untested |
 | `VisitPromptController` | No tests |
 | `ProfileRepository` | A fake exists; nothing exercises the real one |
-| `TikTokPlayerCache` | The bound-at-5 eviction rule and "the watched player is never evicted" (D39) are asserted only by reasoning |
+| `TikTokPlayerCache` | The bound-at-5 eviction rule and "the watched player is never evicted" (D39) are asserted only by reasoning. `tiktok_player_test` covers the framing scale, not the cache |
 | Edge functions | No Deno test suite for `delete-account`, `legal`, `refresh-thumbnails` |
 | RLS policies | No pgTAP suite. Policy correctness rests on review |
 
@@ -137,29 +168,41 @@ have no real network and no platform channels:
 
 ## 6. Running
 
+The SDK lives in `./flutter-sdk` (untracked), so the gate is one line
+([General/RUNBOOK.md](../General/RUNBOOK.md)):
+
 ```bash
-flutter analyze
-flutter test
+export PATH="$PWD/flutter-sdk/bin:$PATH"; flutter analyze lib test; flutter test
 flutter test test/features/restaurants/deck_ranker_test.dart   # while iterating
 ```
 
+`analyze lib test` rather than a bare `analyze`: the tests are the half most
+likely to rot, and an analyzer that only reads `lib/` says nothing about them.
 Both commands must pass before a change is done. Run the minimum needed while
-working; the full suite takes about 6 seconds, so there is no excuse for
-skipping it before a commit.
+working; the full suite is fast enough that there is no excuse for skipping it
+before a commit.
 
 ## 7. CI
 
 `.github/workflows/ci.yml` — on every pull request and every push to `main`:
 set up Flutter **3.47.1**, cache pub packages, `flutter pub get`,
 `flutter analyze`, `flutter test`. Nothing else. No coverage gate, no
-integration stage.
+integration stage, and no `dart format` gate — the source is hand-wrapped and
+18 files would fail today.
+
+CI's analyze is the bare one, not §6's `analyze lib test`. Run the local gate
+before pushing; CI will not catch an analyzer complaint that lives only in
+`test/`.
 
 ## 8. What tests cannot reach
 
 Three behaviours are platform-level and are exercised by neither command. They
 need a device smoke test before a release:
 
-1. The card-to-fullscreen TikTok player handover.
+1. The TikTok player: the detail screen's hero-to-fullscreen handover, and the
+   sound pill's `x-tiktok-player` postMessage actually reaching their player
+   (D122). `flutter test` has no WebView. The deck no longer has a fullscreen
+   route of its own.
 2. Sentry initialisation with a real DSN.
 3. The offline deck fallback, in airplane mode.
 

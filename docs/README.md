@@ -2,7 +2,8 @@
 
 Living documentation for Swipe Eat: a Flutter app for finding somewhere to eat
 by swiping through restaurant cards built from TikTok food videos, backed by
-Supabase.
+Supabase. Five tabs — Swipe, Nearby, Bites, Calendar, You — plus the plans,
+wishlist and friends screens pushed over them.
 
 It is organized by concern, not by chronology — each folder answers a different
 question a reader might have.
@@ -16,7 +17,7 @@ question a reader might have.
 | `Frontend/` | How is the client built? | Stack, conventions, the design system |
 | `Tests/` | How do we test this, and what's covered? | Testing conventions and coverage map |
 | `Release/` | How does this get to users? | Store submission, signing, compliance |
-| `Redesign/` | Where is the design going? | The **Ngap** rebrand — target design system, screens, gap analysis. DRAFT, not built |
+| `Redesign/` | Where is the design going? | The **Ngap** rebrand — target design system, screens, gap analysis. DRAFT |
 | `History/` | What did we plan, and did it land? | Delivered plans and superseded specs, kept for their reasoning |
 
 > **`Features/` describes what ships today. `Redesign/` describes a proposed
@@ -80,23 +81,35 @@ reasoning first.
 | [Auth](Features/Auth.md) | ACTIVE | The welcome and sign-up screens, phone (gated), Google, Apple, the email fallback, Mailtrap SMTP |
 | [Backend-Schema](Features/Backend-Schema.md) | ACTIVE | As-built tables, RPCs, RLS, triggers |
 | [Onboarding-Taste](Features/Onboarding-Taste.md) | ACTIVE | The four-step wizard and the cold-start taste signal |
-| [Swipe-Deck](Features/Swipe-Deck.md) | ACTIVE | The card deck, ranking, super like, rewind, daily limit, streak |
-| [Explore-Search](Features/Explore-Search.md) | ACTIVE | Cuisine grid, search, Top Picks rail |
-| [Likes-Visits](Features/Likes-Visits.md) | ACTIVE | Liked / Visited / Reviewed segments, the visit prompt |
-| [Profile-Preferences](Features/Profile-Preferences.md) | ACTIVE | Preferences, radius, discovery filters, Passport |
+| [Swipe-Deck](Features/Swipe-Deck.md) | ACTIVE | The card deck, ranking, the three-button action bar, discovery settings, offline fallback |
+| [Nearby-Map](Features/Nearby-Map.md) | ACTIVE | The tab-1 map, its pins, the radius stepper and "Swipe all" |
+| [Explore-Search](Features/Explore-Search.md) | SUPERSEDED | Cuisine grid, search, Top Picks rail — the tab is gone (D102) |
+| [Likes-Visits](Features/Likes-Visits.md) | ACTIVE | The Bites grid, the chip row, pull-to-refresh, the visit prompt |
+| [Wishlist](Features/Wishlist.md) | ACTIVE | The checklist at `/wishlist`, the eaten half, "From &lt;friend&gt;" |
+| [Profile-Preferences](Features/Profile-Preferences.md) | ACTIVE | Preferences, diet & budget, radius, discovery filters, location |
 | [TikTok-Video](Features/TikTok-Video.md) | ACTIVE | The embedded player, warming, the thumbnail cache job |
 | [Restaurant-Data](Features/Restaurant-Data.md) | ACTIVE | Scrape → extract → review → geocode pipeline |
 | [Account-Deletion-Legal](Features/Account-Deletion-Legal.md) | SHIPPED | Store-mandated deletion and the public legal pages |
 | [Plans-Calendar](Features/Plans-Calendar.md) | ACTIVE | Pick a date, the Calendar tab, and the planned state everywhere |
-| [Friends](Features/Friends.md) | ACTIVE | The friend graph, contact matching, invites, blocking |
+| [Friends](Features/Friends.md) | ACTIVE | Contact matching in onboarding, the `/friends` lists, plan invites, the plan page's time voting |
 | [Group-Dining](Features/Group-Dining.md) | SUPERSEDED | Tab 3 is the Calendar now; the shared-deck sketch survives |
 | [Quiz](Features/Quiz.md) | ORPHANED | Schema with no UI reaching it |
+
+`Frontend/` holds the two client-wide references:
+
+| Doc | Covers |
+|---|---|
+| [Frontend/STACK.md](Frontend/STACK.md) | Packages, layering, routing, the rules a new feature follows |
+| [Frontend/DESIGN-SYSTEM.md](Frontend/DESIGN-SYSTEM.md) | Tokens, type, shape, the component vocabulary |
 
 ## Proposed: the Ngap redesign
 
 A full rebrand and product expansion — new name, Kuala Lumpur instead of
-Johor/Penang, and a scheduling and social layer the app does not have. **DRAFT;
-nothing here is built.**
+Johor/Penang, and a scheduling and social layer. **DRAFT.** The rebrand and the
+KL catalogue are not built; the scheduling and social layer since has been —
+plans, the Calendar tab, friends, invites and time voting all ship today, under
+`Features/`. [GAP-ANALYSIS.md](Redesign/GAP-ANALYSIS.md) is still the
+difference.
 
 | Doc | Covers |
 |---|---|

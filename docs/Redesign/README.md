@@ -1,6 +1,6 @@
 Status: DRAFT
 Owner: Swipe Eat team
-Last updated: 2026-09-03
+Last updated: 2026-09-10
 Cross-references: [NGAP-DESIGN-SYSTEM.md](NGAP-DESIGN-SYSTEM.md), [SCREENS.md](SCREENS.md), [GAP-ANALYSIS.md](GAP-ANALYSIS.md), [General/PLAN.md](../General/PLAN.md)
 
 # Redesign — Ngap
@@ -12,6 +12,13 @@ difference.
 
 Nothing here is approved or scheduled. It is DRAFT until a maintainer says
 otherwise.
+
+**Partly overtaken, 2026-09-10.** Seven of the ten phases in
+[GAP-ANALYSIS.md](GAP-ANALYSIS.md) §6 ("Suggested order") have shipped — the design system, the
+reskin, the facts columns and detail screen, the Nearby map, the wishlist,
+plans and the Calendar, and friends with invites and time voting. What has
+**not** happened is the part this folder is named for: the rebrand to Ngap and
+the Kuala Lumpur catalogue. Those are still DRAFT.
 
 ## What this is
 
