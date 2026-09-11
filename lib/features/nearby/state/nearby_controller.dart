@@ -387,27 +387,33 @@ class NearbyController extends ChangeNotifier {
     double? minRating,
     int? searchRadiusKm,
   }) async {
-    // Read before the writes: applyUser lands between them, so asking
+    // Read before the writes: applyUser lands after them, so asking
     // afterwards would compare the new radius against itself.
     final radiusChanged = searchRadiusKm != authController.user?.searchRadiusKm;
 
+    // Only the last row reaches [applyUser], and only once — the same rule
+    // `DeckController.applyDiscoveryFilters` follows. Applying the radius on
+    // its own would refetch the map and re-deal the deck under the new radius
+    // and the old filters, two loads thrown away a moment later.
+    AppUser? written;
     try {
       if (radiusChanged) {
-        authController.applyUser(
-          await _profiles.updateSearchRadius(searchRadiusKm),
-        );
+        written = await _profiles.updateSearchRadius(searchRadiusKm);
       }
-      final user = await _profiles.setDiscoveryFilters(
+      written = await _profiles.setDiscoveryFilters(
         cuisineIds: cuisineIds,
         dietaryTagIds: dietaryTagIds,
         minRating: minRating,
       );
-      authController.applyUser(user);
       return true;
     } on Object catch (error) {
       debugPrint('Nearby discovery filters write failed: $error');
       return false;
     } finally {
+      // Whatever landed is the truth now, half a sheet included.
+      if (written != null) {
+        authController.applyUser(written);
+      }
       // The stepper's local override has to give way to a radius the sheet
       // just wrote, or the map would keep drawing the old circle.
       if (radiusChanged && authController.user?.searchRadiusKm != null) {

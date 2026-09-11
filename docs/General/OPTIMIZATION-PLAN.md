@@ -31,9 +31,10 @@ like limits, boosts, exposure fairness, the match moment — has no counterpart
 here and is left out on purpose. §7 lists those rejections by name so nobody
 re-proposes them in six months.
 
-**This document is a DRAFT.** The owner has approved the scope in §2. Nothing
-in §4 onward is built until this plan is read and the decisions in §9 are
-locked.
+**Scope approved 2026-09-11**, one question at a time — the nine answers are
+in §2. Each decision in §11 locks as its phase lands, not before, and the two
+questions in §10 that change a schema are asked again before the migration that
+would answer them by accident.
 
 ## 2. What the owner approved
 
@@ -229,13 +230,25 @@ Load on first reveal instead. Keep the tabs mounted; move the fetch.
 sixth WebView for the clip already playing behind it. Hand the detail screen the
 existing handle.
 
-### 5.4 Carried, not yet scheduled
+### 5.4 The map's filter sheet stops drawing twice (done 2026-09-11)
+
+`NearbyController.applyDiscoveryFilters` called `applyUser` after *both* writes.
+The first call adopted the new radius under the old filters, so saving the sheet
+refetched the map twice and threw the first answer away. `DeckController`'s copy
+of the same method had already been fixed and carries the comment saying why;
+the map's copy had drifted. It now holds the written row and applies it once, in
+`finally`, exactly as the deck does. Pinned by
+`test/features/nearby/nearby_discovery_apply_test.dart`.
+
+### 5.5 Carried, not yet scheduled
 
 Recorded with file and line in the audit, worth doing but not in this round:
 image decode sizing (13 sites, no `cacheWidth` anywhere), no disk image cache,
 the wishlist refetched per detail open, three sequential RPCs in
-`plans.refresh()`, and the two `ListView(children:)` sites that build every row
-per keystroke.
+`plans.refresh()`, the two `ListView(children:)` sites that build every row per
+keystroke, and the Bites grid's `get_liked_restaurants` fetching 200 rows with
+every review body and dish row attached to paint a grid that shows a photo and a
+name.
 
 ## 6. Phase 3 — Database structure
 
@@ -263,7 +276,10 @@ Three things in one migration, all in `get_deck`:
   blocks SQL inlining, so every evaluation goes through the function executor
   instead of folding into arithmetic. Three lines, and it multiplies everything
   above. The security note this trades against is real and needs stating in the
-  decision: these three are pure arithmetic helpers touching no table.
+  decision: these three are pure arithmetic helpers touching no table. Dropping
+  `set search_path` re-raises Supabase's `function_search_path_mutable` advisor
+  warning on all three, which D142 accepts on the record the way D109 accepted
+  its own warning.
 - `rows 300` misinforms the planner by 166×.
 
 ### 6.3 A stranger stops being able to vote (D143)
@@ -388,9 +404,17 @@ declares `READ_CONTACTS` on Android and `NSContactsUsageDescription` on iOS, and
 reads the address book during onboarding. `PrivacyInfo.xcprivacy` declares no
 contacts type. The same page still describes passport, removed by D84 and D121.
 
+The contacts sentence and the passport one are the two that are outright wrong,
+but the fix is not two sentences. "What we collect" still lists an Explore map
+and "marked as visited" and says nothing about friendships, plan membership,
+plan votes, the wishlist, or the hashed phone numbers §7.2 would store — so the
+section is rewritten against the 22 tables that exist, not patched twice.
+
 Per the owner: **fix the text and the manifest, do not deploy.** The edge
 function `supabase/functions/legal/index.ts` is edited in the repo and left for
-the owner to ship, so nobody publishes legal copy the owner has not read.
+the owner to ship, so nobody publishes legal copy the owner has not read. The
+store data-safety forms say the same things in Play Console and App Store
+Connect; those are dashboard work and no commit here can change them.
 
 The honest wording says what is true: phone numbers are hashed on the device
 before they are sent, the raw contact list never leaves the phone, and the
@@ -429,6 +453,11 @@ translation to a one-sided market.
 4. **Where ratings and hours come from.** §7.4 starts collecting ratings from
    people who actually went, but 1,424 rows still have no hours, which caps how
    much §4.3 can ever be worth.
+5. **What a review is, exactly.** Three answers §7.4 cannot invent for itself:
+   the scale (thumbs, or 1–5), whether one person's review is visible to anyone
+   but them, and whether `restaurants.rating` becomes a blend of real reviews or
+   stays the imported number with user reviews kept beside it. **Asked before
+   §7.4 starts**, not during.
 
 ## 11. Decisions this plan proposes
 
@@ -454,12 +483,16 @@ already locked; these are reserved.
 ## 12. Order of work
 
 1. **Phase 3 §6.3** — the vote hole. Correctness first, and it is small.
-2. **Phase 1** — ranking, one term at a time in the order §4 gives.
-3. **Phase 2** — the three frontend fixes.
-4. **Phase 3 §6.1, §6.2** — the query and index work.
-5. **Phase 4** — end-of-deck exits, then contacts, then autoplay, then the
+2. **Phase 3 §6.2** — the `get_deck` rewrite, *before* any ranking term. §4.1
+   and §4.4 both edit the body §6.2 restructures, and §4.4's decay lives inside
+   the exhaustion branch §6.2 removes. Written in the other order, `get_deck` is
+   rewritten twice and verified twice.
+3. **Phase 3 §6.1** — the bounding box and its index, on the new shape.
+4. **Phase 1** — ranking, one term at a time in the order §4 gives.
+5. **Phase 2** — the three frontend fixes.
+6. **Phase 4** — end-of-deck exits, then contacts, then autoplay, then the
    review prompt, which is the largest and goes last.
-6. **§8** — the privacy text, any time; it blocks a submission, not a build.
+7. **§8** — the privacy text, any time; it blocks a submission, not a build.
 
 Every step ends on the gate — `flutter analyze lib test` then `flutter test` —
 and every migration is verified by re-reading the live definition afterwards,
