@@ -69,6 +69,12 @@ class TikTokPlayerCache {
     return future;
   }
 
+  /// The player already warmed for [videoUrl], or null. Unlike [warm] this
+  /// starts nothing and does not count as a use, so asking about a card on
+  /// its way out cannot evict the card arriving behind it.
+  Future<TikTokPlayerHandle>? peek(String? videoUrl) =>
+      videoUrl == null ? null : _players[videoUrl];
+
   /// Drops every player, stopping each one on the way out.
   void clear() {
     final dropped = _players.values.toList();

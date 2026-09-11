@@ -129,6 +129,8 @@ class SwipeCall {
     required this.source,
     this.latitude,
     this.longitude,
+    this.dwellMs,
+    this.unmuted,
   });
 
   final int restaurantId;
@@ -136,6 +138,8 @@ class SwipeCall {
   final String source;
   final double? latitude;
   final double? longitude;
+  final int? dwellMs;
+  final bool? unmuted;
 }
 
 class FakeSwipeRepository implements SwipeRepository {
@@ -155,6 +159,8 @@ class FakeSwipeRepository implements SwipeRepository {
     String source = 'deck',
     double? latitude,
     double? longitude,
+    int? dwellMs,
+    bool? unmuted,
   }) async {
     if (fail) {
       throw Exception('swipe write refused');
@@ -165,6 +171,8 @@ class FakeSwipeRepository implements SwipeRepository {
       source: source,
       latitude: latitude,
       longitude: longitude,
+      dwellMs: dwellMs,
+      unmuted: unmuted,
     );
     calls.add(call);
     onRecord?.call(call);

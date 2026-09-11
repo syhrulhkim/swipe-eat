@@ -117,6 +117,11 @@ run of the ranker (D142).
 | Dietary | 0.10 | The place carries a tag the profile asked for |
 | Exploration | 0.175 **+ 0.075** | `deck_jitter(id, seed)`. The extra 0.075 is added **when the row is unrated**, so an unrated row hands the rating's weight to exploration instead of being scored as a zero. Halved by D137 once the clustering it was hiding had an explicit fix |
 
+Every deck swipe also writes two columns nothing reads yet: `dwell_ms`, how
+long the card sat on top, and `unmuted`, whether its clip had sound on at the
+moment of the decision (D149). They are there because they cannot be
+backfilled, not because anything scores them today.
+
 The taste block is the one signal that learns. Before D136 it asked a single
 question — is this one of the cuisines picked during onboarding — so somebody
 who picked Western on day one and passed on every Western place since kept

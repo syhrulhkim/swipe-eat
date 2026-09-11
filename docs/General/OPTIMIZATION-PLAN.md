@@ -519,7 +519,8 @@ translation to a one-sided market.
 
 ## 10. Open questions
 
-1. ~~**The two implicit columns.**~~ **Answered 2026-09-11: add both now.**
+1. ~~**The two implicit columns.**~~ **Answered 2026-09-11: add both now, and
+   landed the same day** as D149, `20260911180000_a_swipe_remembers_how_long_and_how_loud`.
    `dwell_ms` and `unmuted` on `swipes`, written by the deck, read by nothing
    until there are months of rows. Cheap now, impossible to backfill later.
 2. **A Later returning to the deck after 14 days**, as a visually distinct card

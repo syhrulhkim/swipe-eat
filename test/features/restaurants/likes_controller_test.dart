@@ -64,6 +64,8 @@ class _GatedSwipeRepository extends FakeSwipeRepository {
     String source = 'deck',
     double? latitude,
     double? longitude,
+    int? dwellMs,
+    bool? unmuted,
   }) async {
     await gate.future;
     return super.record(
@@ -72,6 +74,8 @@ class _GatedSwipeRepository extends FakeSwipeRepository {
       source: source,
       latitude: latitude,
       longitude: longitude,
+      dwellMs: dwellMs,
+      unmuted: unmuted,
     );
   }
 }

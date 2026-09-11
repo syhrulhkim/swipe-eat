@@ -199,6 +199,8 @@ class LikesController extends ChangeNotifier {
     bool later = false,
     double? latitude,
     double? longitude,
+    int? dwellMs,
+    bool? unmuted,
   }) async {
     final generation = _generation;
     _likedIds.add(restaurantId);
@@ -215,6 +217,8 @@ class LikesController extends ChangeNotifier {
         source: source,
         latitude: latitude,
         longitude: longitude,
+        dwellMs: dwellMs,
+        unmuted: unmuted,
       );
     } catch (_) {
       if (generation == _generation) {

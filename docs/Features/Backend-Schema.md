@@ -129,11 +129,19 @@ also fed are gone from the client (D84).
 | `visited_at` | `timestamptz` | Stamped by `mark_visited` |
 | `source` | `text` not null `'deck'` | Where the swipe came from |
 | `swiped_at_latitude` / `_longitude` | `double precision` | Where the user was |
+| `dwell_ms` | `integer` | How long the card sat on top, client-measured, clamped at ten minutes. `check (dwell_ms is null or dwell_ms >= 0)`. **Written by the deck, read by nothing** (D149) |
+| `unmuted` | `boolean` | Whether the clip had sound on at the moment of the swipe — the state at the decision, not a latch. Written by the deck, read by nothing (D149) |
 | `created_at` / `updated_at` | `timestamptz` not null | `updated_at` maintained by `touch_updated_at` |
 
 `unique (user_id, restaurant_id)` — a re-swipe is an upsert. Partial indexes on
 `(user_id) where liked` and `(user_id) where super_like` serve the Bites grid;
 the second is now unused, alongside the column it indexes.
+
+`dwell_ms` and `unmuted` are both nullable, and the null is the point: every
+row written before D149 has no answer, and so does every swipe from a surface
+that is not the deck. A `0` and a `false` would have claimed otherwise. Neither
+can be backfilled — the moment is gone as the card leaves the screen — which is
+the whole argument for adding them before anything reads them.
 
 **`liked = false` and "no row" are different states.** `get_deck` excludes every
 restaurant that has *any* swipe row, so writing `liked = false` retires a card
@@ -299,7 +307,7 @@ Three deliberate asymmetries (D105):
 
 | Function | Signature | Notes |
 |---|---|---|
-| `record_swipe` | `(p_restaurant_id, p_liked, p_source, p_latitude, p_longitude, p_super_like) → void` | Upsert on `(user_id, restaurant_id)`. The client stopped sending `p_super_like` (D95); the parameter keeps its default |
+| `record_swipe` | `(p_restaurant_id, p_liked, p_source, p_latitude, p_longitude, p_super_like, p_dwell_ms, p_unmuted) → void` | Upsert on `(user_id, restaurant_id)`. The client stopped sending `p_super_like` (D95); the parameter keeps its default. `p_dwell_ms` and `p_unmuted` were added by D149 and default to null — the old six-argument function was **dropped**, not left beside the new one, because two overloads would hand PostgREST an ambiguity |
 | `undo_swipe` | `(p_restaurant_id bigint) → void` | **Deletes** the row. Raises `42501` with no authenticated user |
 | `mark_visited` | `(p_restaurant_id bigint, p_visited boolean) → void` | Stamps or clears `visited_at` |
 | `get_swipe_stats` | `() → table(swipes_today int, streak_days int)` | The daily-limit and streak chip |

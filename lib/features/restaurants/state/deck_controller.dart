@@ -81,8 +81,20 @@ class DeckController extends ChangeNotifier {
   List<RestaurantCard> _cards = const [];
   List<RestaurantCard> get cards => _cards;
 
-  int _index = 0;
+  int _cursor = 0;
   int get index => _index;
+
+  /// Every move of the cursor restarts the dwell clock, wherever the move came
+  /// from — the next card, a reload, a filter change. A getter/setter pair
+  /// rather than a call at each of the four sites, because the one that gets
+  /// forgotten is the one that reports a dwell of four minutes.
+  int get _index => _cursor;
+  set _index(int value) {
+    _cursor = value;
+    _topCardShownAt = DateTime.now();
+  }
+
+  DateTime _topCardShownAt = DateTime.now();
 
   bool _loading = true;
   bool get loading => _loading;
@@ -411,6 +423,8 @@ class DeckController extends ChangeNotifier {
         position != null && !isFallbackUserPosition(position);
     final latitude = hasRealPosition ? position.latitude : null;
     final longitude = hasRealPosition ? position.longitude : null;
+    final dwellMs = _dwellMs();
+    final unmuted = await _isUnmuted(card);
 
     try {
       if (liked) {
@@ -421,6 +435,8 @@ class DeckController extends ChangeNotifier {
           later: later,
           latitude: latitude,
           longitude: longitude,
+          dwellMs: dwellMs,
+          unmuted: unmuted,
         );
       } else {
         await _swipes.record(
@@ -428,6 +444,8 @@ class DeckController extends ChangeNotifier {
           liked: false,
           latitude: latitude,
           longitude: longitude,
+          dwellMs: dwellMs,
+          unmuted: unmuted,
         );
       }
     } on Object catch (error) {
@@ -435,6 +453,36 @@ class DeckController extends ChangeNotifier {
       if (!_messages.isClosed) {
         _messages.add('Could not save that swipe.');
       }
+    }
+  }
+
+  /// How long the card has been the top card (D149). Clamped at ten minutes:
+  /// past that the phone was in a pocket, not in front of a face, and a wild
+  /// number would be read later as attention.
+  int _dwellMs() {
+    final elapsed = DateTime.now().difference(_topCardShownAt).inMilliseconds;
+    if (elapsed < 0) {
+      return 0;
+    }
+    return elapsed > _maxDwellMs ? _maxDwellMs : elapsed;
+  }
+
+  static const _maxDwellMs = 10 * 60 * 1000;
+
+  /// Whether the card's clip had sound on at the moment of the swipe (D149).
+  /// Read off the warmed player rather than reported up from the mute button,
+  /// which would mean threading a callback through three widgets. Null when
+  /// there is no player to ask — a card with no clip, or one whose player has
+  /// not loaded — because that is not the same as muted.
+  Future<bool?> _isUnmuted(RestaurantCard card) async {
+    final player = players.peek(card.videoUrl);
+    if (player == null) {
+      return null;
+    }
+    try {
+      return !(await player).muted.value;
+    } on Object {
+      return null;
     }
   }
 
