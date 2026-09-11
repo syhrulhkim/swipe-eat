@@ -115,15 +115,23 @@ run of the ranker (D142).
 | Rating | 0.15 | `least(rating, 5) / 5`, **only when `rating > 0`** |
 | Taste | 0.25 | A block: 0.60 for a cuisine the user picked, +0.25 when `morning_mode` and the local hour is before 11 and the place is breakfasty, +0.15 scaled by how close its spice level sits to the profile's `spice_bias` |
 | Dietary | 0.10 | The place carries a tag the profile asked for |
-| Exploration | 0.35 **+ 0.15** | `deck_jitter(id, seed)`. The extra 0.15 is added **when the row is unrated**, so an unrated row hands the rating's weight to exploration instead of being scored as a zero |
+| Exploration | 0.175 **+ 0.075** | `deck_jitter(id, seed)`. The extra 0.075 is added **when the row is unrated**, so an unrated row hands the rating's weight to exploration instead of being scored as a zero. Halved by D137 once the clustering it was hiding had an explicit fix |
+
+Then `get_deck` reorders what it was handed: the **nth card of a cuisine loses
+0.02 × (n − 1)** before the limit is applied, so the penalty decides which
+thirty cards are dealt rather than only how they are arranged (D137). It is a
+soft penalty, not a round robin — the cuisine somebody actually likes keeps
+about eight cards before the penalty eats its edge.
 
 The seed is derived from the current date in `Asia/Kuala_Lumpur`, so the order
 is stable for a day and rerolls at midnight for free.
 
 In practice the rating term is **never non-zero**: 2 of 1,607 rows have a
 rating and both are inactive. So every card dealt today carries the full
-**0.50** of jitter, which makes exploration comfortably the largest signal in
-the deck.
+**0.25** of jitter. Before D137 that was 0.50, which made exploration
+comfortably the largest signal in the deck and made the order feel arbitrary;
+the diversity penalty now does the anti-clustering the randomness was doing
+blindly.
 
 ### `DeckRanker` — the offline cache only
 

@@ -78,7 +78,7 @@ All of it is inside `deck_scored` and `get_deck`. No client change. Built and
 verified one term at a time, in this order, because each later term is only
 measurable once the earlier one has taken the noise out.
 
-### 4.1 Cuisine diversity, then cut the jitter (D137)
+### 4.1 Cuisine diversity, then cut the jitter (D137 — done 2026-09-11)
 
 **The problem.** `get_deck` can hand back five satay stalls in a row: proximity
 dominates the score, satay stalls cluster geographically, and the jitter is
@@ -106,8 +106,22 @@ randomness can halve, and proximity, taste and open-now become things the user
 can actually feel. This ordering is not negotiable: cutting the jitter first
 would expose the clustering the jitter was hiding.
 
-**Verify:** deal a deck before and after, count the longest same-cuisine run and
-the number of distinct cuisines in the first ten cards.
+**Landed** in `20260911160000_a_deck_that_is_not_five_satay_stalls`, at **0.02
+rather than 0.05**. The plan guessed the constant; the deck was then measured.
+The top sixty candidates of a real 30 km deck span 0.211 of score, so 0.05
+drops a cuisine's fifth card below the sixtieth-best card — a round robin in
+all but name, and it would have cancelled §4.2 before it shipped. Over that
+deck:
+
+| Penalty | Distinct in first 10 | Distinct in 30 | Longest run |
+|---|---|---|---|
+| none | 6 | 10 | 3 |
+| 0.02 | 6 | 14 | 1 |
+| 0.05 | 8 | 18 | 1 |
+
+0.02 leaves a liked cuisine about eight cards before the penalty eats the edge
+§4.2 gives it. Against the pre-D137 deck (jitter still at 0.50) the same
+measurement read 5 distinct in the first ten, 8 in thirty, longest run 4.
 
 ### 4.2 Per-user cuisine affinity (D136)
 
