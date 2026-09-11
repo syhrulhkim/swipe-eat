@@ -546,8 +546,8 @@ production.
   inactive**, so no row the deck can deal has a rating at all. Two consequences
   inside `deck_scored`: the `case when ranked.rating > 0` quality term never
   fires, and the exploration jitter it trades against runs at its unrated
-  weight (`0.35 + 0.15`) on **every** card, so the deck is noisier than the
-  formula reads. `filter_min_rating` does not narrow the deck, it empties it.
+  weight (`0.175 + 0.075`, halved by D137) on **every** card, so the deck is
+  noisier than the formula reads. `filter_min_rating` does not narrow the deck, it empties it.
 - ~~**`swiped_at` is the *first* swipe, not the last.**~~ **Fixed 2026-09-11
   (D135)**, migration `20260911090000_deck_scored_swiped_at_is_the_last_swipe`.
   `deck_scored` selected `s.created_at as swiped_at` while `record_swipe`'s

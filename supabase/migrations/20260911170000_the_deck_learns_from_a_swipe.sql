@@ -1,34 +1,38 @@
--- Cuisine diversity, and half the jitter it was standing in for (D137).
+-- The deck learns from a swipe (D136).
 --
--- `get_deck` could hand back five satay stalls in a row. Proximity dominates
--- the score, satay stalls cluster geographically, and the jitter is per
--- restaurant rather than per position, so it could not break up a run — it
--- could only make the run a different run each day.
+-- Nothing in the app read a swipe back into the ranking. The taste term asked
+-- one question -- is this cuisine one of the ones picked during onboarding --
+-- so somebody who picked "Western" on day one and has passed on every Western
+-- place since still gets Western, and the swipes that said otherwise went
+-- nowhere.
 --
--- The fix is a soft penalty on the serve order: the nth card of a cuisine
--- loses 0.02 × (n − 1). Not a round-robin, which would be wrong here — 22
--- cuisines are in use against a 30-card deck, so partitioning would hand
--- nearly every cuisine exactly one slot and give the cuisine the user
--- demonstrably likes no more room than the one they do not.
+-- The fix is a per-cuisine like rate shrunk toward that onboarding pick:
 --
--- 0.02 rather than the 0.05 this was planned at, because the plan guessed and
--- then it was measured. The top sixty candidates of a real 30 km deck span
--- 0.211 of score, so 0.05 pushes a cuisine's fifth card below the sixtieth
--- best card outright — a round-robin in all but name, and it would cancel the
--- affinity term (D136) before that shipped. Over the same deck: no penalty
--- leaves runs of 3 and 10 cuisines in thirty cards; 0.02 leaves no run longer
--- than 1 and 14 cuisines; 0.05 reaches 18 and buys nothing the user can feel.
--- 0.02 also leaves a liked cuisine about eight cards before the penalty eats
--- the edge affinity gives it.
+--     p_like = (likes + 2 * prior) / (swipes + 2)
 --
--- `restaurant_cuisines` is many-to-many and carries no position column. No
--- active restaurant holds more than one cuisine today (1,605 of 1,605 hold
--- exactly one), so "the" cuisine is unambiguous; `min(cuisine_id)` keeps the
--- query correct the day that stops being true.
+-- with prior 1.0 for a picked cuisine and 0.0 for the rest. The degenerate
+-- prior is the point. The obvious softer version -- 0.65 and 0.35 -- spans
+-- 0.045 of the total score, inside the jitter's shadow even after D137 halved
+-- it, so the onboarding pick would have quietly stopped mattering the day
+-- this shipped. At 1.0 and 0.0 a user with no swipes in a cuisine scores
+-- exactly as they did yesterday, and evidence moves the cuisine from there.
 --
--- Then the jitter halves, 0.50 to 0.25. Most of what it bought was exactly
--- this anti-clustering, bought blindly. The order matters: cutting the jitter
--- first would have exposed the clustering it was hiding.
+-- Only deck swipes count. A "Set a date" like (D112) and a Nearby-map swipe
+-- are not deck exposures; counting them would rate a cuisine on cards the
+-- deck never dealt.
+--
+-- The indiscriminate swiper needs no code. Somebody who likes nine cards in
+-- ten lands every cuisine near its own prior, which is where the shrinkage
+-- puts them anyway.
+--
+-- Honest about the day it ships: 63 deck swipes across one profile is nearly
+-- inert. The alternative is never starting to learn.
+--
+-- `rows 1600` rather than the `rows 300` this file inherited: D142 raised the
+-- estimate to something near the truth, and the two `create or replace`
+-- statements between here and there carried the stale number forward. Both
+-- are corrected in place in the same commit so a replay from empty lands
+-- where the live database already is.
 
 create or replace function public.deck_scored(
   p_latitude double precision default null,
@@ -167,10 +171,41 @@ language sql stable rows 1600 set search_path = '' as $function$
       -- quietly kept them would not be a filter.
       and (c.f_min_rating is null or r.rating >= c.f_min_rating)
   ),
+  affinity as (
+    -- D136. A per-cuisine like rate, shrunk toward the onboarding pick by a
+    -- pseudo-count of 2. The prior is degenerate on purpose: 1.0 for a picked
+    -- cuisine, 0.0 otherwise, which is exactly what `matches_pick` was, so a
+    -- user with no swipes in a cuisine gets today's deck to the row. Evidence
+    -- then moves it at the rate the pseudo-count allows -- two likes barely
+    -- shift a picked cuisine, two passes pull it to 0.5. That shrinkage is
+    -- the whole of the cold-start handling; there is no new-user branch.
+    -- `source = 'deck'` only: a "Set a date" like (D112) and a map swipe are
+    -- not deck exposures and would poison the rate. The denominator counts
+    -- restaurants rather than swipe events because `record_swipe` upserts.
+    select
+      rc.cuisine_id,
+      (sum(case when s.liked then 1 else 0 end)
+        + 2.0 * (case when exists (
+            select 1
+            from public.profile_cuisines pc
+            where pc.profile_id = (select auth.uid())
+              and pc.cuisine_id = rc.cuisine_id
+          ) then 1.0 else 0.0 end))
+      / (count(*) + 2.0) as p_like
+    from public.swipes s
+    join public.restaurant_cuisines rc on rc.restaurant_id = s.restaurant_id
+    where s.user_id = (select auth.uid())
+      and s.source = 'deck'
+    group by rc.cuisine_id
+  ),
   taste as (
     select
       rc.restaurant_id,
-      max(case when pc.cuisine_id is not null then 1 else 0 end) as matches_pick,
+      -- the learned rate when this user has swiped the cuisine, the
+      -- onboarding pick when they have not
+      max(coalesce(a.p_like,
+                   case when pc.cuisine_id is not null then 1 else 0 end))
+        as pick_score,
       max(case when cu.is_breakfast then 1 else 0 end) as breakfasty,
       max(cu.spice_level) as spice_level
     from public.restaurant_cuisines rc
@@ -178,6 +213,7 @@ language sql stable rows 1600 set search_path = '' as $function$
     left join public.profile_cuisines pc
       on pc.cuisine_id = rc.cuisine_id
      and pc.profile_id = (select auth.uid())
+    left join affinity a on a.cuisine_id = rc.cuisine_id
     group by rc.restaurant_id
   ),
   diet as (
@@ -213,7 +249,7 @@ language sql stable rows 1600 set search_path = '' as $function$
     + (case when ranked.rating > 0 then 0.15 * least(ranked.rating, 5) / 5.0
             else 0 end)
     + 0.25 * (
-        0.60 * coalesce(t.matches_pick, 0)
+        0.60 * coalesce(t.pick_score, 0)
         + (case
              when ranked.morning_mode and ranked.local_hour < 11
                   and coalesce(t.breakfasty, 0) = 1 then 0.25
@@ -241,78 +277,3 @@ language sql stable rows 1600 set search_path = '' as $function$
   left join taste t on t.restaurant_id = ranked.id
   left join diet d on d.restaurant_id = ranked.id;
 $function$;
-
-create or replace function public.get_deck(
-  p_limit integer default 30,
-  p_latitude double precision default null,
-  p_longitude double precision default null,
-  p_seed bigint default null,
-  p_radius_km integer default null,
-  p_local_hour integer default null
-)
-returns setof public.restaurants
-language plpgsql
-stable
-set search_path = ''
-as $$
-declare
-  v_limit int := least(greatest(coalesce(p_limit, 30), 1), 100);
-begin
-  return query
-    with scored as materialized (
-      -- Once. Every bucket reads this, and `materialized` is what guarantees
-      -- the ranker is not run a second time to answer the second one (D142).
-      select d.restaurant_id, d.score, d.swiped_at, d.liked
-      from public.deck_scored(
-        p_latitude, p_longitude, p_seed, p_radius_km, p_local_hour
-      ) d
-    ),
-    cuisine_of as (
-      -- No active restaurant carries more than one cuisine today, so this is
-      -- "the" cuisine. `min` keeps it single-valued the day that changes.
-      select rc.restaurant_id, min(rc.cuisine_id) as cuisine_id
-      from public.restaurant_cuisines rc
-      group by rc.restaurant_id
-    ),
-    -- Bucket 0 is a card nobody has seen. Bucket 1 is deck exhaustion: the
-    -- catalogue goes fast, so rather than show an empty deck, resurface passes
-    -- older than three days — the retention the device-local
-    -- SeenRestaurantsStore used, measured from the last swipe (D135). Likes
-    -- never come back: they live in the Bites tab, and re-showing them reads
-    -- as a bug.
-    served as (
-      select
-        s.restaurant_id,
-        (case when s.swiped_at is null then 0 else 1 end) as bucket,
-        -- The nth card of a cuisine loses 0.02 × (n − 1), counted over every
-        -- candidate rather than over the thirty that fit, so the penalty
-        -- decides which thirty those are (D137).
-        s.score - 0.02 * (row_number() over (
-          partition by (case when s.swiped_at is null then 0 else 1 end),
-                       coalesce(c.cuisine_id, 0)
-          order by s.score desc, s.restaurant_id
-        ) - 1) as score
-      from scored s
-      left join cuisine_of c on c.restaurant_id = s.restaurant_id
-      where s.swiped_at is null
-         or (
-           s.liked is false
-           and s.swiped_at < pg_catalog.now() - interval '3 days'
-         )
-    ),
-    -- `bucket` first, so a card nobody has seen always beats a card coming
-    -- back, and the resurfaced ones only ever fill what is left of the limit.
-    picked as (
-      select v.restaurant_id, v.bucket, v.score
-      from served v
-      order by v.bucket, v.score desc, v.restaurant_id
-      limit v_limit
-    )
-    -- The columns are joined back *after* the limit: thirty wide rows, not
-    -- the whole catalogue (D142).
-    select r.*
-    from picked p
-    join public.restaurants r on r.id = p.restaurant_id
-    order by p.bucket, p.score desc, p.restaurant_id;
-end
-$$;

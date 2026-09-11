@@ -50,7 +50,7 @@ create or replace function public.deck_scored(
   swiped_at timestamp with time zone,
   liked boolean
 )
-language sql stable rows 300 set search_path = '' as $function$
+language sql stable rows 1600 set search_path = '' as $function$
   with me as (
     select p.*
     from public.profiles p

@@ -66,11 +66,12 @@ Verified against the live project on 2026-09-11.
 | Schema | 22 tables, 48 functions, 35 RLS policies, 3 edge functions, 1 cron job |
 
 Two consequences run through everything below. **The rating term never fires**,
-so the 0.15 quality weight is dead and the jitter runs at its unrated value of
-0.50 on every card. And **the live data cannot tell you whether a query is
-slow** — 1,607 rows fit in memory, so the planner's current choices prove
-nothing about 50,000. Where a finding is scale-dependent it is labelled as
-such rather than dressed up as a present-day emergency.
+so the 0.15 quality weight is dead and the jitter runs at its unrated value on
+every card — 0.50 when this plan was written, 0.25 since D137 landed. And
+**the live data cannot tell you whether a query is slow** — 1,607 rows fit in
+memory, so the planner's current choices prove nothing about 50,000. Where a
+finding is scale-dependent it is labelled as such rather than dressed up as a
+present-day emergency.
 
 ## 4. Phase 1 — Ranking
 
@@ -123,7 +124,7 @@ deck:
 §4.2 gives it. Against the pre-D137 deck (jitter still at 0.50) the same
 measurement read 5 distinct in the first ten, 8 in thirty, longest run 4.
 
-### 4.2 Per-user cuisine affinity (D136)
+### 4.2 Per-user cuisine affinity (D136 — done 2026-09-11)
 
 **The problem.** Nothing in the app learns from a single swipe. The taste term
 reads only the cuisines picked during onboarding, so a user who picked
@@ -171,6 +172,39 @@ shrinkage handles for free.
 
 **Honest caveat:** with 55 swipes this term is nearly inert on day one. It is
 worth shipping anyway, because the alternative is never starting to learn.
+
+**Landed** in `20260911170000_the_deck_learns_from_a_swipe`, as written. The
+`affinity` CTE joins `swipes` to `restaurant_cuisines`, the `taste` CTE left
+joins it and `matches_pick` becomes `pick_score`,
+`max(coalesce(a.p_like, <the old 1-or-0>))`.
+
+Two checks. **A caller with no swipes gets the identical deck** — three
+argument sets of `get_deck` (a 30 km Johor deck, a 10 km KL deck, and the
+no-location branch) hash the same before and after, which is what the
+degenerate prior was for. And the real profile's own 30 km deck moves the way
+the swipes say it should:
+
+| Cuisine | Deck swipes | Liked | Onboarding pick | `p_like` | Cards, before → after |
+|---|---|---|---|---|---|
+| Indian | 8 | 3 | yes | 0.50 | 4 → 2 |
+| Chinese | 3 | 3 | no | 0.60 | 2 → 4 |
+| Dessert | 3 | 3 | no | 0.60 | 4 → 6 |
+| Café | 9 | 5 | no | 0.455 | 3 → 4 |
+| Thai | 1 | 0 | no | 0.00 | 1 → 0 |
+| Korean | 1 | 0 | yes | 0.667 | 1 → 0 |
+
+The picked cuisine they keep passing on loses half its slots; the unpicked
+cuisine they have liked every time doubles. Measured with `halal_only`
+temporarily off inside a rolled-back transaction, because with it on the real
+profile has 8 candidates in 30 km and has swiped all of them — a separate
+finding, recorded in §10.
+
+The same migration repairs a regression this plan created: D142 raised
+`deck_scored`'s row estimate to `rows 1600`, and the two `create or replace`
+statements after it (§6.1 and §4.1) carried the old `rows 300` forward in the
+repo files. Live never had it — both were applied by rewriting the stored
+definition, which keeps the attribute — so this was a replay-from-empty bug
+only. Both files are corrected in place.
 
 ### 4.3 Open now (D138)
 
@@ -485,10 +519,9 @@ translation to a one-sided market.
 
 ## 10. Open questions
 
-1. **The two implicit columns.** `dwell_ms` and `unmuted` on `swipes`, written by
-   the deck, read by nothing until there are months of rows. Offered alongside
-   the review prompt; the owner's answer addressed the review and not these.
-   Cheap now, impossible to backfill later. **Needs a yes or no.**
+1. ~~**The two implicit columns.**~~ **Answered 2026-09-11: add both now.**
+   `dwell_ms` and `unmuted` on `swipes`, written by the deck, read by nothing
+   until there are months of rows. Cheap now, impossible to backfill later.
 2. **A Later returning to the deck after 14 days**, as a visually distinct card
    ("You saved this — still want it?"), capped at one per deck. It amends D95,
    which is why it is not assumed.
@@ -504,6 +537,14 @@ translation to a one-sided market.
    but them, and whether `restaurants.rating` becomes a blend of real reviews or
    stays the imported number with user reviews kept beside it. **Asked before
    §7.4 starts**, not during.
+6. **`halal_only` is a wall, not a filter.** Found while measuring §4.2: with
+   the flag on, the one real profile has **8** candidates inside 30 km and has
+   already swiped all of them, so its deck is empty. `is_halal` is set on a
+   small minority of rows, and the app treats an unset flag as "not halal".
+   Whether the fix is backfilling the flag, or reading it from cuisine and
+   dietary tags, or saying out loud that an unknown place might not be halal,
+   is a data question and a product question, not a ranking one. **Needs an
+   answer before the flag is offered to real users.**
 
 ## 11. Decisions this plan proposes
 

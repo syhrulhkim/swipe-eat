@@ -113,9 +113,19 @@ run of the ranker (D142).
 | Proximity | 0.30 | `2^(−km / 12)` — half-life **12 km**. ×1.5 when `nearby_focus` is on. Unknown location gets 0.5; a row with no origin to measure from gets 0 |
 | Freshness | 0.20 | `percent_rank()` over the TikTok post id — a *percentile*, so gaps between ids cannot skew it |
 | Rating | 0.15 | `least(rating, 5) / 5`, **only when `rating > 0`** |
-| Taste | 0.25 | A block: 0.60 for a cuisine the user picked, +0.25 when `morning_mode` and the local hour is before 11 and the place is breakfasty, +0.15 scaled by how close its spice level sits to the profile's `spice_bias` |
+| Taste | 0.25 | A block: 0.60 × the cuisine's **like rate** for this user, `(likes + 2 × prior) / (swipes + 2)` over deck swipes only, with prior 1 for an onboarding pick and 0 otherwise (D136), +0.25 when `morning_mode` and the local hour is before 11 and the place is breakfasty, +0.15 scaled by how close its spice level sits to the profile's `spice_bias` |
 | Dietary | 0.10 | The place carries a tag the profile asked for |
 | Exploration | 0.175 **+ 0.075** | `deck_jitter(id, seed)`. The extra 0.075 is added **when the row is unrated**, so an unrated row hands the rating's weight to exploration instead of being scored as a zero. Halved by D137 once the clustering it was hiding had an explicit fix |
+
+The taste block is the one signal that learns. Before D136 it asked a single
+question — is this one of the cuisines picked during onboarding — so somebody
+who picked Western on day one and passed on every Western place since kept
+getting Western. The shrunk like rate replaces that 1-or-0 with evidence, and
+because the prior is exactly 1 and 0, a cuisine the user has never swiped
+scores precisely what it scored before. The pseudo-count of 2 is the whole of
+the cold-start handling: two likes barely move a picked cuisine, two passes
+pull it to 0.5. Only `source = 'deck'` swipes count — a "Set a date" like
+(D112) and a Nearby-map swipe are not deck exposures.
 
 Then `get_deck` reorders what it was handed: the **nth card of a cuisine loses
 0.02 × (n − 1)** before the limit is applied, so the penalty decides which
@@ -131,7 +141,10 @@ rating and both are inactive. So every card dealt today carries the full
 **0.25** of jitter. Before D137 that was 0.50, which made exploration
 comfortably the largest signal in the deck and made the order feel arbitrary;
 the diversity penalty now does the anti-clustering the randomness was doing
-blindly.
+blindly. `get_top_picks` shares `deck_scored`, so it inherited the halved
+jitter, but not the penalty — ten cards billed as the best ten should be the
+best ten, and shuffling a cuisine down that list would be a lie about the
+ranking.
 
 ### `DeckRanker` — the offline cache only
 
@@ -146,6 +159,10 @@ handle rows the server would have filtered out, which is why it has a penalty:
 | Freshness | 0.20 | TikTok post id (which increases with post time), else row id |
 | Quality | 0.15 | `rating`, when one exists |
 | Recently seen | −1.25 | Sinks to the back rather than being re-shown |
+
+Its exploration weight stays at 0.35 where the server's halved to 0.175: D137
+traded jitter for a cuisine penalty, and the cached rows this re-ranks carry no
+cuisine, so there is nothing to trade against here.
 
 It knows nothing of `morning_mode`, `spice_bias`, the taste signal, the radius
 or the discovery filters — those are all server-side, which is part of why a
