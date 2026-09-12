@@ -54,6 +54,11 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
+  # Already in the tree via supabase_flutter; declared here only so the
+  # repository tests may import `package:http/testing.dart` without tripping
+  # `depend_on_referenced_packages`. The version matches the lock, so this adds
+  # nothing to the app — `test/support/fake_supabase_http.dart` is its one user.
+  http: ^1.6.0
   # Generates every Android mipmap and iOS AppIcon size from the two source
   # PNGs below. Run `dart run flutter_launcher_icons` after replacing them.
   flutter_launcher_icons: ^0.14.4
