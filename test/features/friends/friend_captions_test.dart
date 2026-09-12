@@ -180,12 +180,62 @@ void main() {
           'Just you');
     });
 
+    test('somebody who only asked to join is not on the plan yet', () {
+      // A request is not a membership (D153). Counting it would make a plan
+      // the owner has not answered read as one more friend already coming.
+      final count = planHeadcount(const ['going', 'requested', 'requested']);
+      expect(count.guests, 1);
+      expect(count.confirmed, 1);
+      expect(planPeopleLine(guests: count.guests, confirmed: count.confirmed),
+          '1 friend · 1 confirmed');
+    });
+
     test('a status nobody planned for still counts as coming', () {
       // A new status added server-side should read as "invited, not answered"
       // rather than silently vanishing from every plan card.
       final count = planHeadcount(const ['maybe']);
       expect(count.guests, 1);
       expect(count.confirmed, 0);
+    });
+  });
+
+  group('friendsGoingLine', () {
+    test('nobody going says nothing at all', () {
+      expect(friendsGoingLine(names: const [], goingCount: 0), isNull);
+    });
+
+    test('people you do not know are a number, never a name', () {
+      // The server sends a stranger's name to nobody (D153), so the line has
+      // to be able to count people it cannot introduce.
+      expect(friendsGoingLine(names: const [], goingCount: 2), '2 going');
+    });
+
+    test('one friend, then two, are named the way you would say them', () {
+      expect(
+        friendsGoingLine(names: const ['Farah Idris'], goingCount: 1),
+        'with Farah',
+      );
+      expect(
+        friendsGoingLine(
+          names: const ['Farah Idris', 'Mei Kee Tan'],
+          goingCount: 2,
+        ),
+        'with Farah and Mei',
+      );
+    });
+
+    test('the people you do not know become a plus', () {
+      expect(
+        friendsGoingLine(names: const ['Farah Idris'], goingCount: 3),
+        'with Farah +2',
+      );
+    });
+
+    test('a blank name is dropped rather than drawn as a gap', () {
+      expect(
+        friendsGoingLine(names: const ['Farah Idris', '  '], goingCount: 2),
+        'with Farah +1',
+      );
     });
   });
 

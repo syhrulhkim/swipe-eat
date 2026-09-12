@@ -130,7 +130,10 @@ String planPeopleLine({required int guests, required int confirmed}) {
   var guests = 0;
   var confirmed = 0;
   for (final status in statuses) {
-    if (status == 'declined') {
+    // Somebody who asked to join is not on the plan until the owner says so
+    // (D153), so they are not counted here either — they are the Requests list
+    // on the plan's own page, not a guest on its card.
+    if (status == 'declined' || status == 'requested') {
       continue;
     }
     guests += 1;
@@ -139,6 +142,44 @@ String planPeopleLine({required int guests, required int confirmed}) {
     }
   }
   return (guests: guests, confirmed: confirmed);
+}
+
+/// "with Farah and Mei", "with Farah +2", "2 going" — the line under a
+/// friend's plan on the Calendar.
+///
+/// [names] is only the people going who are **your** friends as well; the
+/// server never sends a stranger's name (D153). [goingCount] is everybody, so
+/// the two disagree on purpose and the surplus becomes a number.
+///
+///   * nobody going    -> null, and the row says nothing about people
+///   * nobody you know -> "2 going"
+///   * one you know    -> "with Farah"
+///   * two you know    -> "with Farah and Mei"
+///   * more going      -> "with Farah +2"
+String? friendsGoingLine({
+  required List<String> names,
+  required int goingCount,
+}) {
+  if (goingCount <= 0) {
+    return null;
+  }
+  final firsts = [
+    for (final name in names)
+      if (name.trim().isNotEmpty) firstName(name),
+  ];
+  if (firsts.isEmpty) {
+    return '$goingCount going';
+  }
+
+  final rest = goingCount - firsts.length;
+  if (rest > 0) {
+    return 'with ${firsts.join(', ')} +$rest';
+  }
+  if (firsts.length == 1) {
+    return 'with ${firsts.first}';
+  }
+  final head = firsts.take(firsts.length - 1).join(', ');
+  return 'with $head and ${firsts.last}';
 }
 
 /// "3 selected" — the invite foot's own count, and the label a screen reader

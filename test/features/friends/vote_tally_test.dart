@@ -156,6 +156,14 @@ void main() {
       expect(planStatusLabel('invited'), 'Asked');
     });
 
+    test('somebody who asked to join reads differently from somebody asked',
+        () {
+      // The two words are one letter apart on the wire and opposite in
+      // meaning: 'invited' is the owner asking them, 'requested' is them
+      // asking the owner (D153).
+      expect(planStatusLabel('requested'), 'Asked to join');
+    });
+
     test('an unknown status reads as unanswered rather than as itself', () {
       expect(planStatusLabel('bananas'), 'Asked');
     });

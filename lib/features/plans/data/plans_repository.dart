@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/friend_plan.dart';
 import '../models/plan.dart';
 
 /// The two numbers the profile shows. Server-computed, because "consecutive
@@ -41,7 +42,7 @@ class PlansRepository {
   /// for names would return nulls that look like missing data rather than
   /// like a permission the app has not been granted yet.
   static const _columns = 'id, restaurant_id, plan_date, plan_time, '
-      'time_label, with_friends, status, created_at, '
+      'time_label, with_friends, shared_with_friends, status, created_at, '
       'restaurants(id, name, tag, neighbourhood, latitude, longitude, '
       'restaurant_images(url, position)), '
       'plan_members(user_id, status)';
@@ -82,6 +83,7 @@ class PlansRepository {
     String? time,
     String? timeLabel,
     bool withFriends = false,
+    bool shared = false,
   }) async {
     final row = await _client.rpc<dynamic>(
       'create_plan',
@@ -91,6 +93,7 @@ class PlansRepository {
         'p_plan_time': time,
         'p_time_label': timeLabel,
         'p_with_friends': withFriends,
+        'p_shared': shared,
       },
     ).timeout(_timeout);
 
@@ -106,6 +109,36 @@ class PlansRepository {
         .update({'status': PlanStatus.cancelled.wire})
         .eq('id', planId)
         .timeout(_timeout);
+  }
+
+  /// Flips "Share with friends" on a plan I own (D153). An owner `.update`,
+  /// like [cancel] — `own plans all` carries it, so there is no RPC to write.
+  Future<void> setShared(int planId, bool shared) async {
+    await _client
+        .from('plans')
+        .update({'shared_with_friends': shared})
+        .eq('id', planId)
+        .timeout(_timeout);
+  }
+
+  /// The shared evenings of people I am friends with, from [from] forward.
+  ///
+  /// A definer RPC rather than a select: no policy on `plans` exposes a row to
+  /// a non-member, and a third permissive select policy would widen every
+  /// other read as well (D153).
+  Future<List<FriendPlan>> friendsPlans({
+    required DateTime from,
+    int limit = 100,
+  }) async {
+    final rows = await _client.rpc<dynamic>(
+      'get_friends_plans',
+      params: {'p_from': formatPlanDate(from), 'p_limit': limit},
+    ).timeout(_timeout);
+
+    return [
+      for (final row in (rows as List<dynamic>? ?? const []))
+        FriendPlan.fromJson(row as Map<String, dynamic>),
+    ];
   }
 
   /// Moves a plan to another slot without moving the day.

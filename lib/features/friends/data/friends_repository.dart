@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../plans/models/plan.dart' show formatPlanDate;
 import '../domain/phone_hash.dart';
 import '../models/friend.dart';
 
@@ -142,6 +143,39 @@ class FriendsRepository {
       'answer_plan_invite',
       params: {'p_plan_id': planId, 'p_status': going ? 'going' : 'declined'},
     ).timeout(_timeout);
+  }
+
+  /// Asks the owner of a shared plan to be let in (D153).
+  ///
+  /// [today] is the *phone's* today, for the same reason `mark_plan_kept` takes
+  /// it: the database clock is UTC and Kuala Lumpur is +8, so leaving the
+  /// server to decide would close tonight's plan eight hours early. Raises when
+  /// the plan is not open to the caller, and does not say which of the reasons
+  /// it was.
+  Future<void> askToJoin(int planId, DateTime today) async {
+    await _client.rpc<dynamic>(
+      'ask_to_join',
+      params: {'p_plan_id': planId, 'p_today': formatPlanDate(today)},
+    ).timeout(_timeout);
+  }
+
+  /// The owner's answer to one of those. True when a row actually moved —
+  /// false means somebody else already answered it, or the asker withdrew.
+  Future<bool> answerJoinRequest(
+    int planId,
+    String userId, {
+    required bool accept,
+  }) async {
+    final answered = await _client.rpc<dynamic>(
+      'answer_join_request',
+      params: {
+        'p_plan_id': planId,
+        'p_user_id': userId,
+        'p_accept': accept,
+      },
+    ).timeout(_timeout);
+
+    return answered as bool? ?? false;
   }
 
   /// The time votes on one plan, with a face against each.

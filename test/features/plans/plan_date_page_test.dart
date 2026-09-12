@@ -310,6 +310,7 @@ void main() {
         'time': '20:00:00',
         'timeLabel': null,
         'withFriends': true,
+        'shared': false,
       });
       expect(created.calls, 1);
       expect(created.withFriends, isTrue);
@@ -336,6 +337,7 @@ void main() {
         'time': null,
         'timeLabel': 'late',
         'withFriends': false,
+        'shared': false,
       });
       expect(created.withFriends, isFalse);
     });

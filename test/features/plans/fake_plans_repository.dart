@@ -1,4 +1,6 @@
+import 'package:swipe_eat/features/friends/models/friend.dart';
 import 'package:swipe_eat/features/plans/data/plans_repository.dart';
+import 'package:swipe_eat/features/plans/models/friend_plan.dart';
 import 'package:swipe_eat/features/plans/models/plan.dart';
 
 /// A minimal but real [Plan] for list fixtures.
@@ -10,6 +12,7 @@ Plan testPlan(
   int? minute = 0,
   String? timeLabel,
   bool withFriends = false,
+  bool sharedWithFriends = false,
   PlanStatus status = PlanStatus.planned,
   String name = 'Warung Kak Ros',
   String? coverUrl,
@@ -27,6 +30,7 @@ Plan testPlan(
     minute: minute,
     timeLabel: timeLabel,
     withFriends: withFriends,
+    sharedWithFriends: sharedWithFriends,
     status: status,
     restaurantName: name,
     coverUrl: coverUrl,
@@ -48,11 +52,14 @@ class FakePlansRepository implements PlansRepository {
   FakePlansRepository({
     List<Plan> rows = const [],
     PlanStats stats = const PlanStats(),
+    List<FriendPlan> friendPlans = const [],
   })  : _rows = List.of(rows),
-        _stats = stats;
+        _stats = stats,
+        _friendPlans = List.of(friendPlans);
 
   List<Plan> _rows;
   PlanStats _stats;
+  List<FriendPlan> _friendPlans;
 
   int _nextId = 1000;
 
@@ -67,16 +74,29 @@ class FakePlansRepository implements PlansRepository {
   final List<DateTime> markedKeptOn = <DateTime>[];
   final List<DateTime> statsFor = <DateTime>[];
 
+  /// Every `friendsPlans` call's `from`, in order.
+  final List<DateTime> friendsListedFrom = <DateTime>[];
+
+  /// Every `setShared` call, in order.
+  final List<(int, bool)> sharedSet = <(int, bool)>[];
+
   /// Thrown by the next call to whichever method names it, then cleared.
   Object? failList;
   Object? failCreate;
   Object? failCancel;
   Object? failMarkKept;
+  Object? failFriendsPlans;
+  Object? failSetShared;
 
   /// Replaces the table wholesale, as a refresh from the server would.
   void setRows(List<Plan> rows) => _rows = List.of(rows);
 
   void setStats(PlanStats stats) => _stats = stats;
+
+  /// Swaps what the Friends section reads, the way a refresh after "Ask to
+  /// join" swaps `asked` from false to true.
+  void setFriendPlans(List<FriendPlan> plans) =>
+      _friendPlans = List.of(plans);
 
   List<Plan> get rows => List.unmodifiable(_rows);
 
@@ -101,12 +121,45 @@ class FakePlansRepository implements PlansRepository {
   }
 
   @override
+  Future<List<FriendPlan>> friendsPlans({
+    required DateTime from,
+    int limit = 100,
+  }) async {
+    friendsListedFrom.add(from);
+    final failure = failFriendsPlans;
+    if (failure != null) {
+      failFriendsPlans = null;
+      throw failure;
+    }
+    return _friendPlans.take(limit).toList();
+  }
+
+  @override
+  Future<void> setShared(int planId, bool shared) async {
+    sharedSet.add((planId, shared));
+    final failure = failSetShared;
+    if (failure != null) {
+      failSetShared = null;
+      throw failure;
+    }
+    // The controller re-reads after this, so the row has to have moved — a fake
+    // that only logged the call would let the switch pass a test it fails in
+    // the app, snapping back on the next frame.
+    for (var i = 0; i < _rows.length; i++) {
+      if (_rows[i].id == planId) {
+        _rows[i] = _reshared(_rows[i], shared);
+      }
+    }
+  }
+
+  @override
   Future<int> create({
     required int restaurantId,
     required DateTime date,
     String? time,
     String? timeLabel,
     bool withFriends = false,
+    bool shared = false,
   }) async {
     created.add(<String, Object?>{
       'restaurantId': restaurantId,
@@ -114,6 +167,7 @@ class FakePlansRepository implements PlansRepository {
       'time': time,
       'timeLabel': timeLabel,
       'withFriends': withFriends,
+      'shared': shared,
     });
     final failure = failCreate;
     if (failure != null) {
@@ -144,6 +198,7 @@ class FakePlansRepository implements PlansRepository {
         minute: minute,
         timeLabel: timeLabel,
         withFriends: withFriends,
+        sharedWithFriends: shared,
         name: held.restaurantName,
         coverUrl: held.coverUrl,
         tag: held.tag,
@@ -166,6 +221,7 @@ class FakePlansRepository implements PlansRepository {
         minute: minute,
         timeLabel: timeLabel,
         withFriends: withFriends,
+        sharedWithFriends: shared,
       ),
     );
     return id;
@@ -226,6 +282,7 @@ class FakePlansRepository implements PlansRepository {
             minute: plan.minute,
             timeLabel: plan.timeLabel,
             withFriends: plan.withFriends,
+            sharedWithFriends: plan.sharedWithFriends,
             status: PlanStatus.kept,
             name: plan.restaurantName,
             coverUrl: plan.coverUrl,
@@ -255,6 +312,60 @@ class FakePlansRepository implements PlansRepository {
   }
 }
 
+/// The one field `setShared` moves, over the rest of the row unchanged.
+Plan _reshared(Plan plan, bool shared) {
+  return Plan(
+    id: plan.id,
+    restaurantId: plan.restaurantId,
+    date: plan.date,
+    hour: plan.hour,
+    minute: plan.minute,
+    timeLabel: plan.timeLabel,
+    withFriends: plan.withFriends,
+    sharedWithFriends: shared,
+    status: plan.status,
+    restaurantName: plan.restaurantName,
+    coverUrl: plan.coverUrl,
+    tag: plan.tag,
+    neighbourhood: plan.neighbourhood,
+    latitude: plan.latitude,
+    longitude: plan.longitude,
+    members: plan.members,
+  );
+}
+
+/// A minimal but real [FriendPlan] for the Friends section's fixtures.
+FriendPlan testFriendPlan(
+  int id, {
+  required DateTime date,
+  String ownerId = 'aisyah',
+  String ownerName = 'Aisyah Rahman',
+  int? restaurantId,
+  String name = 'Nasi Kandar Pelita',
+  int? hour = 19,
+  int? minute = 30,
+  String? timeLabel,
+  String? coverUrl,
+  int goingCount = 0,
+  List<FriendProfile> goingFriends = const [],
+  bool asked = false,
+}) {
+  return FriendPlan(
+    id: id,
+    owner: FriendProfile(id: ownerId, name: ownerName),
+    restaurantId: restaurantId ?? id,
+    restaurantName: name,
+    date: date,
+    hour: hour,
+    minute: minute,
+    timeLabel: timeLabel,
+    coverUrl: coverUrl,
+    goingCount: goingCount,
+    goingFriends: goingFriends,
+    asked: asked,
+  );
+}
+
 /// [Plan] has no `copyWith` — nothing in the app needs one, and one existing
 /// only for a fake is a production API paying rent for a test. This is the
 /// three fields `setTime` moves, over the rest of the row unchanged.
@@ -267,6 +378,7 @@ Plan _moved(Plan plan, List<String>? parts, String? timeLabel) {
     minute: parts == null || parts.length < 2 ? null : int.tryParse(parts[1]),
     timeLabel: timeLabel,
     withFriends: plan.withFriends,
+    sharedWithFriends: plan.sharedWithFriends,
     status: plan.status,
     restaurantName: plan.restaurantName,
     coverUrl: plan.coverUrl,

@@ -209,6 +209,42 @@ class FakeFriendsRepository implements FriendsRepository {
     calls.add('answerInvite');
   }
 
+  /// Every `askToJoin` call, with the date the phone said it was.
+  final List<(int, DateTime)> joinRequests = [];
+
+  /// Every `answerJoinRequest` call, in order.
+  final List<(int, String, bool)> joinAnswers = [];
+
+  /// Set to throw from [askToJoin] — the server refuses a plan that is not
+  /// open to the caller, which is the case the screen has to say something
+  /// about.
+  Object? failAskToJoinWith;
+
+  /// What [answerJoinRequest] returns; false is the server saying the row had
+  /// already moved.
+  bool answerJoinResult = true;
+
+  @override
+  Future<void> askToJoin(int planId, DateTime today) async {
+    calls.add('askToJoin');
+    final failure = failAskToJoinWith;
+    if (failure != null) {
+      throw failure;
+    }
+    joinRequests.add((planId, today));
+  }
+
+  @override
+  Future<bool> answerJoinRequest(
+    int planId,
+    String userId, {
+    required bool accept,
+  }) async {
+    calls.add('answerJoinRequest');
+    joinAnswers.add((planId, userId, accept));
+    return answerJoinResult;
+  }
+
   @override
   Future<List<PlanVote>> votes(int planId) async {
     calls.add('votes');

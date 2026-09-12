@@ -1,6 +1,8 @@
 import 'package:geolocator/geolocator.dart';
 
+import '../features/friends/models/friend.dart';
 import '../features/plans/data/plans_repository.dart';
+import '../features/plans/models/friend_plan.dart';
 import '../features/plans/models/plan.dart';
 
 /// Plans that make the Calendar tab look like the S6 prototype.
@@ -71,6 +73,44 @@ class DevPlansRepository implements PlansRepository {
     ];
   }
 
+  /// Two friends' evenings, so `USE_DEV_PLANS` shows the Friends section the
+  /// way the prototype does: one with people you know on it, one with nobody.
+  @override
+  Future<List<FriendPlan>> friendsPlans({
+    required DateTime from,
+    int limit = 100,
+  }) async {
+    return [
+      FriendPlan(
+        id: 501,
+        owner: const FriendProfile(id: 'aisyah', name: 'Aisyah Rahman'),
+        restaurantId: 201,
+        restaurantName: 'Nasi Kandar Pelita',
+        date: DateTime(2026, 9, 3),
+        hour: 19,
+        minute: 30,
+        coverUrl: _kakRosCover,
+        goingCount: 3,
+        goingFriends: const [
+          FriendProfile(id: 'farah', name: 'Farah Idris'),
+        ],
+      ),
+      FriendPlan(
+        id: 502,
+        owner: const FriendProfile(id: 'aiman', name: 'Aiman Zulkifli'),
+        restaurantId: 202,
+        restaurantName: 'Sate Kajang Hj Samuri',
+        date: DateTime(2026, 9, 5),
+        timeLabel: 'late',
+        coverUrl: _satayCover,
+        asked: true,
+      ),
+    ];
+  }
+
+  @override
+  Future<void> setShared(int planId, bool shared) async {}
+
   @override
   Future<int> create({
     required int restaurantId,
@@ -78,6 +118,7 @@ class DevPlansRepository implements PlansRepository {
     String? time,
     String? timeLabel,
     bool withFriends = false,
+    bool shared = false,
   }) async {
     return 1000;
   }

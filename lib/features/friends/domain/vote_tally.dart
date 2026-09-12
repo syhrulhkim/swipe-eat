@@ -110,6 +110,7 @@ String planStatusLabel(String status) {
   return switch (status) {
     'going' => 'Going',
     'declined' => "Can't",
+    'requested' => 'Asked to join',
     _ => 'Asked',
   };
 }
