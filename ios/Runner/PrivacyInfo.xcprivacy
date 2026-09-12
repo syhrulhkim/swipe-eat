@@ -133,6 +133,22 @@
 			</array>
 		</dict>
 		<dict>
+			<!-- The push token this install is registered under, stored in
+			     `push_tokens` against the account so an invite or a join
+			     request can reach the phone. Deleted on sign-out, and only
+			     ever present in a build made with the Firebase defines. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
 			<!-- Sentry, and only when a DSN is built in. `sendDefaultPii` is
 			     off, so reports carry no email, no IP and no account id, which
 			     is why this one is not linked to identity. -->

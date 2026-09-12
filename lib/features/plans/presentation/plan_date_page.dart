@@ -99,6 +99,12 @@ class _PlanDatePageState extends State<PlanDatePage> {
   DateTime? _selected;
   PlanSlot _slot = PlanSlot.initial;
   bool _withFriends = true;
+
+  /// Off unless the user says otherwise (D153). Where you are eating and who
+  /// with is the most private thing this app holds, so the switch that lets
+  /// other people see it cannot start switched on.
+  bool _shared = false;
+
   bool _saving = false;
 
   bool get _canLockIn => _selected != null && !_saving;
@@ -170,6 +176,15 @@ class _PlanDatePageState extends State<PlanDatePage> {
                             onChanged: (value) =>
                                 setState(() => _withFriends = value),
                           ),
+                          const SizedBox(height: 10),
+                          PrefSwitchRow(
+                            title: 'Share with friends',
+                            subtitle: 'They can see it on their calendar and '
+                                'ask to join',
+                            value: _shared,
+                            onChanged: (value) =>
+                                setState(() => _shared = value),
+                          ),
                           const SizedBox(height: 16),
                         ],
                       ),
@@ -210,6 +225,7 @@ class _PlanDatePageState extends State<PlanDatePage> {
         time: _slot.wireTime,
         timeLabel: _slot.wireLabel,
         withFriends: _withFriends,
+        shared: _shared,
       );
       if (!mounted) {
         return;

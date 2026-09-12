@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +10,7 @@ import '../../friends/domain/friend_captions.dart';
 import '../../friends/domain/vote_tally.dart';
 import '../../friends/presentation/person_row.dart';
 import '../../friends/state/friends_controller.dart';
+import '../../profile/presentation/preference_controls.dart';
 import '../domain/plan_labels.dart';
 import '../models/plan.dart';
 import '../models/plan_slot.dart';
@@ -46,6 +49,13 @@ class _PlanPageState extends State<PlanPage> {
 
   bool _busy = false;
 
+  /// A push can land on a plan the calendar has never read — an invite sent
+  /// while the app was closed, or a plan of somebody else's I have just been
+  /// let into. One re-read, guarded, because "not on your calendar" is also
+  /// the honest answer for a plan from last month and a retry loop would
+  /// hammer the server over it.
+  bool _refetched = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +87,14 @@ class _PlanPageState extends State<PlanPage> {
 
   Widget _body(BuildContext context) {
     final plan = _plans.planById(widget.planId);
+    if (plan == null && _plans.isLoaded && !_refetched) {
+      _refetched = true;
+      // A microtask late, for the reason `FriendsController.refresh` spells
+      // out: this runs inside a build, the controller is shared, and notifying
+      // from here would ask the Calendar tab — mounted, listening, not an
+      // ancestor — to rebuild in the middle of it, which Flutter refuses.
+      unawaited(Future<void>.microtask(() => _plans.refresh()));
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenPadding,
@@ -95,7 +113,10 @@ class _PlanPageState extends State<PlanPage> {
           const SizedBox(height: 8),
           Expanded(
             child: plan == null
-                ? _Missing(loading: _plans.loading && !_plans.isLoaded)
+                ? _Missing(
+                    loading: _plans.loading && !_plans.isLoaded,
+                    waitingOn: _waitingOn(),
+                  )
                 : ListView(
                     physics: const BouncingScrollPhysics(),
                     children: _sections(context, plan),
@@ -122,6 +143,10 @@ class _PlanPageState extends State<PlanPage> {
       asked: planHeadcount([for (final person in people) person.status]).guests + 1,
     );
     final myMembership = _myMembership(plan);
+    final requests = [
+      for (final person in people)
+        if (person.status == 'requested') person,
+    ];
 
     return [
       _RestaurantLink(plan: plan),
@@ -156,20 +181,64 @@ class _PlanPageState extends State<PlanPage> {
           status: myMembership.status,
           onAnswer: _busy ? null : _answer,
         ),
-      const SizedBox(height: AppSpacing.lg),
-      Text('Who’s coming', style: appTitleStyle(context)),
-      const SizedBox(height: AppSpacing.sm),
-      if (people.isEmpty)
-        const _Note('Just you so far.')
-      else
-        for (final person in people)
+      if (requests.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.lg),
+        Text('Requests', style: appTitleStyle(context)),
+        const SizedBox(height: AppSpacing.sm),
+        for (final person in requests) ...[
           PersonRow(
-            key: ValueKey(person.profile.id),
+            key: ValueKey('request-${person.profile.id}'),
             profile: person.profile,
             selected: false,
             subtitle: planStatusLabel(person.status),
             onTap: () {},
           ),
+          _AnswerRow(
+            status: person.status,
+            yes: 'Accept',
+            no: 'Decline',
+            onAnswer: _busy
+                ? null
+                : (accept) => _answerRequest(person.profile.id, accept),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+      const SizedBox(height: AppSpacing.lg),
+      Text('Who’s coming', style: appTitleStyle(context)),
+      const SizedBox(height: AppSpacing.sm),
+      if (people.length == requests.length)
+        const _Note('Just you so far.')
+      else
+        for (final person in people)
+          if (person.status != 'requested')
+            PersonRow(
+              key: ValueKey(person.profile.id),
+              profile: person.profile,
+              selected: false,
+              subtitle: planStatusLabel(person.status),
+              onTap: () {},
+            ),
+      // The owner's two controls sit under the roster, not over it: who is
+      // coming is what the screen is for, and both of these are answers to
+      // "and who else?".
+      if (myMembership == null) ...[
+        const SizedBox(height: AppSpacing.lg),
+        PrefSwitchRow(
+          title: 'Share with friends',
+          subtitle: 'They can see it on their calendar and ask to join',
+          value: plan.sharedWithFriends,
+          onChanged: _busy ? (_) {} : (value) => _share(value),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppSecondaryButton(
+          label: 'Invite friends',
+          expand: true,
+          onPressed: _busy
+              ? null
+              : () => context.push('/plans/${widget.planId}/invite'),
+        ),
+      ],
     ];
   }
 
@@ -211,6 +280,35 @@ class _PlanPageState extends State<PlanPage> {
         'Could not lock that time in.',
       );
 
+  /// Whose plan I am waiting on, or null when this plan is not one I asked to
+  /// join.
+  ///
+  /// A request is not a membership (D153), so the plan itself is invisible to
+  /// me until the owner says yes — the only thing I can see is the row the
+  /// Calendar's Friends section reads, which carries the owner's name.
+  String? _waitingOn() {
+    for (final plan in _plans.friendsPlans) {
+      if (plan.id == widget.planId && plan.asked) {
+        return firstName(plan.owner.name);
+      }
+    }
+    return null;
+  }
+
+  Future<void> _share(bool shared) => _run(
+        () => _plans.setShared(widget.planId, shared),
+        'Could not change who can see this.',
+      );
+
+  Future<void> _answerRequest(String userId, bool accept) => _run(
+        () => _friends.answerJoinRequest(
+          widget.planId,
+          userId,
+          accept: accept,
+        ),
+        'Could not answer that request.',
+      );
+
   Future<void> _answer(bool going) => _run(
         () => _friends.answerInvite(widget.planId, going: going),
         'Could not send that answer.',
@@ -250,7 +348,11 @@ class _TopBar extends StatelessWidget {
           size: kUtilityButtonSize,
           onPhoto: false,
           semanticLabel: 'Back',
-          onTap: () => Navigator.of(context).maybePop(),
+          // A notification opens this screen by *replacing* the stack, not by
+          // pushing onto it, so there is nothing behind it to pop to and Back
+          // would do nothing at all. The calendar is where the plan lives.
+          onTap: () =>
+              context.canPop() ? context.pop() : context.go('/dashboard'),
         ),
         Expanded(
           child: Text(
@@ -392,10 +494,20 @@ class _LockRow extends StatelessWidget {
 
 /// A guest's half: the two answers, with the one already given held down.
 class _AnswerRow extends StatelessWidget {
-  const _AnswerRow({required this.status, required this.onAnswer});
+  const _AnswerRow({
+    required this.status,
+    required this.onAnswer,
+    this.yes = 'Going',
+    this.no = "Can't",
+  });
 
   final String status;
   final ValueChanged<bool>? onAnswer;
+
+  /// The owner answering a join request is the same two buttons with the same
+  /// two meanings, said the other way round: Accept / Decline.
+  final String yes;
+  final String no;
 
   @override
   Widget build(BuildContext context) {
@@ -406,13 +518,13 @@ class _AnswerRow extends StatelessWidget {
       children: [
         Expanded(
           child: going
-              ? const AppPrimaryButton(
-                  label: 'Going',
+              ? AppPrimaryButton(
+                  label: yes,
                   expand: true,
                   onPressed: null,
                 )
               : AppSecondaryButton(
-                  label: 'Going',
+                  label: yes,
                   expand: true,
                   onPressed: onAnswer == null ? null : () => onAnswer!(true),
                 ),
@@ -420,7 +532,7 @@ class _AnswerRow extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: AppSecondaryButton(
-            label: "Can't",
+            label: no,
             expand: true,
             tint: declined ? kAccentEmber : null,
             onPressed: onAnswer == null ? null : () => onAnswer!(false),
@@ -432,17 +544,25 @@ class _AnswerRow extends StatelessWidget {
 }
 
 class _Missing extends StatelessWidget {
-  const _Missing({required this.loading});
+  const _Missing({required this.loading, this.waitingOn});
 
   final bool loading;
 
+  /// The owner's first name when I have asked to join this plan and nobody
+  /// has answered yet — the plan is invisible to me until they do.
+  final String? waitingOn;
+
   @override
   Widget build(BuildContext context) {
+    final owner = waitingOn;
+
     return Center(
       child: Text(
-        loading
-            ? 'Finding that plan…'
-            : 'That plan is not on your calendar.',
+        owner != null
+            ? 'Waiting on $owner.'
+            : loading
+                ? 'Finding that plan…'
+                : 'That plan is not on your calendar.',
         textAlign: TextAlign.center,
         style: _noteStyle,
       ),

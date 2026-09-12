@@ -71,16 +71,26 @@ class SwipeEatApp extends StatefulWidget {
   const SwipeEatApp({
     super.key,
     required this.authController,
+    this.pushRoute,
   });
 
   final AuthController authController;
+
+  /// Where a tapped notification's route lands, when the build has push at
+  /// all. Owned here rather than by the service, because it outlives nothing:
+  /// the router is what reads it, and the router lives exactly as long as this
+  /// widget does.
+  final ValueNotifier<String?>? pushRoute;
 
   @override
   State<SwipeEatApp> createState() => _SwipeEatAppState();
 }
 
 class _SwipeEatAppState extends State<SwipeEatApp> {
-  late final GoRouter _router = createRouter(widget.authController);
+  late final GoRouter _router = createRouter(
+    widget.authController,
+    pushRoute: widget.pushRoute,
+  );
 
   @override
   Widget build(BuildContext context) {

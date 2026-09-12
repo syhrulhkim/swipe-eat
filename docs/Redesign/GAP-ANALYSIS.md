@@ -1,6 +1,6 @@
 Status: DRAFT
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [README.md](README.md), [SCREENS.md](SCREENS.md), [NGAP-DESIGN-SYSTEM.md](NGAP-DESIGN-SYSTEM.md), [Features/Backend-Schema.md](../Features/Backend-Schema.md), [General/PLAN.md](../General/PLAN.md)
 
 # Gap Analysis — built vs. Ngap
@@ -501,10 +501,14 @@ screen and D134 for why it exists at all.
 - **Time voting works** — the five chips carry tallies on `/plans/:id`, a vote
   replaces your last one, and the owner can move the plan to the winning slot.
 
-Still open after Phase 8:
+Closed after Phase 8:
 
-- **Other people's plans do not show as pips** — a guest sees the plan on the
-  list, but the month grid still only marks days the user owns a plan on.
+- **Friends can see each other's plans** — `plans.shared_with_friends` (off by
+  default), `get_friends_plans`, a Friends section on the Calendar with its own
+  pip, and "Ask to join" answered by the owner on the plan (D153). Invites,
+  requests and acceptances are pushed (D155).
+
+Still open after Phase 8:
 - **The invite screen's context lines** ("Free Friday evening", "Lives 400 m
   from there") need joins no query does yet.
 

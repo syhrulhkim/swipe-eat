@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:swipe_eat/features/plans/data/plans_repository.dart';
 import 'package:swipe_eat/features/plans/domain/plan_labels.dart';
+import 'package:swipe_eat/features/plans/models/friend_plan.dart';
 import 'package:swipe_eat/features/plans/models/plan.dart';
 import 'package:swipe_eat/features/plans/state/plans_controller.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart';
@@ -367,6 +368,7 @@ void main() {
         'time': '20:00:00',
         'timeLabel': null,
         'withFriends': true,
+        'shared': false,
       });
       expect(controller.plans.single.id, id);
       expect(repository.listedFrom, hasLength(2));
@@ -389,6 +391,37 @@ void main() {
       await controller.cancel(1);
       expect(controller.plans, isEmpty);
       expect(repository.cancelled, [1, 1]);
+    });
+
+    test('a plan made with the switch on is created shared', () async {
+      final repository = FakePlansRepository();
+      final controller = buildController(repository);
+      addTearDown(controller.dispose);
+      await controller.ensureLoaded();
+
+      await controller.create(
+        restaurantId: 306,
+        date: DateTime(2026, 9, 4),
+        shared: true,
+      );
+
+      expect(repository.created.single['shared'], isTrue);
+      expect(controller.plans.single.sharedWithFriends, isTrue);
+    });
+
+    test('setShared writes the flag and re-reads the row', () async {
+      final repository = FakePlansRepository(
+        rows: [testPlan(1, date: DateTime(2026, 9, 4))],
+      );
+      final controller = buildController(repository);
+      addTearDown(controller.dispose);
+      await controller.ensureLoaded();
+      expect(controller.plans.single.sharedWithFriends, isFalse);
+
+      await controller.setShared(1, true);
+
+      expect(repository.sharedSet.single, (1, true));
+      expect(controller.plans.single.sharedWithFriends, isTrue);
     });
 
     test('setTime moves the slot and re-reads', () async {
@@ -426,6 +459,109 @@ void main() {
       await controller.ensureLoaded();
       expect(controller.plans, hasLength(1));
       expect(repository.listedFrom, hasLength(2));
+    });
+  });
+
+  group("PlansController friends' plans", () {
+    test('the calendar reads them from today, not the first of the month',
+        () async {
+      // The grid looks back to the first so a day already gone by still shows
+      // a ring; a friend's evening that has already happened is not something
+      // to ask to join.
+      final repository = FakePlansRepository(
+        friendPlans: [testFriendPlan(501, date: DateTime(2026, 9, 4))],
+      );
+      final controller = buildController(repository);
+      addTearDown(controller.dispose);
+
+      await controller.ensureLoaded();
+
+      expect(repository.friendsListedFrom.single, DateTime(2026, 9, 2));
+      expect(repository.listedFrom.single, DateTime(2026, 9, 1));
+      expect(controller.friendsPlans.single.owner.name, 'Aisyah Rahman');
+    });
+
+    test('a server without the RPC still opens the calendar', () async {
+      // Part B ships the client and the server separately, and a phone on the
+      // old server must not lose its own evenings over a section it cannot
+      // fill — the same rule the kept-flip follows.
+      final repository = FakePlansRepository(
+        rows: [testPlan(1, date: DateTime(2026, 9, 4))],
+      );
+      repository.failFriendsPlans = StateError('no such function');
+      final controller = buildController(repository);
+      addTearDown(controller.dispose);
+
+      await controller.ensureLoaded();
+
+      expect(controller.isLoaded, isTrue);
+      expect(controller.error, isNull);
+      expect(controller.plans, hasLength(1));
+      expect(controller.friendsPlans, isEmpty);
+    });
+
+    test('reset drops them with the rest of the account', () async {
+      final repository = FakePlansRepository(
+        friendPlans: [testFriendPlan(501, date: DateTime(2026, 9, 4))],
+      );
+      final controller = buildController(repository);
+      addTearDown(controller.dispose);
+      await controller.ensureLoaded();
+      expect(controller.friendsPlans, hasLength(1));
+
+      controller.reset();
+
+      expect(controller.friendsPlans, isEmpty);
+    });
+  });
+
+  group('FriendPlan', () {
+    test('decodes the row get_friends_plans sends', () {
+      final plan = FriendPlan.fromJson(<String, dynamic>{
+        'plan_id': 501,
+        'owner_id': 'aisyah',
+        'owner_name': 'Aisyah Rahman',
+        'owner_avatar_url': '',
+        'restaurant_id': 201,
+        'restaurant_name': 'Nasi Kandar Pelita',
+        'cover_url': 'https://a.example/1.jpg',
+        'plan_date': '2026-09-04',
+        'plan_time': '19:30:00',
+        'time_label': null,
+        'going_count': 3,
+        'going_friends': <dynamic>[
+          <String, dynamic>{'user_id': 'farah', 'name': 'Farah Idris'},
+        ],
+        'asked': true,
+      });
+
+      expect(plan.id, 501);
+      expect(plan.owner.name, 'Aisyah Rahman');
+      // An empty avatar is no avatar, not an empty URL to fetch.
+      expect(plan.owner.avatarUrl, isNull);
+      expect(plan.date, DateTime(2026, 9, 4));
+      expect(plan.timeText, '19:30');
+      expect(plan.goingCount, 3);
+      expect(plan.goingFriends.single.name, 'Farah Idris');
+      expect(plan.asked, isTrue);
+    });
+
+    test('a label-only plan reads back as the label', () {
+      final plan = FriendPlan.fromJson(<String, dynamic>{
+        'plan_id': 502,
+        'owner_id': 'aiman',
+        'owner_name': 'Aiman Zulkifli',
+        'restaurant_id': 202,
+        'restaurant_name': 'Sate Kajang',
+        'plan_date': '2026-09-05',
+        'plan_time': null,
+        'time_label': 'late',
+        'going_count': 0,
+      });
+
+      expect(plan.timeText, 'Late');
+      expect(plan.goingFriends, isEmpty);
+      expect(plan.asked, isFalse);
     });
   });
 

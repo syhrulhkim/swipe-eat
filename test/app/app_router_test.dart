@@ -308,6 +308,155 @@ void main() {
       expect(find.text('Aiman Zulkifli'), findsOneWidget);
     });
   });
+
+  group('a tapped notification', () {
+    late FakeAuthRepository repository;
+    late AuthController controller;
+    late ValueNotifier<String?> pushRoute;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      repository = FakeAuthRepository()
+        ..sessionPresent = true
+        ..profile = _user(onboardedAt: DateTime(2026, 8, 23));
+      controller = AuthController(repository);
+      pushRoute = ValueNotifier<String?>(null);
+
+      PlansController.debugSetInstance(
+        PlansController(
+          repository: FakePlansRepository(
+            rows: [testPlan(77, date: DateTime(2026, 9, 4))],
+          ),
+          clock: () => DateTime(2026, 9, 6, 19, 41),
+          followAuthChanges: false,
+        ),
+      );
+      FriendsController.debugSetInstance(
+        FriendsController(
+          repository: FakeFriendsRepository(),
+          followAuthChanges: false,
+        ),
+      );
+    });
+
+    tearDown(() async {
+      pushRoute.dispose();
+      controller.dispose();
+      await repository.dispose();
+    });
+
+    Future<GoRouter> pumpApp(WidgetTester tester) async {
+      final router = createRouter(controller, pushRoute: pushRoute);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          routerConfig: router,
+          supportedLocales: FLocalizations.supportedLocales,
+          localizationsDelegates: FLocalizations.localizationsDelegates,
+          builder: (_, child) => Material(
+            type: MaterialType.transparency,
+            child: FTheme(
+              data: FThemes.neutral.dark.touch,
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      return router;
+    }
+
+    testWidgets('opens the plan it names, and is spent doing it',
+        (tester) async {
+      await controller.bootstrap();
+      final router = await pumpApp(tester);
+      // Never settled: the dashboard this lands on spins a looping mark, so
+      // the frames are pumped by hand — the same rule the invite chain above
+      // follows.
+      await _settleRoute(tester);
+
+      pushRoute.value = '/plans/77';
+      await _settleRoute(tester);
+
+      expect(find.byType(PlanPage), findsOneWidget);
+      // Consumed, or the next refresh would drag the user back here from
+      // wherever they had walked to.
+      expect(pushRoute.value, isNull);
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/plans/77');
+    });
+
+    testWidgets('waits on the splash until the session has resolved',
+        (tester) async {
+      // A cold start is the common case: the notification is tapped, the app
+      // launches, and the route arrives before anybody is signed in. Honoured
+      // there it would open a plan screen nothing could read.
+      pushRoute.value = '/plans/77';
+      await pumpApp(tester);
+      await tester.pump();
+
+      expect(find.byType(SplashPage), findsOneWidget);
+      expect(pushRoute.value, '/plans/77');
+
+      await controller.bootstrap();
+      await _settleRoute(tester);
+
+      expect(find.byType(PlanPage), findsOneWidget);
+      expect(pushRoute.value, isNull);
+    });
+
+    testWidgets('leaves a Back that goes to the calendar, not nowhere',
+        (tester) async {
+      // The redirect *replaces* the stack rather than pushing onto it, so a
+      // plan opened from a notification has nothing behind it and a plain pop
+      // would strand the user on it.
+      await controller.bootstrap();
+      final router = await pumpApp(tester);
+      await _settleRoute(tester);
+
+      pushRoute.value = '/plans/77';
+      await _settleRoute(tester);
+      expect(find.byType(PlanPage), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await _settleRoute(tester);
+
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/dashboard');
+    });
+
+    testWidgets('a build with no push at all routes exactly as before',
+        (tester) async {
+      // `createRouter` is called without the notifier on any build made
+      // without the Firebase defines, and that path must stay the one the
+      // rest of this file tests.
+      await controller.bootstrap();
+      final router = createRouter(controller);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          routerConfig: router,
+          supportedLocales: FLocalizations.supportedLocales,
+          localizationsDelegates: FLocalizations.localizationsDelegates,
+          builder: (_, child) => Material(
+            type: MaterialType.transparency,
+            child: FTheme(
+              data: FThemes.neutral.dark.touch,
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await _settleRoute(tester);
+
+      expect(router.routerDelegate.currentConfiguration.uri.path, '/dashboard');
+    });
+  });
+}
+
+/// Two frames and the crossfade, instead of `pumpAndSettle`: every route these
+/// tests land on can have a looping mark on it, and a settle would wait for a
+/// loop that never ends.
+Future<void> _settleRoute(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 600));
 }
 
 AppUser _user({DateTime? onboardedAt}) => AppUser(

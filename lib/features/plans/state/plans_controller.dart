@@ -7,6 +7,7 @@ import '../../restaurants/state/likes_controller.dart'
     show LikesAuthEvents, LikesController;
 import '../data/plans_repository.dart';
 import '../domain/plan_labels.dart';
+import '../models/friend_plan.dart';
 import '../models/plan.dart';
 
 /// Every screen's answer to "has this place got a day yet?".
@@ -52,6 +53,7 @@ class PlansController extends ChangeNotifier {
   String? _accountId;
 
   List<Plan> _plans = const [];
+  List<FriendPlan> _friendsPlans = const [];
   PlanStats _stats = const PlanStats();
   bool _loaded = false;
   bool _loading = false;
@@ -67,6 +69,11 @@ class PlansController extends ChangeNotifier {
   DateTime get now => _clock();
 
   List<Plan> get plans => List.unmodifiable(_plans);
+
+  /// The shared plans of people I know, in the order the server returned them
+  /// — the Calendar's Friends section (D153). Empty until the calendar has
+  /// loaded, and empty on a build whose server has no `get_friends_plans`.
+  List<FriendPlan> get friendsPlans => List.unmodifiable(_friendsPlans);
   bool get isLoaded => _loaded;
   bool get loading => _loading;
   String? get error => _error;
@@ -207,17 +214,19 @@ class PlansController extends ChangeNotifier {
         debugPrint('Marking past plans kept failed: $error');
       }
 
-      // Two reads with nothing between them: one round trip, not two. The
-      // flip above has to land first, because both of these read its result.
-      final (rows, stats) = await (
+      // Three reads with nothing between them: one round trip, not three. The
+      // flip above has to land first, because the first two read its result.
+      final (rows, stats, friends) = await (
         _repository.list(from: firstOfMonth(today)),
         _repository.stats(today),
+        _friendsPlansOrEmpty(today),
       ).wait;
       if (generation != _generation) {
         return;
       }
       _plans = rows;
       _stats = stats;
+      _friendsPlans = friends;
       _loaded = true;
       _publishToLikes();
     } on Object catch (error) {
@@ -234,6 +243,19 @@ class PlansController extends ChangeNotifier {
     }
   }
 
+  /// Friends' plans are the one part of this load allowed to fail on its own,
+  /// for the same reason the kept-flip above is: the calendar is the user's own
+  /// evenings, and losing a section below them beats losing the screen. A build
+  /// running against a server without `get_friends_plans` still opens.
+  Future<List<FriendPlan>> _friendsPlansOrEmpty(DateTime today) async {
+    try {
+      return await _repository.friendsPlans(from: today);
+    } on Object catch (error) {
+      debugPrint('Loading friends plans failed: $error');
+      return const [];
+    }
+  }
+
   /// "Lock it in". Returns the new plan's id, and leaves the list refreshed —
   /// the RPC hands back a bare row with no restaurant joined onto it, which is
   /// not enough to draw a calendar line with.
@@ -243,6 +265,7 @@ class PlansController extends ChangeNotifier {
     String? time,
     String? timeLabel,
     bool withFriends = false,
+    bool shared = false,
   }) async {
     final id = await _repository.create(
       restaurantId: restaurantId,
@@ -250,6 +273,7 @@ class PlansController extends ChangeNotifier {
       time: time,
       timeLabel: timeLabel,
       withFriends: withFriends,
+      shared: shared,
     );
     await refresh();
     return id;
@@ -278,6 +302,16 @@ class PlansController extends ChangeNotifier {
     }
   }
 
+  /// Flips "Share with friends" on a plan I own, then re-reads.
+  ///
+  /// Re-read rather than patched in place, like [setTime]: `Plan` has no
+  /// `copyWith` on purpose, and one existing only so a switch can animate a
+  /// frame earlier would be a production API paying rent for a test.
+  Future<void> setShared(int planId, bool shared) async {
+    await _repository.setShared(planId, shared);
+    await refresh();
+  }
+
   /// Moves a plan to another slot. Same day, different hour.
   Future<void> setTime(int planId, {String? time, String? timeLabel}) async {
     await _repository.setTime(planId, time: time, timeLabel: timeLabel);
@@ -289,6 +323,7 @@ class PlansController extends ChangeNotifier {
   void reset() {
     _generation += 1;
     _plans = const [];
+    _friendsPlans = const [];
     _stats = const PlanStats();
     _loaded = false;
     _loading = false;

@@ -4,14 +4,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/friends/presentation/person_row.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
+import 'package:swipe_eat/features/plans/models/friend_plan.dart';
 import 'package:swipe_eat/features/plans/models/plan.dart';
 import 'package:swipe_eat/features/plans/models/plan_slot.dart';
 import 'package:swipe_eat/features/plans/presentation/plan_page.dart';
 import 'package:swipe_eat/features/plans/state/plans_controller.dart';
+import 'package:swipe_eat/features/profile/presentation/preference_controls.dart';
 import 'package:swipe_eat/features/restaurants/state/likes_controller.dart'
     show LikesAuthEvents;
 
@@ -45,12 +48,17 @@ class _Harness {
     required this.friends,
     required this.plansRepository,
     required this.plans,
+    required this.pushed,
   });
 
   final FakeFriendsRepository friendsRepository;
   final FriendsController friends;
   final FakePlansRepository plansRepository;
   final PlansController plans;
+
+  /// Where the screen sent the user. The plan page pushes two routes — the
+  /// restaurant behind the plan, and the invite list.
+  final List<String> pushed;
 }
 
 Future<_Harness> _pumpPlan(
@@ -59,6 +67,7 @@ Future<_Harness> _pumpPlan(
   List<Plan>? planRows,
   int planId = 77,
   String? me = 'owner',
+  List<FriendPlan> friendPlans = const [],
   Size viewport = _phoneViewport,
   TextScaler textScaler = TextScaler.noScaling,
 }) async {
@@ -74,6 +83,7 @@ Future<_Harness> _pumpPlan(
 
   final plansBacking = FakePlansRepository(
     rows: planRows ?? [testPlan(77, date: DateTime(2026, 9, 4))],
+    friendPlans: friendPlans,
   );
   final plans = PlansController(
     repository: plansBacking,
@@ -83,13 +93,41 @@ Future<_Harness> _pumpPlan(
   addTearDown(plans.dispose);
   await plans.ensureLoaded();
 
+  final pushed = <String>[];
+  // A router rather than a bare `home:`, because two of the screen's controls
+  // are pushes and a test that cannot follow them cannot check them.
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) =>
+            PlanPage(planId: planId, friends: friends, plans: plans),
+      ),
+      GoRoute(
+        path: '/plans/:id/invite',
+        builder: (context, state) {
+          pushed.add('/plans/${state.pathParameters['id']}/invite');
+          return const Scaffold(body: Text('invite'));
+        },
+      ),
+      GoRoute(
+        path: '/restaurant/:id',
+        builder: (context, state) {
+          pushed.add('/restaurant/${state.pathParameters['id']}');
+          return const Scaffold(body: Text('detail'));
+        },
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+
   await tester.pumpWidget(
-    MaterialApp(
+    MaterialApp.router(
+      routerConfig: router,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(textScaler: textScaler),
         child: child!,
       ),
-      home: PlanPage(planId: planId, friends: friends, plans: plans),
     ),
   );
   await tester.pumpAndSettle();
@@ -99,6 +137,7 @@ Future<_Harness> _pumpPlan(
     friends: friends,
     plansRepository: plansBacking,
     plans: plans,
+    pushed: pushed,
   );
 }
 
@@ -313,6 +352,142 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(harness.friendsRepository.calls, contains('answerInvite'));
+    });
+  });
+
+  group('sharing it', () {
+    testWidgets('the owner gets a switch that starts off', (tester) async {
+      await _pumpPlan(tester);
+
+      expect(find.text('Share with friends'), findsOneWidget);
+      final control = tester.widget<PrefSwitch>(
+        find.descendant(
+          of: find.widgetWithText(PrefSwitchRow, 'Share with friends'),
+          matching: find.byType(PrefSwitch),
+        ),
+      );
+      expect(control.value, isFalse);
+    });
+
+    testWidgets('flipping it writes the plan and reads the row back',
+        (tester) async {
+      final harness = await _pumpPlan(tester);
+
+      await tester.tap(find.text('Share with friends'));
+      await tester.pumpAndSettle();
+
+      expect(harness.plansRepository.sharedSet.single, (77, true));
+      expect(harness.plans.planById(77)!.sharedWithFriends, isTrue);
+    });
+
+    testWidgets('a guest is not offered the switch at all', (tester) async {
+      await _pumpPlan(
+        tester,
+        me: 'guest',
+        planRows: [
+          testPlan(
+            77,
+            date: DateTime(2026, 9, 4),
+            members: const [PlanMember(userId: 'guest', status: 'invited')],
+          ),
+        ],
+      );
+
+      expect(find.text('Share with friends'), findsNothing);
+      expect(find.text('Invite friends'), findsNothing);
+    });
+
+    testWidgets('Invite friends opens the invite list for this plan',
+        (tester) async {
+      final harness = await _pumpPlan(tester);
+
+      await tester.ensureVisible(find.text('Invite friends'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Invite friends'));
+      await tester.pumpAndSettle();
+
+      expect(harness.pushed, ['/plans/77/invite']);
+    });
+  });
+
+  group('requests to join', () {
+    testWidgets('somebody who asked is listed apart from the guests',
+        (tester) async {
+      await _pumpPlan(
+        tester,
+        friendsRepository: FakeFriendsRepository(
+          planPeople: [
+            testPlanPerson(77, 'a', name: 'Aiman Zulkifli', status: 'going'),
+            testPlanPerson(77, 'z', name: 'Zara Khan', status: 'requested'),
+          ],
+        ),
+      );
+
+      expect(find.text('Requests'), findsOneWidget);
+      expect(find.text('Asked to join'), findsOneWidget);
+      expect(find.text('Accept'), findsOneWidget);
+      expect(find.text('Decline'), findsOneWidget);
+      // Counted as a guest she would be counted as somebody owing a vote:
+      // the owner plus Aiman is two, not three.
+      expect(find.text('2 people still to vote'), findsOneWidget);
+    });
+
+    testWidgets('Accept answers that one person', (tester) async {
+      final harness = await _pumpPlan(
+        tester,
+        friendsRepository: FakeFriendsRepository(
+          planPeople: [
+            testPlanPerson(77, 'z', name: 'Zara Khan', status: 'requested'),
+          ],
+        ),
+      );
+
+      await tester.tap(find.text('Accept'));
+      await tester.pumpAndSettle();
+
+      expect(harness.friendsRepository.joinAnswers.single, (77, 'z', true));
+    });
+
+    testWidgets('Decline says no to the same person', (tester) async {
+      final harness = await _pumpPlan(
+        tester,
+        friendsRepository: FakeFriendsRepository(
+          planPeople: [
+            testPlanPerson(77, 'z', name: 'Zara Khan', status: 'requested'),
+          ],
+        ),
+      );
+
+      await tester.tap(find.text('Decline'));
+      await tester.pumpAndSettle();
+
+      expect(harness.friendsRepository.joinAnswers.single, (77, 'z', false));
+    });
+
+    testWidgets('a plan I only asked to join says who I am waiting on',
+        (tester) async {
+      // A request is not a membership, so the plan itself is invisible to me
+      // (D153) — the only row I can see is the one the Calendar's Friends
+      // section reads, and it carries the owner's name.
+      final harness = await _pumpPlan(
+        tester,
+        me: 'asker',
+        planRows: const [],
+        friendPlans: [
+          testFriendPlan(
+            77,
+            date: DateTime(2026, 9, 4),
+            ownerName: 'Aisyah Rahman',
+            asked: true,
+          ),
+        ],
+      );
+
+      expect(find.text('Waiting on Aisyah.'), findsOneWidget);
+      expect(find.text('That plan is not on your calendar.'), findsNothing);
+      // A push can land on a plan the calendar has never read, so it re-reads
+      // once — and only once, however many times the screen rebuilds.
+      expect(harness.plansRepository.listedFrom, hasLength(2));
     });
   });
 

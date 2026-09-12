@@ -22,10 +22,19 @@ import '../features/restaurants/presentation/restaurant_detail_route.dart';
 import '../features/settings/presentation/settings_page.dart';
 import '../features/wishlist/presentation/wishlist_page.dart';
 
-GoRouter createRouter(AuthController authController) {
+/// [pushRoute] is where a tapped notification puts the route it wants opened
+/// (D155). The router listens to it and **consumes** it — the value is cleared
+/// as it is used, so a second pass does not send the user back to the same
+/// plan they have just navigated away from.
+GoRouter createRouter(
+  AuthController authController, {
+  ValueNotifier<String?>? pushRoute,
+}) {
   return GoRouter(
     initialLocation: '/splash',
-    refreshListenable: authController,
+    refreshListenable: pushRoute == null
+        ? authController
+        : Listenable.merge([authController, pushRoute]),
     // Route changes become breadcrumbs on a crash report; empty list when no
     // DSN was built in.
     observers: crashReportingObservers(),
@@ -55,6 +64,18 @@ GoRouter createRouter(AuthController authController) {
       // app can show, because the deck has no taste signal without it.
       if (authController.needsOnboarding) {
         return isOnOnboarding ? null : '/onboarding';
+      }
+
+      // After the gates above, never before: a notification tapped on a cold
+      // start arrives while the session is still resolving, and a redirect
+      // that honoured it there would land on a screen the user is not signed
+      // in to yet. Held until they are, then spent.
+      final pushed = pushRoute?.value;
+      if (pushed != null) {
+        pushRoute!.value = null;
+        if (pushed != location) {
+          return pushed;
+        }
       }
 
       if (isOnAuthPage ||

@@ -55,6 +55,7 @@ class Plan {
     this.minute,
     this.timeLabel,
     this.withFriends = false,
+    this.sharedWithFriends = false,
     this.status = PlanStatus.planned,
     this.coverUrl,
     this.tag,
@@ -80,7 +81,7 @@ class Plan {
         .where((url) => url.isNotEmpty)
         .firstOrNull;
 
-    final time = _parseTime(json['plan_time'] as String?);
+    final time = parsePlanTime(json['plan_time'] as String?);
 
     return Plan(
       id: (json['id'] as num).toInt(),
@@ -90,6 +91,7 @@ class Plan {
       minute: time?.$2,
       timeLabel: json['time_label'] as String?,
       withFriends: json['with_friends'] as bool? ?? false,
+      sharedWithFriends: json['shared_with_friends'] as bool? ?? false,
       status: PlanStatus.fromWire(json['status'] as String?),
       restaurantName: restaurant?['name'] as String? ?? 'A place',
       coverUrl: cover,
@@ -118,6 +120,12 @@ class Plan {
   final String? timeLabel;
 
   final bool withFriends;
+
+  /// Whether friends can see this evening on their own calendar (D153). Per
+  /// plan and off unless the owner said otherwise — the switch is on the
+  /// pick-a-date screen and on the plan itself.
+  final bool sharedWithFriends;
+
   final PlanStatus status;
 
   final String restaurantName;
@@ -180,7 +188,10 @@ String formatPlanDate(DateTime date) {
       '${date.day.toString().padLeft(2, '0')}';
 }
 
-(int, int)? _parseTime(String? value) {
+/// `20:30:00` → `(20, 30)`, and null for a plan that only has a label. Public
+/// because a friend's plan arrives on a different RPC and parses the same
+/// column the same way.
+(int, int)? parsePlanTime(String? value) {
   if (value == null) {
     return null;
   }

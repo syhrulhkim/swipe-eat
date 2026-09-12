@@ -376,6 +376,44 @@ void main() {
     });
   });
 
+  group('asking to join', () {
+    test('the phone says what day it is, not the server', () async {
+      // Same reason mark_plan_kept takes a date: the database clock is UTC
+      // and Kuala Lumpur is +8, so a server-side "today" would close
+      // tonight's plan eight hours early.
+      final repository = FakeFriendsRepository();
+      final controller = controllerFor(repository);
+
+      await controller.askToJoin(501, DateTime(2026, 9, 12));
+
+      expect(repository.joinRequests.single, (501, DateTime(2026, 9, 12)));
+    });
+
+    test('answering a request re-reads that one plan', () async {
+      final repository = FakeFriendsRepository(
+        planPeople: [testPlanPerson(7, 'u1', status: 'requested')],
+      );
+      final controller = controllerFor(repository);
+
+      await controller.answerJoinRequest(7, 'u1', accept: true);
+
+      expect(repository.joinAnswers.single, (7, 'u1', true));
+      expect(repository.planPeopleAsked.single, [7]);
+    });
+
+    test('a plan that is not open to me raises rather than going quiet',
+        () async {
+      final repository = FakeFriendsRepository()
+        ..failAskToJoinWith = StateError('That plan is not open to you.');
+      final controller = controllerFor(repository);
+
+      await expectLater(
+        controller.askToJoin(501, DateTime(2026, 9, 12)),
+        throwsStateError,
+      );
+    });
+  });
+
   group('time votes', () {
     FakeFriendsRepository repositoryWithVotes() => FakeFriendsRepository(
           votes: [

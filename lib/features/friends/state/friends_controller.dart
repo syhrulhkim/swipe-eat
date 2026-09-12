@@ -212,6 +212,24 @@ class FriendsController extends ChangeNotifier {
     await loadPlanPeople([planId]);
   }
 
+  /// Asks to join a friend's shared plan. Straight through: the `asked` flag
+  /// the button reads lives on `PlansController.friendsPlans`, so it is the
+  /// plans that are refreshed afterwards, not this cache.
+  Future<void> askToJoin(int planId, DateTime today) =>
+      _repository.askToJoin(planId, today);
+
+  /// Accepts or declines somebody who asked to join my plan, then re-reads that
+  /// plan's roster — accepting moves them out of the Requests list and into
+  /// "Who's coming", and two lists edited by hand are two chances to disagree.
+  Future<void> answerJoinRequest(
+    int planId,
+    String userId, {
+    required bool accept,
+  }) async {
+    await _repository.answerJoinRequest(planId, userId, accept: accept);
+    await loadPlanPeople([planId]);
+  }
+
   /// Loads once; concurrent callers share the request. A failed load clears its
   /// handle so the next call retries rather than caching the failure.
   Future<void> ensureLoaded() {

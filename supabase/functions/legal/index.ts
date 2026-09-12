@@ -89,7 +89,11 @@ you. This page explains exactly what the app stores and why.</p>
   had the sound on, because how sure you were is part of what you told us. This
   is what makes the recommendations yours.</li>
   <li><strong>Your plans</strong> — the restaurant, the day and the time you
-  picked, who you invited, and how the people you invited voted on the time.</li>
+  picked, who you invited, and how the people you invited voted on the time. A
+  plan is private to you and the people on it unless you turn on <em>Share with
+  friends</em> for that one plan, which is off until you do: then the friends
+  you have on Swipe Eat can see that plan on their calendar and ask to join it,
+  and you decide who gets in. We also store who has asked.</li>
   <li><strong>Your friends</strong> — who you are friends with on Swipe Eat, and
   friend requests in either direction.</li>
   <li><strong>Contacts, when you ask us to look</strong> — if you tap "Find
@@ -105,6 +109,11 @@ you. This page explains exactly what the app stores and why.</p>
   them</strong>, under your name; nobody else can. Your stars also count towards
   the average rating shown on that restaurant, which everyone sees — a number,
   never your name.</li>
+  <li><strong>A notification code for your phone</strong> — so we can tell you
+  when somebody invites you to a plan, asks to join one of yours, or lets you
+  in. It identifies the app on this device, not you personally, and it is
+  deleted when you sign out or delete your account. If you say no to
+  notifications, there is nothing to store.</li>
   <li><strong>Crash and error reports</strong> — if the app crashes we send
   diagnostic data (device model, OS version, stack trace) to Sentry so we can fix
   it.</li>

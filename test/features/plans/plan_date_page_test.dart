@@ -24,6 +24,14 @@ const PlanDraft _draft = PlanDraft(
   tag: 'Nasi lemak',
 );
 
+/// The screen now has two switches. Each one is found by the row it sits in,
+/// so a test that meant "Bring friends" cannot accidentally flip who can see
+/// the plan.
+Finder _switch(String title) => find.descendant(
+      of: find.widgetWithText(PrefSwitchRow, title),
+      matching: find.byType(PrefSwitch),
+    );
+
 class _Created {
   int? planId;
   bool? withFriends;
@@ -160,9 +168,9 @@ void main() {
       await _pumpPage(tester);
       await _tapDay(tester, 4);
 
-      await tester.ensureVisible(find.byType(PrefSwitch));
+      await tester.ensureVisible(_switch('Bring friends'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(PrefSwitch));
+      await tester.tap(_switch('Bring friends'));
       await tester.pumpAndSettle();
 
       expect(find.text('Kak Ros · Just you'), findsOneWidget);
@@ -310,10 +318,43 @@ void main() {
         'time': '20:00:00',
         'timeLabel': null,
         'withFriends': true,
+        'shared': false,
       });
       expect(created.calls, 1);
       expect(created.withFriends, isTrue);
       expect(created.planId, isNotNull);
+    });
+
+    testWidgets('sharing starts off, and stays off unless it is asked for',
+        (tester) async {
+      // Where you are eating and who with is the most private thing this app
+      // holds (D153): the switch that lets other people see it cannot start
+      // switched on.
+      final (repository, _) = await _pumpPage(tester);
+      await _tapDay(tester, 4);
+
+      final control = tester.widget<PrefSwitch>(_switch('Share with friends'));
+      expect(control.value, isFalse);
+
+      await _lockIn(tester);
+
+      expect(repository.created.single['shared'], isFalse);
+    });
+
+    testWidgets('a plan made with it on is created shared', (tester) async {
+      final (repository, _) = await _pumpPage(tester);
+      await _tapDay(tester, 4);
+
+      await tester.ensureVisible(_switch('Share with friends'));
+      await tester.pumpAndSettle();
+      await tester.tap(_switch('Share with friends'));
+      await tester.pumpAndSettle();
+
+      await _lockIn(tester);
+
+      expect(repository.created.single['shared'], isTrue);
+      // The other switch is a different question and must not have moved.
+      expect(repository.created.single['withFriends'], isTrue);
     });
 
     testWidgets(
@@ -323,9 +364,9 @@ void main() {
       await _tapDay(tester, 12);
 
       await _tapSlot(tester, 'Late');
-      await tester.ensureVisible(find.byType(PrefSwitch));
+      await tester.ensureVisible(_switch('Bring friends'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(PrefSwitch));
+      await tester.tap(_switch('Bring friends'));
       await tester.pumpAndSettle();
 
       await _lockIn(tester);
@@ -336,6 +377,7 @@ void main() {
         'time': null,
         'timeLabel': 'late',
         'withFriends': false,
+        'shared': false,
       });
       expect(created.withFriends, isFalse);
     });

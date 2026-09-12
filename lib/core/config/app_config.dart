@@ -45,6 +45,36 @@ class AppConfig {
   static const bool guestBrowsingEnabled =
       bool.fromEnvironment('GUEST_BROWSING_ENABLED');
 
+  /// Firebase, for push. Five values off the console's app registration —
+  /// there is no `google-services.json` or `GoogleService-Info.plist` in this
+  /// repo, and no gradle plugin: the options are handed to `Firebase
+  /// .initializeApp` explicitly, so a build made without them has no Firebase
+  /// at all rather than a half-configured one.
+  static const String firebaseApiKey =
+      String.fromEnvironment('FIREBASE_API_KEY');
+
+  static const String firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
+
+  static const String firebaseProjectId =
+      String.fromEnvironment('FIREBASE_PROJECT_ID');
+
+  static const String firebaseSenderId =
+      String.fromEnvironment('FIREBASE_SENDER_ID');
+
+  /// iOS only, and not part of [hasPush]: an Android build has no bundle id to
+  /// pass and would be refused push for want of a value it cannot have.
+  static const String firebaseIosBundleId =
+      String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID');
+
+  /// Whether this build can be pushed to. False for every test and every local
+  /// run, which is what keeps the whole feature inert until the owner has done
+  /// the console setup (D155) — the same shape as [hasGoogleSignIn].
+  static bool get hasPush =>
+      firebaseApiKey.isNotEmpty &&
+      firebaseAppId.isNotEmpty &&
+      firebaseProjectId.isNotEmpty &&
+      firebaseSenderId.isNotEmpty;
+
   /// Sentry's ingest URL for this project. Not defaulted: a build made without
   /// it — every local run and every test — reports nothing at all rather than
   /// filling a project with noise from developer machines.

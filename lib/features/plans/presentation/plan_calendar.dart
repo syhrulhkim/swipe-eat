@@ -8,13 +8,16 @@ import '../domain/plan_labels.dart';
 /// pip for every person involved.
 ///
 /// Ember pips are plans created by the current user; cream pips are friends
-/// invited to those plans. The prototype draws them in two colours so a day
-/// reads at a glance as "mine", "theirs" or "both".
+/// invited to those plans; a muted pip is a friend's own shared plan on that
+/// day (D153). The prototype draws them in two colours so a day reads at a
+/// glance as "mine", "theirs" or "both"; the third is the quietest of them
+/// because it is the one nobody has committed to.
 class PlanDayMark {
   const PlanDayMark({
     this.coverUrl,
     this.planCount = 1,
     this.friendCount = 0,
+    this.friendPlanCount = 0,
     this.initials = '',
   });
 
@@ -28,6 +31,10 @@ class PlanDayMark {
   /// How many friends are involved in plans on this day. One cream pip each,
   /// sharing the same three-pip cap.
   final int friendCount;
+
+  /// How many of your friends' own shared plans fall on this day. A day that
+  /// has only these carries no ring and no cover — it is not your evening.
+  final int friendPlanCount;
 
   /// Drawn inside the ring when there is no cover photo, so a planned day
   /// still says *which* place rather than showing an empty hole.
@@ -204,7 +211,9 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final planned = mark != null;
+    // A day carrying nothing but a friend's plan is not a day you have booked:
+    // no ring, no cover, no "1 plan" in the announcement. Only the pip.
+    final planned = (mark?.planCount ?? 0) > 0;
 
     // Orange means chosen or actionable, in that order: a selected day wins
     // over today's cream disc, and today's disc wins over a plan's ring —
@@ -268,7 +277,8 @@ class _DayCell extends StatelessWidget {
 
     final mePips = mark?.planCount ?? 0;
     final friendPips = mark?.friendCount ?? 0;
-    final totalPips = mePips + friendPips;
+    final friendPlanPips = mark?.friendPlanCount ?? 0;
+    final totalPips = mePips + friendPips + friendPlanPips;
 
     Widget cell = SizedBox(
       height: _cellHeight,
@@ -288,7 +298,13 @@ class _DayCell extends StatelessWidget {
                           i < (totalPips > 3 ? 3 : totalPips);
                           i++) ...[
                         if (i > 0) const SizedBox(width: 2),
-                        _Dot(color: i < mePips ? kAccentEmber : kCreamMuted),
+                        _Dot(
+                          color: i < mePips
+                              ? kAccentEmber
+                              : i < mePips + friendPips
+                                  ? kCreamMuted
+                                  : kTextOnPhotoMuted,
+                        ),
                       ],
                     ],
                   )
@@ -335,7 +351,7 @@ class _DayCell extends StatelessWidget {
     final parts = <String>[
       '${weekdayShort(date)} ${date.day} ${shortMonth(date)}',
       if (isToday) 'today',
-      if (mark != null) planCount(mark!.planCount),
+      if ((mark?.planCount ?? 0) > 0) planCount(mark!.planCount),
       if (onTap == null && isPast) 'past',
     ];
     return parts.join(', ');
