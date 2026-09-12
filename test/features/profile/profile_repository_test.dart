@@ -104,6 +104,12 @@ void main() {
       // Omitting `p_budget_max` would read as "keep the old cap", which is the
       // opposite of what moving the range to "RM 10 and up" means.
       expect(fake.single.json, {'p_budget_min': 10, 'p_budget_max': null});
+
+      // And `clearBudget` is the only way back to "Any" — a null pair on its
+      // own is indistinguishable from "leave it alone".
+      fake.calls.clear();
+      await repository.updatePreferences(spiceLevel: 3, clearBudget: true);
+      expect(fake.single.json, {'p_spice_level': 3, 'p_clear_budget': true});
     });
 
     test('the discovery sheet overwrites all three filters every time',
