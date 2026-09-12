@@ -49,6 +49,13 @@ dependencies:
   # list is never held past the call — see `ContactsReader` (D122). Reached
   # only through an injected typedef, so no test touches the platform channel.
   flutter_contacts: ^2.3.1
+  # Push, for plan invites and join requests. Configured from five
+  # `--dart-define`s rather than a google-services file, so a build made
+  # without them starts no Firebase at all (D155); `firebase_messaging` is
+  # reached only through the `PushMessaging` seam, so no test touches the
+  # channel.
+  firebase_core: ^4.14.0
+  firebase_messaging: ^16.6.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

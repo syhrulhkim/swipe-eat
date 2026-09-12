@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/swipe_eat_app.dart';
 import 'core/config/app_config.dart';
 import 'core/observability/crash_reporting.dart';
+import 'core/push/push_service.dart';
 import 'dev/calendar_dev_data.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/state/auth_controller.dart';
@@ -35,11 +37,61 @@ Future<void> _startApp() async {
     );
   }
 
-  final controller = AuthController(AuthRepository());
+  // Null on every build made without the five Firebase defines — every test,
+  // every local run — so nothing below it exists either (D155).
+  final push = await _startPush();
+
+  final controller = AuthController(
+    AuthRepository(beforeSignOut: push?.service.forgetDevice),
+  );
   // Not awaited: the controller starts in AuthStatus.unknown and the router
   // holds on the splash route until it resolves, so the first frame paints
   // immediately instead of after a network round trip.
   unawaited(controller.bootstrap());
 
-  runApp(SwipeEatApp(authController: controller));
+  runApp(
+    SwipeEatApp(authController: controller, pushRoute: push?.route),
+  );
+}
+
+/// Brings Firebase up and starts listening, or returns null when this build
+/// has no push.
+///
+/// A failure here is survivable: the app's own job is dinner, and a phone that
+/// cannot register for notifications should still open.
+Future<({PushService service, ValueNotifier<String?> route})?>
+    _startPush() async {
+  if (!AppConfig.hasPush) {
+    return null;
+  }
+
+  try {
+    await Firebase.initializeApp(
+      options: FirebaseOptions(
+        apiKey: AppConfig.firebaseApiKey,
+        appId: AppConfig.firebaseAppId,
+        projectId: AppConfig.firebaseProjectId,
+        messagingSenderId: AppConfig.firebaseSenderId,
+        // Null rather than empty on an Android-only build: an empty string is
+        // a bundle id that matches nothing, and this field has no meaning off
+        // iOS.
+        iosBundleId: AppConfig.firebaseIosBundleId.isEmpty
+            ? null
+            : AppConfig.firebaseIosBundleId,
+      ),
+    );
+
+    final route = ValueNotifier<String?>(null);
+    final service = PushService(
+      messaging: FirebaseMessagingAdapter(),
+      route: route,
+    );
+    // Not awaited: it asks the OS for permission, and the first frame must not
+    // wait behind a system prompt.
+    unawaited(service.start());
+    return (service: service, route: route);
+  } on Object catch (error) {
+    debugPrint('Push could not start: $error');
+    return null;
+  }
 }

@@ -225,6 +225,12 @@ The output lands in `build/app/outputs/bundle/release/app-release.aab` and
   **Reviews (D147)** are the app's first user-written content that leaves its
   author. They are shown to the author's friends under their name, and their
   stars feed a public average that carries no name.
+  **Device ID (D155):** a build made with the Firebase defines registers a push
+  token and stores it in `push_tokens` against the account, so an invite or a
+  request to join can reach the phone. Declare *Device or other IDs*, collected
+  and linked, for app functionality — never for advertising. It is deleted on
+  sign-out and cascades with the account. A build made without the defines has
+  no token and nothing to declare here.
 - **Phone number** — declare it if `PHONE_AUTH_ENABLED` is on for the build you
   upload. It is off by default (D113), in which case there is nothing to
   declare.
@@ -249,6 +255,12 @@ The output lands in `build/app/outputs/bundle/release/app-release.aab` and
   (D148): only an irreversible hash leaves the device and the server keeps
   nothing, but it is declared as collected rather than argued out of scope,
   because the alternative is a rejection over a judgement call.
+- **Notifications** — a push build asks on first launch (iOS) and declares
+  `POST_NOTIFICATIONS` (Android 13+). A refusal costs the notifications and
+  nothing else, which the reviewer must be able to see. FCM needs no new
+  `Info.plist` key; it does need **Push Notifications** and background remote
+  notifications enabled on the App ID and in Xcode, which is the console work
+  named in the first section.
 - **Contacts permission** — `NSContactsUsageDescription` is in `Info.plist` and
   names the reason. The step is skippable and the rest of the app works without
   it; make sure the reviewer can see that.
@@ -279,6 +291,9 @@ Then on a real device, in a release build:
 - Google sign-in and Apple sign-in, after the console work in the first section.
 - Deny the location permission and confirm the app still opens and swipes.
 - Deny the contacts permission in onboarding and confirm the wizard finishes.
+- Deny notifications and confirm sign-in, plans and invites all still work.
+- With two devices: invite the second account to a plan, confirm the banner
+  arrives and opens `/plans/:id`, then sign out and confirm the token is gone.
 - Settings → Account → **Delete account**, then confirm the same email can sign
   up again from scratch. This is the flow both stores check.
 

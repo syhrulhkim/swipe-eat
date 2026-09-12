@@ -32,6 +32,8 @@ call site could replace.
 | `share_plus` | ^13.3.0 | Hands the wishlist to the OS share sheet as plain text |
 | `connectivity_plus` | ^6.1.0 | Tells the autoplay setting whether this is Wi-Fi or somebody's data plan (D146). Reached only through an injected `Stream<bool>`, so no test touches the channel |
 | `flutter_contacts` | ^2.3.1 | Reads phone numbers off the address book for the onboarding friends step. Numbers are normalised and hashed before they leave the device; reached only through an injected typedef, so no test touches the channel |
+| `firebase_core` | ^4.14.0 | Configured from five `--dart-define`s, never a `google-services.json` (D155). Absent from a build made without them |
+| `firebase_messaging` | ^16.6.0 | Push for invites, join requests and acceptances. Reached only through the four-method `PushMessaging` seam, so no test touches the channel |
 | `lottie` | ^3.3.2 | The small bundled vector loops |
 | `sentry_flutter` | ^9.28.0 | Crash reporting, off unless `SENTRY_DSN` is passed |
 | `cupertino_icons` | ^1.0.8 | |

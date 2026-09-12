@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/app_config.dart';
@@ -34,11 +35,19 @@ class AuthRepository {
   AuthRepository({
     SupabaseClient? client,
     OAuthProviderClient? oauth,
+    Future<void> Function()? beforeSignOut,
   })  : _client = client ?? Supabase.instance.client,
-        _oauth = oauth ?? const OAuthProviderClient();
+        _oauth = oauth ?? const OAuthProviderClient(),
+        _beforeSignOut = beforeSignOut;
 
   final SupabaseClient _client;
   final OAuthProviderClient _oauth;
+
+  /// Run on the way out, while the session is still valid — the push token is
+  /// deleted here, because a row in `push_tokens` can only be dropped by the
+  /// user who owns it. A callback rather than a dependency so this class keeps
+  /// knowing nothing about Firebase.
+  final Future<void> Function()? _beforeSignOut;
 
   static const String _profileColumns =
       'id, name, avatar_url, onboarded_at, search_radius_km, last_place_name, '
@@ -194,6 +203,14 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
+    try {
+      await _beforeSignOut?.call();
+    } on Object catch (error) {
+      // Whatever this was, it must not strand somebody in a session they asked
+      // to leave.
+      debugPrint('A pre-sign-out step failed: $error');
+    }
+
     try {
       await _auth.signOut();
     } on AuthException {

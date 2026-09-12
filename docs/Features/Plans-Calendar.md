@@ -163,7 +163,10 @@ warning on `get_ngap_count`.
 
 | Function | Returns | Notes |
 |---|---|---|
-| `create_plan(p_restaurant_id, p_plan_date, p_plan_time, p_time_label, p_with_friends)` | `plans` | Upserts on `(owner_id, restaurant_id, plan_date)`; a cancelled plan comes back as `planned`. |
+| `create_plan(p_restaurant_id, p_plan_date, p_plan_time, p_time_label, p_with_friends, p_shared)` | `plans` | Upserts on `(owner_id, restaurant_id, plan_date)`; a cancelled plan comes back as `planned`. `p_shared` defaults false (D153). |
+| `get_friends_plans(p_from date, p_limit int)` | `table(plan_id, owner_id, owner_name, owner_avatar_url, restaurant_id, restaurant_name, cover_url, plan_date, plan_time, time_label, going_count, going_friends jsonb, asked bool)` | Definer. Shared, uncancelled plans of accepted friends, minus the ones you are already on. |
+| `ask_to_join(p_plan_id, p_today date)` | `void` | Definer. Inserts a `requested` row, or raises `22023` when the plan is not open to the caller. |
+| `answer_join_request(p_plan_id, p_user_id, p_accept)` | `boolean` | The owner's answer. False when the row had already moved. |
 | `mark_plan_kept(p_today date default current_date)` | `integer` | Flips the caller's past `planned` rows to `kept`. Returns how many. |
 | `plan_stats(p_today date default current_date)` | `table(plans_kept int, streak_weeks int)` | The You tab's two figures. |
 
@@ -318,6 +321,11 @@ dashboard only decides where to hang it.
   used to open the restaurant, which was the only thing a plan had to show
   before it had guests — the restaurant is now one tap further in, from the
   plan's own header.
+- **A guest long-presses for the other half of that decision**: "Can't make
+  it", through `answer_plan_invite(false)`, and then a refresh. Cancelling
+  somebody else's plan is an update RLS refuses, and PostgREST reports zero
+  rows changed rather than an error — so the row used to leave the list
+  optimistically, look cancelled, and come back on the next load.
 - Empty: "No plans yet / Bite something, then pick a day." with **Start
   swiping**. The month grid stays — an empty calendar is still a calendar.
 
@@ -353,6 +361,52 @@ costs one `get_plan_votes` and one `get_plan_people`.
   The screen tells owner from guest by looking for its own id in the plan's
   members: RLS only ever hands it a plan you own or belong to, so "not a
   member" and "owner" are the same answer.
+- **The owner also gets** the "Share with friends" switch, an **Invite
+  friends** button through to `/plans/:id/invite` — the route existed and
+  nothing pushed it — and the Requests list. All three sit under the roster,
+  because who is coming is what the screen is for and each of them is an
+  answer to "and who else?".
+- **A plan the calendar has never read** — a push can land on one — re-reads
+  once, guarded by a flag. "That plan is not on your calendar" is also the
+  honest answer for a plan from last month, and a retry loop would hammer the
+  server over it.
+
+## 6b. Sharing a plan, and asking to join one
+
+A plan is private until its owner says otherwise. `plans.shared_with_friends`
+is per plan and **off by default** (D153): where you are eating and who with is
+the most private thing this app holds, and a switch that let other people see
+it would be the wrong one to default on.
+
+- **The switch** is on S4 under "Bring friends", and again on `/plans/:id` for
+  the owner. S4 passes it to `create_plan(p_shared)`; the plan page writes it
+  with an owner `.update`, the same idiom `cancel` uses, and re-reads — `Plan`
+  has no `copyWith` and one existing so a switch can animate a frame earlier
+  would be a production API paying rent for a test.
+- **Friends see it** through `get_friends_plans(p_from, p_limit)`, a definer
+  RPC rather than a third permissive select policy on `plans` — a policy would
+  have widened every other read as well. It returns the owner, the place, the
+  time, how many are going, and the names of the ones **you** know. A stranger
+  on somebody else's plan is a number, never a name.
+- **The Calendar's Friends section** lists them under your own evenings, with a
+  third, quieter pip on the grid. A day that carries nothing but a friend's
+  plan wears no ring and no cover: it is not an evening you have booked.
+- **"Ask to join"** calls `ask_to_join(p_plan_id, p_today)` and then refreshes,
+  so the label flips to **Asked** off the server's answer rather than off a
+  local guess a failed request would leave lying. `p_today` is the *phone's*
+  today, for the same reason `mark_plan_kept` takes one.
+- **A request is not a membership.** `plan_members.status = 'requested'` is not
+  counted as a guest anywhere — not in the card's people line, not in the
+  grid's cream pips, not in "still to vote" — and the plan itself stays
+  invisible to the asker until the owner answers. `/plans/:id` for a plan you
+  have only asked to join says **"Waiting on Aisyah."**, read off the Friends
+  section's row, because that is the only row you are allowed to see.
+- **The owner answers** in a **Requests** list on the plan, Accept / Decline
+  through `answer_join_request`, reusing the same two-button row a guest gets.
+  Accepting moves the row to `going`; inviting somebody who had already asked
+  does the same thing, so there is never a double row.
+- **Notifications** are how anybody learns about any of this — see
+  [Friends.md](Friends.md) §6a. The Calendar does not poll.
 
 ## 7. The dev harness
 
@@ -383,7 +437,6 @@ point: it is a way to look at S6 with a full month on it, not a seed.
 
 ## 8. Out of scope
 
-- Reminders or notifications. A calendar you have to open is still a calendar.
 - Syncing to the phone's own calendar.
 - A plan for a place that is not in the catalogue — that is what the wishlist
   is for.
@@ -393,6 +446,7 @@ point: it is a way to look at S6 with a full month on it, not a seed.
 
 | ID | Decision | Status |
 |---|---|---|
+| D153 | Sharing is **per plan and off by default**, read by a `security definer` RPC rather than a third select policy, and the names it returns are only the caller's own friends. A per-account "friends can see my journey" switch would be one decision covering every evening, including the one you did not want seen; a policy would have widened every other read on `plans`; and a plan's guest list can hold people the caller does not know, whose names are nobody else's to hand out. | locked 2026-09-11 |
 | D123 | The Calendar tab draws its month grid the way the date picker does: `PlanCalendarHeader` + `PlanCalendar` on the page, at the screen padding, with the picker's month arrows. The `SimpleCard` wrapper and the "This month ▾" chip's six-month bottom sheet are removed. One grid used on two screens has to *look* like one grid — the card's border and padding narrowed the columns, and the day discs drew as ellipses on a 320 pt phone while the picker's drew as circles. Arrows also beat a sheet for a tab that only ever looks a few months ahead. | locked 2026-09-10 |
 | D107 | A plan is one owner, one restaurant, one date. The triple is a unique index and the ON CONFLICT target of `create_plan`, so locking the same place in twice on one day moves the time instead of creating a second row. | locked 2026-09-06 |
 | D108 | A past plan is a kept plan unless it was cancelled first. `mark_plan_kept()` flips it server-side on load; there is no "did you go?" prompt, because the calendar records intent and intent that survived to the day counts. | locked 2026-09-06 |

@@ -89,7 +89,11 @@ class _PlanPageState extends State<PlanPage> {
     final plan = _plans.planById(widget.planId);
     if (plan == null && _plans.isLoaded && !_refetched) {
       _refetched = true;
-      unawaited(_plans.refresh());
+      // A microtask late, for the reason `FriendsController.refresh` spells
+      // out: this runs inside a build, the controller is shared, and notifying
+      // from here would ask the Calendar tab — mounted, listening, not an
+      // ancestor — to rebuild in the middle of it, which Flutter refuses.
+      unawaited(Future<void>.microtask(() => _plans.refresh()));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -344,7 +348,11 @@ class _TopBar extends StatelessWidget {
           size: kUtilityButtonSize,
           onPhoto: false,
           semanticLabel: 'Back',
-          onTap: () => Navigator.of(context).maybePop(),
+          // A notification opens this screen by *replacing* the stack, not by
+          // pushing onto it, so there is nothing behind it to pop to and Back
+          // would do nothing at all. The calendar is where the plan lives.
+          onTap: () =>
+              context.canPop() ? context.pop() : context.go('/dashboard'),
         ),
         Expanded(
           child: Text(

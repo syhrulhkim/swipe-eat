@@ -5,6 +5,9 @@
          reads nothing: the permission is only requested when the user taps
          "Find friends from contacts". -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Android 13+. Asked for the first time the app starts with push built
+         in; a refusal costs the notifications and nothing else. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="Swipe Eat"
