@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swipe_eat/core/ui/design_tokens.dart';
+import 'package:swipe_eat/core/ui/progress_dots.dart';
 import 'package:swipe_eat/features/restaurants/data/tiktok_player_factory.dart';
 import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
 import 'package:swipe_eat/features/restaurants/models/restaurant_card.dart';
@@ -18,6 +20,7 @@ RestaurantCard card({
   String? neighbourhood,
   String tag = 'Malay',
   String? videoUrl,
+  List<String> imageUrls = const [],
 }) {
   return RestaurantCard(
     id: 1,
@@ -31,7 +34,7 @@ RestaurantCard card({
     reviewName: '',
     reviewText: '',
     reviews: const [],
-    imageUrls: const [],
+    imageUrls: imageUrls,
     videoUrl: videoUrl,
     hours: hours,
     priceFrom: priceFrom,
@@ -177,7 +180,29 @@ Future<void> pumpBlock(
   );
 }
 
+/// The widths of the dots a [ProgressDots] drew, in order.
+///
+/// Scoped to the row, because the card paints plenty of other boxes, and read
+/// off the constraints rather than the laid-out size, which would include each
+/// dot's own right margin.
+List<double> dotWidths(WidgetTester tester, Type dot) {
+  final dots = find.descendant(
+    of: find.byType(ProgressDots),
+    matching: find.byType(dot),
+  );
+  return tester.widgetList<Widget>(dots).map((widget) {
+    final constraints = widget is AnimatedContainer
+        ? widget.constraints
+        : (widget as Container).constraints;
+    return constraints!.maxWidth;
+  }).toList();
+}
+
 void main() {
+  // Photos are `Image.network`, and flutter_test answers every request with a
+  // 400 unless this is installed (D72).
+  setUpAll(() => HttpOverrides.global = ImageHttpOverrides());
+
   group('RestaurantInfoBlock', () {
     testWidgets('shows the open chip, cuisine and halal when known',
         (tester) async {
@@ -527,6 +552,68 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(Image), findsNothing);
       expect(find.text('Warung Kak Ros'), findsOneWidget);
+    });
+  });
+
+  group('ProgressDots', () {
+    testWidgets('two photos put two dots on the card, the first one wide',
+        (tester) async {
+      await pumpCard(
+        tester,
+        card(imageUrls: const [
+          'https://example.test/1.jpg',
+          'https://example.test/2.jpg',
+        ]),
+      );
+
+      expect(find.byType(ProgressDots), findsOneWidget);
+      expect(dotWidths(tester, AnimatedContainer), [18, 6]);
+    });
+
+    testWidgets('one photo needs no dots at all', (tester) async {
+      await pumpCard(
+        tester,
+        card(imageUrls: const ['https://example.test/1.jpg']),
+      );
+
+      expect(find.byType(ProgressDots), findsNothing);
+    });
+
+    testWidgets('a card showing a clip counts no photos', (tester) async {
+      // The dots mark position among the photos; while the clip is playing
+      // there is nothing to be positioned in.
+      await pumpCard(
+        tester,
+        card(
+          videoUrl: 'https://tiktok.test/v/1',
+          imageUrls: const [
+            'https://example.test/1.jpg',
+            'https://example.test/2.jpg',
+          ],
+        ),
+      );
+
+      expect(find.byType(ProgressDots), findsNothing);
+    });
+
+    testWidgets('the review row draws fatter, unanimated dots',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(child: ProgressDots(count: 3, activeIndex: 1)),
+          ),
+        ),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byType(ProgressDots),
+          matching: find.byType(AnimatedContainer),
+        ),
+        findsNothing,
+      );
+      expect(dotWidths(tester, Container), [5, 14, 5]);
     });
   });
 }

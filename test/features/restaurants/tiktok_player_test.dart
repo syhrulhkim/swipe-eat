@@ -28,6 +28,32 @@ void main() {
     });
   });
 
+  group('isTikTokPlayerNavigation', () {
+    // The player carries links out to the app, the creator's profile and ads.
+    // Whatever the page asks for, only TikTok's own hosts — plus the blank
+    // page an evicted player is parked on — may be followed.
+    const allowed = <String, bool>{
+      'https://www.tiktok.com/x': true,
+      'https://evil.com': false,
+      'http://tiktok.com.evil.com': false,
+      'about:blank': true,
+      'javascript:alert(1)': false,
+      'not a url': false,
+    };
+
+    test('follows TikTok and the blank page, and nothing else', () {
+      allowed.forEach((url, mayFollow) {
+        expect(isTikTokPlayerNavigation(url), mayFollow, reason: url);
+      });
+    });
+
+    test('a subdomain is TikTok, a suffix of the name is not', () {
+      expect(isTikTokPlayerNavigation('https://TikTok.com/@warung'), isTrue);
+      expect(isTikTokPlayerNavigation('https://m.tiktok.com/v/1'), isTrue);
+      expect(isTikTokPlayerNavigation('https://nottiktok.com/v/1'), isFalse);
+    });
+  });
+
   group('tikTokFramingScale', () {
     // A phone-sized card: 360 x 620, a touch wider than 9:16.
     const card = BoxConstraints.tightFor(width: 360, height: 620);
