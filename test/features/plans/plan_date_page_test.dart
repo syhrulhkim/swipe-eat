@@ -1,19 +1,23 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swipe_eat/core/location/user_location.dart';
+import 'package:swipe_eat/features/friends/presentation/invite_page.dart';
+import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/plans/presentation/plan_date_page.dart';
-import 'package:swipe_eat/features/profile/presentation/preference_controls.dart';
 import 'package:swipe_eat/features/plans/state/plans_controller.dart';
+import 'package:swipe_eat/features/restaurants/domain/opening_hours.dart';
 
 import '../../support/widget_test_support.dart';
+import '../friends/fake_friends_repository.dart';
 import 'fake_plans_repository.dart';
 
 const Size _phoneViewport = Size(390, 844);
 const Size _narrowViewport = Size(320, 568);
 
-/// The Wednesday the prototype's calendar is drawn on.
+/// The Wednesday the prototype's sheet is drawn on. The week strip therefore
+/// runs Wed 2 September to Tue 8 September.
 final DateTime _now = DateTime(2026, 9, 2, 11);
 
 const PlanDraft _draft = PlanDraft(
@@ -24,38 +28,39 @@ const PlanDraft _draft = PlanDraft(
   tag: 'Nasi lemak',
 );
 
-/// The screen now has two switches. Each one is found by the row it sits in,
-/// so a test that meant "Bring friends" cannot accidentally flip who can see
-/// the plan.
-Finder _switch(String title) => find.descendant(
-      of: find.widgetWithText(PrefSwitchRow, title),
-      matching: find.byType(PrefSwitch),
-    );
+class _Harness {
+  _Harness(this.plansRepository, this.friendsRepository);
 
-class _Created {
-  int? planId;
-  bool? withFriends;
-  int calls = 0;
+  final FakePlansRepository plansRepository;
+  final FakeFriendsRepository friendsRepository;
 }
 
-Future<(FakePlansRepository, _Created)> _pumpPage(
+Future<_Harness> _pumpPage(
   WidgetTester tester, {
   FakePlansRepository? repository,
+  FakeFriendsRepository? friendsRepository,
   PlanDraft draft = _draft,
   Size viewport = _phoneViewport,
   TextScaler textScaler = TextScaler.noScaling,
 }) async {
   useViewport(tester, viewport);
+  resetUserPositionCache();
+
   final backing = repository ?? FakePlansRepository();
-  final controller = PlansController(
+  final plans = PlansController(
     repository: backing,
     clock: () => _now,
     followAuthChanges: false,
   );
-  addTearDown(controller.dispose);
-  await controller.ensureLoaded();
+  addTearDown(plans.dispose);
+  await plans.ensureLoaded();
 
-  final created = _Created();
+  final friendsBacking = friendsRepository ?? FakeFriendsRepository();
+  final friends = FriendsController(
+    repository: friendsBacking,
+    followAuthChanges: false,
+  );
+  addTearDown(friends.dispose);
 
   await tester.pumpWidget(
     MaterialApp(
@@ -65,61 +70,29 @@ Future<(FakePlansRepository, _Created)> _pumpPage(
       ),
       home: PlanDatePage(
         draft: draft,
-        controller: controller,
-        onCreated: (context, planId, withFriends) {
-          created
-            ..planId = planId
-            ..withFriends = withFriends
-            ..calls += 1;
-        },
+        controller: plans,
+        friends: friends,
       ),
     ),
   );
   await tester.pumpAndSettle();
 
-  return (backing, created);
+  return _Harness(backing, friendsBacking);
 }
 
-/// Taps a day number in the grid. The number is unique inside one month, so
-/// finding by text is enough.
-Future<void> _tapDay(WidgetTester tester, int day) async {
-  // Scrolled to first: on a 568 pt phone at a doubled text scale the last
-  // week of the month starts below the fold.
-  await tester.ensureVisible(find.text('$day'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('$day'));
+/// Taps a cell in the week strip. The three-letter weekday is unique across
+/// seven consecutive days, and the summary line below spells its own day
+/// inside one longer string, so the short name only ever finds the strip.
+Future<void> _tapWeekday(WidgetTester tester, String weekday) async {
+  await tester.tap(find.text(weekday));
   await tester.pumpAndSettle();
 }
 
-/// Taps a time chip. The design's `.slots` wraps onto a second line, so the
-/// last chips can start below the fold on a short phone.
-Future<void> _tapSlot(WidgetTester tester, String label) async {
+Future<void> _tapChip(WidgetTester tester, String label) async {
   await tester.ensureVisible(find.text(label));
   await tester.pumpAndSettle();
   await tester.tap(find.text(label));
   await tester.pumpAndSettle();
-}
-
-bool _lockInEnabled(WidgetTester tester) {
-  final ink = tester.widget<InkWell>(
-    find
-        .ancestor(of: find.text('Lock it in'), matching: find.byType(InkWell))
-        .first,
-  );
-  return ink.onTap != null;
-}
-
-/// Taps "Lock it in" and lets the request settle.
-///
-/// Not `pumpAndSettle`: a successful save leaves the button spinning until the
-/// route changes, and in a test nothing changes it, so settling would time
-/// out. Fixed frames are enough for a fake that answers on the next
-/// microtask.
-Future<void> _lockIn(WidgetTester tester) async {
-  await tester.tap(find.text('Lock it in'));
-  for (var i = 0; i < 6; i++) {
-    await tester.pump(const Duration(milliseconds: 50));
-  }
 }
 
 void main() {
@@ -127,272 +100,274 @@ void main() {
   tearDownAll(() => HttpOverrides.global = null);
 
   group('PlanDatePage copy', () {
-    testWidgets('asks the question and names the place', (tester) async {
+    testWidgets('asks the question, names the place and counts the step',
+        (tester) async {
       await _pumpPage(tester);
 
       expect(find.text('When are we going?'), findsOneWidget);
-      expect(find.text('Warung Kak Ros'), findsOneWidget);
-      expect(find.text('September 2026'), findsOneWidget);
-      expect(find.text('Time'), findsOneWidget);
-      expect(find.text('Bring friends'), findsOneWidget);
+      expect(find.text('Step 1 of 2'), findsOneWidget);
+      // Twice by design: the peek header names the place, and the summary
+      // card names it again under the answer. With no location fix the
+      // summary drops its "· 1.2 km from you" tail and the two read alike.
+      expect(find.text('Warung Kak Ros'), findsNWidgets(2));
+      expect(find.text('Kepong'), findsOneWidget);
+      expect(find.text('Tonight'), findsOneWidget);
+      expect(find.text('Tomorrow'), findsOneWidget);
+      expect(find.text('This week'), findsOneWidget);
+      expect(find.text('Pick another date ›'), findsOneWidget);
+      expect(find.text("Who's coming"), findsOneWidget);
+      expect(find.text('Just me'), findsOneWidget);
+      expect(find.text('Next · invite friends'), findsOneWidget);
+    });
+
+    testWidgets('the switches the flow depends on are both here',
+        (tester) async {
+      await _pumpPage(tester);
+
+      expect(find.text('Let friends vote on the time'), findsOneWidget);
+      // D153's sharing switch survived the redesign.
+      expect(find.text('Share with friends'), findsOneWidget);
       expect(
-        find.text("Optional — they'll get a vote on the time"),
+        find.text('They can see it on their calendar and ask to join'),
         findsOneWidget,
       );
     });
 
-    testWidgets('the summary waits for a day, then reads the answer back',
+    testWidgets('the time heading names the closing hour when we know it',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        draft: PlanDraft(
+          restaurantId: 306,
+          title: 'Warung Kak Ros',
+          hours: OpeningHours.fromJson(const {
+            'opens_at': '18:00',
+            'closes_at': '02:00',
+          }),
+        ),
+      );
+
+      expect(find.text('Time · they close at 2 am'), findsOneWidget);
+    });
+
+    testWidgets('and says only "Time" when the hours are unknown',
         (tester) async {
       await _pumpPage(tester);
 
-      expect(find.text('Pick a day'), findsOneWidget);
-      expect(find.text('Kak Ros · With friends'), findsOneWidget);
-
-      await _tapDay(tester, 4);
-
-      expect(find.text('Pick a day'), findsNothing);
-      expect(find.text('Fri 4 Sep · 20:00'), findsOneWidget);
-    });
-
-    testWidgets('the summary follows the time chip', (tester) async {
-      await _pumpPage(tester);
-      await _tapDay(tester, 4);
-
-      await _tapSlot(tester, 'Late');
-
-      expect(find.text('Fri 4 Sep · Late'), findsOneWidget);
-    });
-
-    testWidgets('the summary reads "Just you" when the friend switch is off',
-        (tester) async {
-      await _pumpPage(tester);
-      await _tapDay(tester, 4);
-
-      await tester.ensureVisible(_switch('Bring friends'));
-      await tester.pumpAndSettle();
-      await tester.tap(_switch('Bring friends'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Kak Ros · Just you'), findsOneWidget);
+      expect(find.text('Time'), findsOneWidget);
+      expect(find.textContaining('they close at'), findsNothing);
     });
   });
 
-  group('PlanDatePage day grid', () {
-    testWidgets('Lock it in waits for a day', (tester) async {
-      await _pumpPage(tester);
-
-      expect(_lockInEnabled(tester), isFalse);
-
-      await _tapDay(tester, 4);
-
-      expect(_lockInEnabled(tester), isTrue);
-      // The label never becomes a count; the design has none.
-      expect(find.text('Lock it in'), findsOneWidget);
-    });
-
-    testWidgets('a day that has passed cannot be chosen', (tester) async {
-      final handle = tester.ensureSemantics();
-      await _pumpPage(tester);
-
-      // The 1st is yesterday: no tap action on the node, and driving the
-      // widget itself changes nothing either.
-      final node = tester.getSemantics(find.text('1'));
-      expect(node.label, 'Tue 1 Sep, past');
-      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
-
-      await tester.ensureVisible(find.text('1'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('1'), warnIfMissed: false);
-      await tester.pumpAndSettle();
-      expect(_lockInEnabled(tester), isFalse);
-      expect(find.text('Pick a day'), findsOneWidget);
-      handle.dispose();
-    });
-
-    testWidgets('today is marked, and can still be chosen', (tester) async {
-      final handle = tester.ensureSemantics();
-      await _pumpPage(tester);
-
-      expect(tester.getSemantics(find.text('2')).label, contains('today'));
-
-      await _tapDay(tester, 2);
-
-      expect(find.text('Wed 2 Sep · 20:00'), findsOneWidget);
-      handle.dispose();
-    });
-
-    testWidgets('every day cell reads as its own date', (tester) async {
-      final handle = tester.ensureSemantics();
-      await _pumpPage(tester);
-
-      expect(tester.getSemantics(find.text('4')).label, 'Fri 4 Sep');
-      handle.dispose();
-    });
-
-    testWidgets('the whole cell is the target, not just the disc',
+  group('PlanDatePage week strip and quick chips', () {
+    testWidgets('opens on the last day of the strip, under "This week"',
         (tester) async {
       await _pumpPage(tester);
 
-      // The rect of the *cell*, not of the number: `find.text('4')` is about
-      // eight points wide and sits inside the disc, so tapping just outside it
-      // would still land on the disc and prove nothing.
-      final cell = tester.getRect(find.bySemanticsLabel('Fri 4 Sep'));
-      // A finger landing in the gutter beside the 36 pt disc must still choose
-      // the day.
-      await tester.tapAt(Offset(cell.left + 1, cell.center.dy));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Fri 4 Sep · 20:00'), findsOneWidget);
+      expect(find.text('Tue 8 · 8:00 pm · just you'), findsOneWidget);
     });
 
-    testWidgets('there is no way back past the month you are standing in',
+    testWidgets('Tonight takes the first day, Tomorrow the second',
         (tester) async {
       await _pumpPage(tester);
 
-      // Absent, not merely dead: there is no plan to be made in a week that
-      // has already happened.
-      expect(find.bySemanticsLabel('Previous month'), findsNothing);
+      await _tapChip(tester, 'Tonight');
+      expect(find.text('Wed 2 · 8:00 pm · just you'), findsOneWidget);
 
-      await tester.tap(find.bySemanticsLabel('Next month'));
+      await _tapChip(tester, 'Tomorrow');
+      expect(find.text('Thu 3 · 8:00 pm · just you'), findsOneWidget);
+
+      await _tapChip(tester, 'This week');
+      expect(find.text('Tue 8 · 8:00 pm · just you'), findsOneWidget);
+    });
+
+    testWidgets('a day off the strip presses "This week" — unless it is today',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpPage(tester);
+
+      await _tapWeekday(tester, 'Fri');
+      expect(find.text('Fri 4 · 8:00 pm · just you'), findsOneWidget);
+      expect(tester.getSemantics(find.text('This week')).label, 'This week');
+
+      // The mockup's own exception: today is "Tonight", not "This week".
+      await _tapWeekday(tester, 'Wed');
+      expect(find.text('Wed 2 · 8:00 pm · just you'), findsOneWidget);
+      expect(tester.getSemantics(find.text('Tonight')).label, 'Tonight');
+      handle.dispose();
+    });
+
+    testWidgets('a day you already have a plan on says so', (tester) async {
+      final handle = tester.ensureSemantics();
+      // Friday the 4th is spoken for.
+      await _pumpPage(
+        tester,
+        repository:
+            FakePlansRepository(rows: [testPlan(77, date: DateTime(2026, 9, 4))]),
+      );
+
+      expect(
+        tester.getSemantics(find.text('Fri')).label,
+        contains('you have a plan'),
+      );
+      expect(
+        tester.getSemantics(find.text('Sat')).label,
+        isNot(contains('you have a plan')),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('today is marked as today', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpPage(tester);
+
+      expect(tester.getSemantics(find.text('Wed')).label, contains('today'));
+      handle.dispose();
+    });
+
+    testWidgets('the full calendar is one tap away and answers back',
+        (tester) async {
+      await _pumpPage(tester);
+
+      await tester.tap(find.text('Pick another date ›'));
       await tester.pumpAndSettle();
-
-      expect(find.text('October 2026'), findsOneWidget);
-      expect(find.bySemanticsLabel('Previous month'), findsOneWidget);
-
-      await tester.tap(find.bySemanticsLabel('Previous month'));
-      await tester.pumpAndSettle();
-
       expect(find.text('September 2026'), findsOneWidget);
-    });
 
-    testWidgets('a day in another month keeps its month in the summary',
-        (tester) async {
-      await _pumpPage(tester);
-
-      await tester.tap(find.bySemanticsLabel('Next month'));
+      // The 20th is outside the seven days on offer.
+      await tester.tap(find.text('20'));
       await tester.pumpAndSettle();
-      await _tapDay(tester, 10);
 
-      expect(find.text('Sat 10 Oct · 20:00'), findsOneWidget);
+      expect(find.text('Sun 20 · 8:00 pm · just you'), findsOneWidget);
     });
   });
 
   group('PlanDatePage time chips', () {
-    testWidgets('all five are offered, one at a time', (tester) async {
+    testWidgets('the design\'s four are offered, one at a time', (tester) async {
       await _pumpPage(tester);
 
-      for (final label in ['12:30', '18:30', '20:00', '21:30', 'Late']) {
+      for (final label in ['6:30', '8:00', '9:30', 'Late']) {
         expect(find.text(label), findsOneWidget);
       }
 
-      await _tapDay(tester, 4);
-      await _tapSlot(tester, '12:30');
-      expect(find.text('Fri 4 Sep · 12:30'), findsOneWidget);
+      await _tapChip(tester, 'Late');
+      expect(find.text('Tue 8 · late · just you'), findsOneWidget);
 
-      await _tapSlot(tester, '18:30');
-      expect(find.text('Fri 4 Sep · 18:30'), findsOneWidget);
-      expect(find.text('Fri 4 Sep · 12:30'), findsNothing);
+      await _tapChip(tester, '6:30');
+      expect(find.text('Tue 8 · 6:30 pm · just you'), findsOneWidget);
     });
 
     testWidgets('tapping the pressed chip does not clear it', (tester) async {
       await _pumpPage(tester);
-      await _tapDay(tester, 4);
 
-      await _tapSlot(tester, '20:00');
+      await _tapChip(tester, '8:00');
 
-      expect(find.text('Fri 4 Sep · 20:00'), findsOneWidget);
+      expect(find.text('Tue 8 · 8:00 pm · just you'), findsOneWidget);
     });
   });
 
-  group('PlanDatePage locking in', () {
-    testWidgets('creates the plan with the day, the time and the switch',
+  group('PlanDatePage who is coming', () {
+    testWidgets('starts with the friends who already ngap\'d the place',
         (tester) async {
-      final (repository, created) = await _pumpPage(tester);
-      await _tapDay(tester, 4);
+      await _pumpPage(
+        tester,
+        friendsRepository: FakeFriendsRepository(
+          friends: [
+            testFriend('u1', name: 'Aiman Zulkifli'),
+            testFriend('u2', name: 'Mei Kee Tan'),
+          ],
+          liked: [
+            testFriend('u1', name: 'Aiman Zulkifli'),
+            testFriend('u2', name: 'Mei Kee Tan'),
+          ],
+        ),
+      );
 
-      await _lockIn(tester);
-
-      expect(repository.created.single, {
-        'restaurantId': 306,
-        'date': '2026-09-04',
-        'time': '20:00:00',
-        'timeLabel': null,
-        'withFriends': true,
-        'shared': false,
-      });
-      expect(created.calls, 1);
-      expect(created.withFriends, isTrue);
-      expect(created.planId, isNotNull);
+      // "Mei", not the prototype's "Mei Kee": firstName() takes the first
+      // word of a name, which is the convention every other screen uses.
+      expect(find.text('Aiman, Mei'), findsOneWidget);
+      expect(find.text("Aiman and Mei ngap'd this"), findsOneWidget);
+      expect(find.text('Tue 8 · 8:00 pm · 2 friends'), findsOneWidget);
     });
 
-    testWidgets('sharing starts off, and stays off unless it is asked for',
+    testWidgets('"Just me" flips the label and empties the tail',
         (tester) async {
-      // Where you are eating and who with is the most private thing this app
-      // holds (D153): the switch that lets other people see it cannot start
-      // switched on.
-      final (repository, _) = await _pumpPage(tester);
-      await _tapDay(tester, 4);
+      await _pumpPage(
+        tester,
+        friendsRepository: FakeFriendsRepository(
+          friends: [testFriend('u1', name: 'Aiman Zulkifli')],
+          liked: [testFriend('u1', name: 'Aiman Zulkifli')],
+        ),
+      );
+      expect(find.text('Tue 8 · 8:00 pm · 1 friend'), findsOneWidget);
 
-      final control = tester.widget<PrefSwitch>(_switch('Share with friends'));
-      expect(control.value, isFalse);
+      // The row sits below the fold on this viewport, so it has to be
+      // scrolled to before it can be tapped.
+      await tester.ensureVisible(find.text('Just me'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Just me'));
+      await tester.pumpAndSettle();
 
-      await _lockIn(tester);
+      expect(find.text('Add friends back'), findsOneWidget);
+      expect(find.text('Just me'), findsNothing);
+      expect(find.text('Tue 8 · 8:00 pm · just you'), findsOneWidget);
 
-      expect(repository.created.single['shared'], isFalse);
+      await tester.ensureVisible(find.text('Add friends back'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add friends back'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tue 8 · 8:00 pm · 1 friend'), findsOneWidget);
+    });
+  });
+
+  group('PlanDatePage saves nothing', () {
+    testWidgets('"Next" opens step two and writes no plan', (tester) async {
+      final harness = await _pumpPage(tester);
+
+      await tester.tap(find.text('Next · invite friends'));
+      await tester.pumpAndSettle();
+
+      // The whole point of the redesign: step one is a question, not a save.
+      expect(harness.plansRepository.created, isEmpty);
+      expect(find.byType(InvitePage), findsOneWidget);
+      expect(find.text("Who's hungry?"), findsOneWidget);
+      expect(find.text('Step 2 of 2'), findsOneWidget);
+      // Step two's peek reads back what step one collected.
+      expect(find.text('Tue 8 · 8:00 pm'), findsOneWidget);
     });
 
-    testWidgets('a plan made with it on is created shared', (tester) async {
-      final (repository, _) = await _pumpPage(tester);
-      await _tapDay(tester, 4);
-
-      await tester.ensureVisible(_switch('Share with friends'));
-      await tester.pumpAndSettle();
-      await tester.tap(_switch('Share with friends'));
-      await tester.pumpAndSettle();
-
-      await _lockIn(tester);
-
-      expect(repository.created.single['shared'], isTrue);
-      // The other switch is a different question and must not have moved.
-      expect(repository.created.single['withFriends'], isTrue);
-    });
-
-    testWidgets(
-        'Late posts a label rather than a time, and the switch can be '
-        'turned off', (tester) async {
-      final (repository, created) = await _pumpPage(tester);
-      await _tapDay(tester, 12);
-
-      await _tapSlot(tester, 'Late');
-      await tester.ensureVisible(_switch('Bring friends'));
-      await tester.pumpAndSettle();
-      await tester.tap(_switch('Bring friends'));
-      await tester.pumpAndSettle();
-
-      await _lockIn(tester);
-
-      expect(repository.created.single, {
-        'restaurantId': 306,
-        'date': '2026-09-12',
-        'time': null,
-        'timeLabel': 'late',
-        'withFriends': false,
-        'shared': false,
-      });
-      expect(created.withFriends, isFalse);
-    });
-
-    testWidgets('a refused save says so and leaves the screen usable',
+    testWidgets('the "+" beside the faces opens the same step',
         (tester) async {
-      final repository = FakePlansRepository()..failCreate = StateError('down');
-      final (_, created) = await _pumpPage(tester, repository: repository);
-      await _tapDay(tester, 4);
+      final harness = await _pumpPage(tester);
 
-      await _lockIn(tester);
+      await tester.tap(find.bySemanticsLabel('Add friends'));
+      await tester.pumpAndSettle();
 
-      expect(created.calls, 0);
-      expect(find.text('Could not save that plan.'), findsOneWidget);
-      expect(_lockInEnabled(tester), isTrue);
+      expect(harness.plansRepository.created, isEmpty);
+      expect(find.byType(InvitePage), findsOneWidget);
+    });
+
+    testWidgets('coming back from step two keeps what was ticked there',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        friendsRepository: FakeFriendsRepository(
+          friends: [
+            testFriend('u1', name: 'Aiman Zulkifli'),
+            testFriend('u2', name: 'Mei Kee Tan'),
+          ],
+        ),
+      );
+      expect(find.text('Tue 8 · 8:00 pm · just you'), findsOneWidget);
+
+      await tester.tap(find.text('Next · invite friends'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aiman Zulkifli'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tue 8 · 8:00 pm · 1 friend'), findsOneWidget);
     });
   });
 
@@ -404,11 +379,16 @@ void main() {
         'coverUrl': 'https://example.test/cover.jpg',
         'neighbourhood': 'Kepong',
         'tag': 'Nasi lemak',
+        'latitude': 3.17,
+        'longitude': 101.7,
+        'hours': <String, dynamic>{'opens_at': '18:00', 'closes_at': '02:00'},
       });
 
       expect(draft?.restaurantId, 306);
       expect(draft?.title, 'Warung Kak Ros');
       expect(draft?.shortName, 'Kak Ros');
+      expect(draft?.latitude, 3.17);
+      expect(draft?.hours.closesAtMinutes, 120);
     });
 
     test('takes an id that arrived as text, and survives a thin payload', () {
@@ -417,10 +397,11 @@ void main() {
             ?.restaurantId,
         306,
       );
-      expect(
-        PlanDraft.fromPayload(<String, dynamic>{'restaurantId': 306})?.title,
-        'A place',
-      );
+      final thin = PlanDraft.fromPayload(<String, dynamic>{'restaurantId': 306});
+      expect(thin?.title, 'A place');
+      // No coordinates and no hours: both are dropped, never guessed.
+      expect(thin?.hours.isKnown, isFalse);
+      expect(thin?.distanceFrom(null), isNull);
     });
 
     test('refuses a payload with no restaurant in it', () {
@@ -442,21 +423,22 @@ void main() {
 
       expect(tester.takeException(), isNull);
 
-      await _tapDay(tester, 4);
+      await _tapWeekday(tester, 'Fri');
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('and is still usable there', (tester) async {
-      final (repository, _) = await _pumpPage(
+      final harness = await _pumpPage(
         tester,
         viewport: _narrowViewport,
         textScaler: const TextScaler.linear(2),
       );
 
-      await _tapDay(tester, 4);
-      await _lockIn(tester);
+      await tester.tap(find.text('Next · invite friends'));
+      await tester.pumpAndSettle();
 
-      expect(repository.created, hasLength(1));
+      expect(harness.plansRepository.created, isEmpty);
+      expect(find.byType(InvitePage), findsOneWidget);
     });
   });
 }

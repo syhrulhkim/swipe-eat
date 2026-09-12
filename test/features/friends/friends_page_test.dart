@@ -7,18 +7,29 @@ import 'package:swipe_eat/features/friends/presentation/friends_page.dart';
 import 'package:swipe_eat/features/friends/presentation/person_row.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_steps.dart';
+import 'package:swipe_eat/features/dashboard/state/dashboard_tab_request.dart';
+import 'package:swipe_eat/features/plans/models/plan.dart';
+import 'package:swipe_eat/features/plans/state/plans_controller.dart';
 
 import '../../support/widget_test_support.dart';
+import '../plans/fake_plans_repository.dart';
 import 'fake_friends_repository.dart';
 
 const Size _phoneViewport = Size(390, 844);
 const Size _narrowViewport = Size(320, 568);
 
+/// The day the clock is pinned to, so "Fri 18" is a fact rather than a guess.
+final DateTime _today = DateTime(2026, 9, 15, 12);
+
 class _Harness {
-  _Harness(this.repository, this.controller);
+  _Harness(this.repository, this.controller, this.tabs, this.shared);
 
   final FakeFriendsRepository repository;
   final FriendsController controller;
+  final DashboardTabRequest tabs;
+
+  /// Every text the invite button handed to the share sheet.
+  final List<String> shared;
 }
 
 /// The address book the design's "Friends · 38" implies: one person waiting on
@@ -42,6 +53,7 @@ Future<_Harness> _pumpPage(
   Size viewport = _phoneViewport,
   TextScaler textScaler = TextScaler.noScaling,
   Future<List<String>> Function()? readContacts,
+  List<Plan> plans = const [],
 }) async {
   useViewport(tester, viewport);
   final backing = repository ?? _fullBook();
@@ -51,18 +63,35 @@ Future<_Harness> _pumpPage(
   );
   addTearDown(controller.dispose);
 
+  final planning = PlansController(
+    repository: FakePlansRepository(rows: plans),
+    clock: () => _today,
+    followAuthChanges: false,
+  );
+  addTearDown(planning.dispose);
+
+  final tabs = DashboardTabRequest();
+  addTearDown(tabs.dispose);
+  final shared = <String>[];
+
   await tester.pumpWidget(
     MaterialApp(
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(textScaler: textScaler),
         child: child!,
       ),
-      home: FriendsPage(friends: controller, readContacts: readContacts),
+      home: FriendsPage(
+        friends: controller,
+        plans: planning,
+        readContacts: readContacts,
+        tabRequests: tabs,
+        onShare: (text) async => shared.add(text),
+      ),
     ),
   );
   await tester.pumpAndSettle();
 
-  return _Harness(backing, controller);
+  return _Harness(backing, controller, tabs, shared);
 }
 
 void main() {
@@ -73,10 +102,10 @@ void main() {
     testWidgets('the row is there whether or not anybody is', (tester) async {
       await _pumpPage(tester, repository: FakeFriendsRepository());
 
-      // The empty state used to imply names only ever arrive on their own.
-      expect(find.text('Find friends from contacts'), findsOneWidget);
+      // The design puts adding somebody in the bar, not in a row of its own.
+      expect(find.bySemanticsLabel('Add friend'), findsOneWidget);
       expect(
-        find.textContaining('Check your contacts above'),
+        find.textContaining('Add somebody with the button above'),
         findsOneWidget,
       );
     });
@@ -94,9 +123,9 @@ void main() {
         readContacts: () async => ['+60123456789', '0111234567'],
       );
 
-      await tester.tap(find.text('Find friends from contacts'));
+      await tester.tap(find.bySemanticsLabel('Add friend'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Find friends from contacts').last);
+      await tester.tap(find.text('Find friends from contacts'));
       await tester.pumpAndSettle();
 
       expect(find.text('Hafiz Omar'), findsOneWidget);
@@ -130,9 +159,9 @@ void main() {
         readContacts: () async => ['+60123456789'],
       );
 
-      await tester.tap(find.text('Find friends from contacts'));
+      await tester.tap(find.bySemanticsLabel('Add friend'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Find friends from contacts').last);
+      await tester.tap(find.text('Find friends from contacts'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Siti Nurul'));
@@ -148,22 +177,25 @@ void main() {
     testWidgets('titles itself and offers a way back', (tester) async {
       await _pumpPage(tester);
 
-      expect(find.text('Friends'), findsOneWidget);
+      expect(find.text('Friends · 2'), findsOneWidget);
       expect(find.bySemanticsLabel('Back'), findsOneWidget);
     });
 
-    testWidgets('splits the three kinds of person into three sections',
-        (tester) async {
+    testWidgets('heads the design\'s sections and folds sent requests into '
+        'Everyone', (tester) async {
       await _pumpPage(tester);
 
-      expect(find.text('Wants to be friends'), findsOneWidget);
+      expect(find.text('Requests · 1'), findsOneWidget);
       expect(find.text('Syafiq Rahman'), findsOneWidget);
 
-      expect(find.text('Waiting to hear back'), findsOneWidget);
+      // The design has no outgoing section, so a request you sent sits at the
+      // foot of Everyone still saying "Asked" and still cancellable.
+      expect(find.text('Everyone'), findsOneWidget);
       expect(find.text('Nadia Idris'), findsOneWidget);
+      expect(find.text('Asked'), findsOneWidget);
 
-      // The count the You tab's button shows, repeated where the names are.
-      expect(find.text('Your friends · 2'), findsOneWidget);
+      // The count the You tab's button shows, repeated in the title.
+      expect(find.text('Friends · 2'), findsOneWidget);
       expect(find.text('Aiman Zulkifli'), findsOneWidget);
       expect(find.byType(PersonRow), findsNWidgets(4));
     });
@@ -177,9 +209,10 @@ void main() {
         ),
       );
 
-      expect(find.text('Wants to be friends'), findsNothing);
-      expect(find.text('Waiting to hear back'), findsNothing);
-      expect(find.text('Your friends · 1'), findsOneWidget);
+      expect(find.textContaining('Requests · '), findsNothing);
+      expect(find.text('Asked'), findsNothing);
+      expect(find.text('Everyone'), findsOneWidget);
+      expect(find.text('Friends · 1'), findsOneWidget);
     });
 
     testWidgets('an empty address book says how one fills up', (tester) async {
@@ -218,8 +251,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(harness.repository.actions, [('u9', FriendAction.accept)]);
-      expect(find.text('Wants to be friends'), findsNothing);
-      expect(find.text('Your friends · 3'), findsOneWidget);
+      expect(find.textContaining('Requests · '), findsNothing);
+      expect(find.text('Friends · 3'), findsOneWidget);
     });
 
     testWidgets('Decline takes the request off the page', (tester) async {
@@ -231,7 +264,7 @@ void main() {
       expect(harness.repository.actions, [('u9', FriendAction.decline)]);
       expect(find.text('Syafiq Rahman'), findsNothing);
       // Declining is not befriending.
-      expect(find.text('Your friends · 2'), findsOneWidget);
+      expect(find.text('Friends · 2'), findsOneWidget);
     });
 
     testWidgets('cancelling a sent request deletes the same row a decline '
@@ -257,7 +290,7 @@ void main() {
 
       expect(find.text('That did not go through.'), findsOneWidget);
       expect(find.text('Syafiq Rahman'), findsOneWidget);
-      expect(find.text('Your friends · 2'), findsOneWidget);
+      expect(find.text('Friends · 2'), findsOneWidget);
     });
   });
 
@@ -290,7 +323,7 @@ void main() {
 
       expect(harness.repository.actions, [('u1', FriendAction.remove)]);
       expect(find.text('Aiman Zulkifli'), findsNothing);
-      expect(find.text('Your friends · 1'), findsOneWidget);
+      expect(find.text('Friends · 1'), findsOneWidget);
     });
   });
 
@@ -334,6 +367,120 @@ void main() {
     });
   });
 
+  group('FriendsPage search, chips and this week', () {
+    testWidgets('the search field filters the rows by name', (tester) async {
+      await _pumpPage(tester);
+
+      await tester.enterText(find.byType(TextField), 'mei');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mei Kee Tan'), findsOneWidget);
+      expect(find.text('Aiman Zulkifli'), findsNothing);
+      // Requests are rows too, and the filter is case-insensitive.
+      expect(find.text('Syafiq Rahman'), findsNothing);
+    });
+
+    testWidgets('a shared plan in the next week gets its own section and the '
+        'design\'s subtitle', (tester) async {
+      await _pumpPage(
+        tester,
+        plans: [
+          testPlan(
+            1,
+            date: DateTime(2026, 9, 18),
+            members: const [PlanMember(userId: 'u1', status: 'going')],
+          ),
+        ],
+      );
+
+      // The chip says it and so does the heading under it.
+      expect(find.text('Eating this week'), findsNWidgets(2));
+      expect(
+        find.text('Fri 18 · Warung Kak Ros with you'),
+        findsOneWidget,
+      );
+      // The same person is still in Everyone underneath.
+      expect(find.text('Aiman Zulkifli'), findsNWidgets(2));
+    });
+
+    testWidgets('a plan further out than a week is not this week',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        plans: [
+          testPlan(
+            1,
+            date: DateTime(2026, 9, 30),
+            members: const [PlanMember(userId: 'u1', status: 'going')],
+          ),
+        ],
+      );
+
+      // The chip is always there; the heading and its rows are not.
+      expect(find.text('Eating this week'), findsOneWidget);
+      expect(find.textContaining('with you'), findsNothing);
+      expect(find.text('Aiman Zulkifli'), findsOneWidget);
+    });
+
+    testWidgets('the chips are single-select and narrow the page',
+        (tester) async {
+      await _pumpPage(
+        tester,
+        plans: [
+          testPlan(
+            1,
+            date: DateTime(2026, 9, 18),
+            members: const [PlanMember(userId: 'u1', status: 'going')],
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Eating this week').first);
+      await tester.pumpAndSettle();
+
+      // Only the one section is left: no requests, no Everyone.
+      expect(find.text('Fri 18 · Warung Kak Ros with you'), findsOneWidget);
+      expect(find.textContaining('Requests · '), findsNothing);
+      expect(find.text('Everyone'), findsNothing);
+      expect(find.text('Aiman Zulkifli'), findsOneWidget);
+
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Requests · 1'), findsOneWidget);
+      expect(find.text('Everyone'), findsOneWidget);
+    });
+
+    testWidgets('a friend\'s calendar button asks for the Swipe tab',
+        (tester) async {
+      final harness = await _pumpPage(tester);
+
+      expect(harness.tabs.revision, 0);
+      await tester.tap(find.bySemanticsLabel('Plan with Aiman Zulkifli'));
+      await tester.pumpAndSettle();
+
+      expect(harness.tabs.index, 0);
+      expect(harness.tabs.revision, 1);
+    });
+
+    testWidgets('a request row has no calendar button', (tester) async {
+      await _pumpPage(tester);
+
+      expect(find.bySemanticsLabel('Plan with Syafiq Rahman'), findsNothing);
+      expect(find.bySemanticsLabel('Plan with Nadia Idris'), findsNothing);
+    });
+
+    testWidgets('the foot shares an invite', (tester) async {
+      final harness = await _pumpPage(tester);
+
+      await tester.tap(find.text('Invite friends with a link'));
+      await tester.pumpAndSettle();
+
+      // No link exists yet, so the text carries no URL that would 404.
+      expect(harness.shared.single, 'Come and eat with me on Swipe Eat.');
+    });
+  });
+
   group('FriendsPage layout', () {
     testWidgets('four rows of people fit the narrowest phone at a doubled '
         'text scale', (tester) async {
@@ -344,7 +491,7 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Wants to be friends'), findsOneWidget);
+      expect(find.text('Requests · 1'), findsOneWidget);
     });
 
     testWidgets('the confirm sheet survives the same', (tester) async {
@@ -355,9 +502,15 @@ void main() {
         textScaler: const TextScaler.linear(2),
       );
 
-      // The friends section is the last of three, and the list only builds
-      // what is on screen.
-      await tester.scrollUntilVisible(find.text('Aiman Zulkifli'), 300);
+      // Everyone is the last section, and the list only builds what is on
+      // screen.
+      // Two scrollables now — the chip row and the list — so the list is
+      // named rather than guessed at.
+      await tester.scrollUntilVisible(
+        find.text('Aiman Zulkifli'),
+        300,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.bySemanticsLabel('Remove Aiman Zulkifli'));

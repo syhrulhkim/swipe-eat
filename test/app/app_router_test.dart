@@ -12,6 +12,7 @@ import 'package:swipe_eat/features/friends/presentation/friends_page.dart';
 import 'package:swipe_eat/features/friends/presentation/invite_page.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
 import 'package:swipe_eat/features/onboarding/presentation/onboarding_page.dart';
+import 'package:swipe_eat/features/plans/presentation/plan_confirmed_page.dart';
 import 'package:swipe_eat/features/plans/presentation/plan_date_page.dart';
 import 'package:swipe_eat/features/plans/presentation/plan_page.dart';
 import 'package:swipe_eat/features/plans/state/plans_controller.dart';
@@ -256,12 +257,12 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('locking in with friends on lands on the invite screen',
+    testWidgets('the two steps save at the second one, not the first',
         (tester) async {
-      // The whole chain the router owns: the plan is created, the screen goes
-      // to the calendar, and the invite screen is pushed on top of it — in
-      // that order, so Skip pops back onto the plan that was just made rather
-      // than onto the date picker.
+      // The whole chain the router owns, in the order D156 put it: step one
+      // saves nothing, step two creates the plan, and the confirmation is what
+      // the user lands on. The old order wrote the plan at step one, which
+      // left a silent party of one behind anybody who backed out of inviting.
       final router = await pumpApp(
         tester,
         deepLink: '/plans/new',
@@ -275,9 +276,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(PlanDatePage), findsOneWidget);
 
-      // "Bring friends" starts on, so a day is the only thing missing.
-      await tester.tap(find.text('12'));
+      // The sheet opens on a day already chosen, so step one needs no input.
+      await tester.tap(find.text('Next · invite friends'));
       await tester.pumpAndSettle();
+
+      // Step two is reached and nothing has been written yet. This is the
+      // assertion the reordering exists for.
+      expect(find.byType(InvitePage), findsOneWidget);
+      expect(plansRepository.created, isEmpty);
+
       await tester.tap(find.text('Lock it in'));
       // Not pumpAndSettle: the dashboard underneath spins forever without an
       // initialised Supabase behind its repositories.
@@ -285,12 +292,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
 
       expect(plansRepository.created, hasLength(1));
-      expect(find.byType(InvitePage), findsOneWidget);
+      expect(find.byType(PlanConfirmedPage), findsOneWidget);
 
-      // And Skip puts the user behind it, not back on the date picker. This
-      // is the assertion the whole ordering exists for: `go` to the calendar
-      // first, `push` the invite screen second.
-      await tester.tap(find.text('Skip'));
+      // And the confirmation's own exit is what reaches the calendar; neither
+      // sheet is left behind it to be swiped back onto.
+      await tester.tap(find.text('See it on your calendar'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 

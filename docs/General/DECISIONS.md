@@ -194,6 +194,7 @@ not the row number.
 | D90 | Onboarding ends on a **gesture primer** — "Three moves" — and its button says **"Show me dinner"** rather than "Finish". The three words the deck expects (Ngap!, Skip, Later) are taught before the user meets a card that expects them. | [Features/Onboarding-Taste](../Features/Onboarding-Taste.md) | locked 2026-09-04 |
 | D111 | The detail screen's facts strip shows **only the facts the catalogue can answer** — a tile it cannot fill is removed and the rest widen, rather than printing a dash where an answer goes. The price tile is a *cheapest dish* (not the design's per-person band, which nobody measured), and the big number is the ngap count rather than a rating that is 0 on almost every row. | [Features/Restaurant-Detail](../Features/Restaurant-Detail.md) | locked 2026-09-06 |
 | D112 | **"Set a date" likes the place first.** A plan is a thing you do about a restaurant you want, so a plan on an un-bitten place would be an orphan the Bites tab never lists. A like that will not write stops the push rather than landing the user in a planner whose premise silently failed. | [Features/Restaurant-Detail](../Features/Restaurant-Detail.md) | locked 2026-09-06 |
+| D156 | **The Friends screen and the plan-with-a-friend flow are built to the prototype's own copy, and a plan is saved at step 2 rather than step 1.** The owner approved two screens out of the otherwise unapproved redesign by asking for them, so the prototype's wording is now binding on both: "Plan a visit" replaces "Set a date" on the detail screen (narrowing D112, whose reasoning about liking the place first is untouched), step 1 ends on "Next · invite friends" and saves nothing, and step 2's "Lock it in" creates the plan and sends the invites together. Moving the save point is the whole of the change: the old order wrote a plan before anybody was asked to it, so abandoning the invite screen left a silent one-person plan on the calendar. The invite screen therefore gains a draft mode beside its existing `planId` mode, because inviting people to a plan that already exists is still reachable from the plan itself. If the plan saves and the invites then fail, the confirmation is shown anyway with an error — a saved plan is never thrown away to report a failed invite. Everything the prototype draws from data the app does not hold is **omitted rather than faked**: groups, presence dots, free/busy and been-here badges, mutual-friend counts, and the calendar and reminder actions, which would each need a dependency the project does not carry. | [Frontend/DESIGN-SYSTEM](../Frontend/DESIGN-SYSTEM.md) | locked 2026-09-12 |
 
 ## Testing
 
@@ -228,6 +229,6 @@ One decision is recorded but not made:
    log** table, with the reasoning around it.
 2. Add the row here, in the matching section, with a link back.
 3. Take the next free ID. **Never reuse one** — a decision cited elsewhere by
-   ID must keep meaning the same thing. The highest ID in use is **D151**;
+   ID must keep meaning the same thing. The highest ID in use is **D156**;
    D144–D148 are reserved by
    [OPTIMIZATION-PLAN.md](OPTIMIZATION-PLAN.md) and land as their phases do.

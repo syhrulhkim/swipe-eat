@@ -683,7 +683,7 @@ void main() {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      await tester.tap(find.text('Set a date'));
+      await tester.tap(find.text('Plan a visit'));
       await tester.pumpAndSettle();
 
       // A plan is always on a bitten place (D112).
@@ -699,7 +699,7 @@ void main() {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      await tester.tap(find.text('Set a date'));
+      await tester.tap(find.text('Plan a visit'));
       await tester.pumpAndSettle();
 
       expect(_swipes.calls, isEmpty);
@@ -717,7 +717,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Set a date'));
+      await tester.tap(find.text('Plan a visit'));
       await tester.pumpAndSettle();
 
       expect(_lastPlansExtra, <String, dynamic>{
@@ -726,6 +726,18 @@ void main() {
         'coverUrl': 'https://example.com/a.jpg',
         'neighbourhood': 'Kampung Baru',
         'tag': 'Grilled chicken',
+        // The date sheet needs both to draw what it promises: the coordinates
+        // for the confirmation's "from you" distance, the hours for "they
+        // close at …". A sheet that had to re-fetch the restaurant it was
+        // already handed would be the alternative.
+        'latitude': _userLat,
+        'longitude': _userLng,
+        'hours': <String, dynamic>{
+          'opens_at': null,
+          'closes_at': null,
+          'closed_dow': <dynamic>[],
+          'hours_text': null,
+        },
       });
     });
 
@@ -734,7 +746,7 @@ void main() {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, _detailData());
 
-      await tester.tap(find.text('Set a date'));
+      await tester.tap(find.text('Plan a visit'));
       await tester.pumpAndSettle();
 
       // Arriving at the planner having silently failed the thing the planner
@@ -764,7 +776,7 @@ void main() {
 
       expect(find.bySemanticsLabel('Directions'), findsNothing);
       // …and the CTA still fills the bar.
-      expect(find.text('Set a date'), findsOneWidget);
+      expect(find.text('Plan a visit'), findsOneWidget);
     });
   });
 
@@ -918,7 +930,7 @@ void main() {
       useViewport(tester, const Size(390, 844));
       await _pumpDetailPage(tester, full());
 
-      final cta = tester.getRect(find.text('Set a date'));
+      final cta = tester.getRect(find.text('Plan a visit'));
       expect(cta.bottom, lessThanOrEqualTo(844));
     });
   });

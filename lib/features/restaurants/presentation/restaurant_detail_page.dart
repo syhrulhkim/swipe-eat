@@ -361,6 +361,11 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage>
       'coverUrl': imageUrls.isEmpty ? null : imageUrls.first,
       'neighbourhood': widget.data.neighbourhood,
       'tag': widget.data.tag,
+      // The planner draws the closing time and the distance from these; both
+      // are dropped rather than guessed when they are not in the payload.
+      'latitude': widget.data.latitude,
+      'longitude': widget.data.longitude,
+      'hours': widget.data.hours.toJson(),
     }));
   }
 

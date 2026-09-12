@@ -9,8 +9,10 @@ import 'core/config/app_config.dart';
 import 'core/observability/crash_reporting.dart';
 import 'core/push/push_service.dart';
 import 'dev/calendar_dev_data.dart';
+import 'dev/friends_dev_data.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/state/auth_controller.dart';
+import 'features/friends/state/friends_controller.dart';
 import 'features/plans/state/plans_controller.dart';
 
 Future<void> main() async {
@@ -21,6 +23,9 @@ Future<void> main() async {
 }
 
 const bool _useDevPlans = bool.fromEnvironment('USE_DEV_PLANS');
+
+/// Its own flag, because restaurants are real data and the friend cast is not.
+const bool _useDevFriends = bool.fromEnvironment('USE_DEV_FRIENDS');
 
 Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +38,13 @@ Future<void> _startApp() async {
   if (_useDevPlans) {
     PlansController.instance = PlansController(
       repository: DevPlansRepository(),
+      followAuthChanges: false,
+    );
+  }
+
+  if (_useDevFriends) {
+    FriendsController.instance = FriendsController(
+      repository: DevFriendsRepository(),
       followAuthChanges: false,
     );
   }
