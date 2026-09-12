@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -5,13 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 import 'package:swipe_eat/core/ui/design_tokens.dart';
 import 'package:swipe_eat/features/dashboard/state/dashboard_tab_request.dart';
 import 'package:swipe_eat/features/friends/presentation/friend_avatar.dart';
 import 'package:swipe_eat/features/friends/state/friends_controller.dart';
+import 'package:swipe_eat/features/friends/models/friend.dart';
+import 'package:swipe_eat/features/plans/models/friend_plan.dart';
 import 'package:swipe_eat/features/plans/models/plan.dart';
 import 'package:swipe_eat/features/plans/presentation/calendar_tab.dart';
 import 'package:swipe_eat/features/plans/state/plans_controller.dart';
+import 'package:swipe_eat/features/restaurants/state/likes_controller.dart'
+    show LikesAuthEvents;
 
 import '../../support/widget_test_support.dart';
 import '../friends/fake_friends_repository.dart';
@@ -22,6 +28,21 @@ const Size _narrowViewport = Size(320, 568);
 
 /// The Wednesday the prototype's calendar is drawn on.
 final DateTime _now = DateTime(2026, 9, 2, 11);
+
+/// Signed in as somebody, without a Supabase singleton to be signed in to.
+/// The tab needs it for one question only: is this plan mine to cancel, or am
+/// I a guest on it?
+class _FakeAuthEvents extends LikesAuthEvents {
+  _FakeAuthEvents(this.userId);
+
+  final String? userId;
+
+  @override
+  Stream<AuthState>? get changes => null;
+
+  @override
+  String? get currentUserId => userId;
+}
 
 /// Kuala Lumpur, so a plan with coordinates gets a real distance.
 Position _kualaLumpur() {
@@ -123,6 +144,7 @@ Future<_Harness> _pumpTab(
   List<Plan> rows = const [],
   FakePlansRepository? repository,
   FakeFriendsRepository? friendsRepository,
+  String? me,
   Size viewport = _phoneViewport,
   TextScaler textScaler = TextScaler.noScaling,
   Position? position,
@@ -139,6 +161,7 @@ Future<_Harness> _pumpTab(
   final friends = FriendsController(
     repository: friendsBacking,
     followAuthChanges: false,
+    authEvents: _FakeAuthEvents(me),
   );
   addTearDown(friends.dispose);
   final tabs = DashboardTabRequest();
@@ -753,4 +776,138 @@ void main() {
       expect(find.text('No plans yet'), findsOneWidget);
     });
   });
+
+  group('CalendarTab friends', () {
+    testWidgets("a friend's plan is listed under its own heading",
+        (tester) async {
+      await _pumpTab(tester, repository: _withFriendPlans());
+
+      expect(find.text('Friends'), findsOneWidget);
+      expect(find.text('Nasi Kandar Pelita'), findsOneWidget);
+      // Who, when, what time, and the one person on it you know — the two
+      // people you do not become a number rather than a name.
+      expect(find.text('Aisyah · Fri 4 · 19:30 · with Farah +2'),
+          findsOneWidget);
+      expect(find.byType(FriendAvatar), findsWidgets);
+    });
+
+    testWidgets('Ask to join asks, then the button says Asked',
+        (tester) async {
+      final harness = await _pumpTab(tester, repository: _withFriendPlans());
+
+      expect(find.text('Ask to join'), findsOneWidget);
+      // What the refresh after the write will read back.
+      harness.repository.setFriendPlans(_friendPlans(asked: true));
+
+      await tester.tap(find.text('Ask to join'));
+      await tester.pumpAndSettle();
+
+      expect(harness.friendsRepository.joinRequests.single, (501, _now));
+      expect(find.text('Asked'), findsOneWidget);
+      expect(find.text('Ask to join'), findsNothing);
+    });
+
+    testWidgets('tapping the row opens the place, not the plan',
+        (tester) async {
+      // It is not my plan: there is nothing on `/plans/:id` I am allowed to
+      // see until the owner lets me in.
+      final harness = await _pumpTab(tester, repository: _withFriendPlans());
+
+      await tester.tap(find.text('Nasi Kandar Pelita'));
+      await tester.pumpAndSettle();
+
+      expect(harness.pushed, ['/restaurant/201']);
+    });
+
+    testWidgets("a day carrying only a friend's plan wears no ring",
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pumpTab(tester, repository: _withFriendPlans());
+
+      // The pip is there; "1 plan" is not, because it is not my plan.
+      expect(find.bySemanticsLabel('Fri 4 Sep'), findsOneWidget);
+      expect(find.bySemanticsLabel('Fri 4 Sep, 1 plan'), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('a calendar with only friends on it is not called empty',
+        (tester) async {
+      await _pumpTab(tester, repository: _withFriendPlans());
+
+      expect(find.text('No plans yet'), findsNothing);
+      expect(find.text('Nasi Kandar Pelita'), findsOneWidget);
+    });
+
+    testWidgets('with nothing at all it still says so', (tester) async {
+      await _pumpTab(tester);
+
+      expect(find.text('No plans yet'), findsOneWidget);
+      expect(find.text('Friends'), findsNothing);
+    });
+  });
+
+  group('a guest on somebody else\'s plan', () {
+    List<Plan> guestPlan() => [
+          testPlan(
+            1,
+            restaurantId: 11,
+            date: DateTime(2026, 9, 4),
+            hour: 20,
+            name: 'Warung Kak Ros',
+            members: const [PlanMember(userId: 'me', status: 'invited')],
+          ),
+        ];
+
+    testWidgets('is offered a way out, not a way to cancel it', (tester) async {
+      // The bug this exists to stop: cancelling somebody else's plan is an
+      // update RLS refuses, and PostgREST reports zero rows rather than an
+      // error — so the row left the calendar and came back on the next load.
+      final harness = await _pumpTab(tester, rows: guestPlan(), me: 'me');
+
+      await tester.longPress(find.text('Warung Kak Ros'));
+      await tester.pumpAndSettle();
+
+      expect(find.text("Can't make Warung Kak Ros?"), findsOneWidget);
+      expect(find.text('Cancel plan'), findsNothing);
+
+      await tester.tap(find.text("Can't make it"));
+      await tester.pumpAndSettle();
+
+      expect(harness.friendsRepository.calls, contains('answerInvite'));
+      expect(harness.repository.cancelled, isEmpty);
+    });
+
+    testWidgets('the owner of the same plan still cancels it', (tester) async {
+      final harness = await _pumpTab(tester, rows: guestPlan(), me: 'owner');
+
+      await tester.longPress(find.text('Warung Kak Ros'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cancel Warung Kak Ros?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel plan'));
+      await tester.pumpAndSettle();
+
+      expect(harness.repository.cancelled, [1]);
+      expect(harness.friendsRepository.calls, isNot(contains('answerInvite')));
+    });
+  });
 }
+/// One friend's evening, on the Friday of the design's week.
+List<FriendPlan> _friendPlans({bool asked = false}) {
+  return [
+    testFriendPlan(
+      501,
+      date: DateTime(2026, 9, 4),
+      restaurantId: 201,
+      name: 'Nasi Kandar Pelita',
+      ownerName: 'Aisyah Rahman',
+      goingCount: 3,
+      goingFriends: const [FriendProfile(id: 'farah', name: 'Farah Idris')],
+      asked: asked,
+    ),
+  ];
+}
+
+FakePlansRepository _withFriendPlans({List<Plan> rows = const []}) =>
+    FakePlansRepository(rows: rows, friendPlans: _friendPlans());
