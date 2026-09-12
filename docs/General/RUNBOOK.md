@@ -1,6 +1,6 @@
 Status: ACTIVE
 Owner: Swipe Eat team
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 Cross-references: [PLAN.md](PLAN.md), [Tests/CONVENTIONS.md](../Tests/CONVENTIONS.md), [Release/STORE.md](../Release/STORE.md), [Features/Auth.md](../Features/Auth.md)
 
 # Runbook
@@ -152,20 +152,64 @@ call is ambiguous.
 
 ## 5. Edge functions
 
-Three of them, configured in `supabase/config.toml`:
+Four of them, configured in `supabase/config.toml`:
 
 | Function | `verify_jwt` | Purpose |
 |---|---|---|
 | `refresh-thumbnails` | false | Caches TikTok thumbnails into Storage; called by pg_cron |
 | `legal` | false | Serves the public privacy / terms / deletion pages |
 | `delete-account` | true | Deletes the calling user's own account |
+| `send-push` | false | Sends the plan invite / join push; called by the `plan_members_notify` trigger |
 
 ```bash
 supabase functions deploy refresh-thumbnails
 supabase functions deploy legal
 supabase functions deploy delete-account
+supabase functions deploy send-push
 supabase secrets set THUMBNAIL_REFRESH_KEY=<random hex>
 ```
+
+### Turning push on (owner only, once per environment)
+
+Nothing below can be done from a checkout: it needs the Firebase console, an
+Apple developer account and the project's secrets. Until it is done the
+pipeline is **inert** — the trigger finds no vault secrets and returns without
+sending, so invites keep working and nobody is notified (D152).
+
+1. **Firebase project.** Create one, add an Android app with package
+   `com.swipeeat.app` and an iOS app with the same bundle id Xcode ships.
+   Note the API key, app ids, project id and sender id — the client reads them
+   from `--dart-define`s, not from a `google-services.json`.
+2. **APNs key.** In the Apple developer portal create an APNs `.p8` auth key
+   and upload it to Firebase → Project settings → Cloud Messaging, with the
+   key id and team id. FCM carries iOS too, so there is one sender.
+3. **Xcode.** Signing & Capabilities → add **Push Notifications** and
+   **Background Modes → Remote notifications**. This creates the
+   `.entitlements` file the project does not have yet.
+4. **Function secrets.** `FCM_SERVICE_ACCOUNT` is the whole service-account
+   JSON from Firebase → Project settings → Service accounts → Generate new
+   private key. Put both in a file and read them from it; never inline a
+   secret on a command line.
+
+   ```bash
+   supabase secrets set PUSH_KEY=<random hex>
+   supabase secrets set --env-file ./push-secrets.env   # FCM_SERVICE_ACCOUNT=...
+   ```
+
+5. **Vault secrets**, which are what actually arm the trigger. `push_key` must
+   equal the `PUSH_KEY` above — it is the shared secret the function checks in
+   the `x-push-key` header:
+
+   ```sql
+   select vault.create_secret('<the same random hex>', 'push_key');
+   select vault.create_secret(
+     'https://<project-ref>.supabase.co/functions/v1/send-push', 'push_url');
+   ```
+
+6. `supabase functions deploy send-push`, then send one real invite between
+   two devices and confirm the banner opens `/plans/:id`.
+
+To turn push off again without a migration, delete the two vault secrets.
 
 `config.toml` pins the `verify_jwt` flags; deploying without it defaults them
 back to true, and the cron caller starts getting 401s.

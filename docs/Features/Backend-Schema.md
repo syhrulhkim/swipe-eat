@@ -23,11 +23,11 @@ Cross-references: [General/PLAN.md](../General/PLAN.md), [General/RUNBOOK.md](..
 > the row's existing name: the name belongs to the fix.
 
 The **as-built** state of the Supabase project `vpcldlhqpvunnuexecgn`, read from
-the live database on 2026-09-10. Where this disagrees with
+the live database on 2026-09-11. Where this disagrees with
 [History/backend-plan.md](../History/backend-plan.md), this doc is right — that
 one is the original plan and the schema has grown well past it.
 
-22 tables, 48 functions, 35 RLS policies, 5 triggers, 3 edge functions, 1 cron
+23 tables, 55 functions, 36 RLS policies, 9 triggers, 4 edge functions, 1 cron
 job, 1 storage bucket.
 
 > **Migration versions differ from the repo's filenames.** A migration applied
@@ -71,9 +71,10 @@ skill:
 | `profile_dietary_tags` | — | Dietary needs from onboarding |
 | `swipes` | 55 | Every deck decision. Also the Bites grid and the visit stamp |
 | `wishlist_items` | 3 | Places to try. The store behind Later (D94) |
-| `plans` | 3 | One owner, one restaurant, one date (D107). The Calendar tab |
-| `plan_members` | — | Who else is on a plan. Written by `invite_to_plan` / `answer_plan_invite` |
+| `plans` | 4 | One owner, one restaurant, one date (D107). The Calendar tab. `shared_with_friends` is the per-plan visibility switch (D153) |
+| `plan_members` | — | Who else is on a plan. Written by `invite_to_plan` / `answer_plan_invite` / `ask_to_join` / `answer_join_request`. A `requested` row is **not** a membership (D154) |
 | `plan_time_votes` | — | A member's vote on the time. Written by `set_plan_vote` |
+| `push_tokens` | 0 | One row per install: FCM device token, owner, platform. Read only by the `send-push` edge function (D152) |
 | `friendships` | 0 | The friend graph: one ordered pair per row (D130). See [Friends.md](Friends.md) |
 | `phone_hashes` | — | Peppered phone digest, keyed to `auth.users`. RLS on, **no policy** — nothing selects it (D128) |
 | `dishes` | 0 | "What people bite". Exists and stays empty until menus are curated |
@@ -187,26 +188,57 @@ Backfilled from `swipes where super_like` with the swipe's own `updated_at` as
 
 `id` identity, `owner_id` → `profiles`, `restaurant_id` → `restaurants` (both
 cascade), `plan_date date`, `plan_time time` (null for "Late"), `time_label text
-check in ('late')`, `with_friends boolean`, `status text check in
-('planned','kept','cancelled')`, `created_at` / `updated_at`.
+check in ('late')`, `with_friends boolean`, `shared_with_friends boolean`,
+`status text check in ('planned','kept','cancelled')`, `created_at` /
+`updated_at`.
+
+`with_friends` and `shared_with_friends` are different questions: the first is
+"am I bringing anyone", the second is "may my friends see this at all" (D153).
+It defaults to false and is set by `create_plan`'s `p_shared` or by the owner
+updating the row.
 
 `plans_owner_restaurant_date_key` is the unique index behind D107 and the ON
-CONFLICT target of `create_plan`. Also `plans_owner_date_idx` and
-`plans_restaurant_idx`. `updated_at` rides the shared `touch_updated_at`
-trigger.
+CONFLICT target of `create_plan`. Also `plans_owner_date_idx`,
+`plans_restaurant_idx`, and `plans_shared_date_idx` — partial on
+`shared_with_friends and status <> 'cancelled'`, which is
+`get_friends_plans`'s whole where-clause. `updated_at` rides the shared
+`touch_updated_at` trigger.
 
 `plan_date` is a `date`, never a timestamp: the client formats it from the
 phone's local parts so a device east of UTC cannot post yesterday.
 
 `plan_members` is `(plan_id, user_id)` with `status in
-('invited','going','declined')` and `invited_at`, indexed on `user_id`.
-`plan_time_votes` is `(plan_id, user_id)` plus `plan_time` / `time_label`.
-Both are written now: `invite_to_plan` inserts members, `answer_plan_invite`
-moves a member's own status, and `set_plan_vote` upserts a vote (D133). The
-owner is deliberately **not** a `plan_members` row (D107) — the plan's
-`owner_id` says so — which is why the client counts them in itself.
+('invited','going','declined','requested')` and `invited_at`, indexed on
+`user_id`. `plan_time_votes` is `(plan_id, user_id)` plus `plan_time` /
+`time_label`. Both are written now: `invite_to_plan` inserts members,
+`answer_plan_invite` moves a member's own status, `ask_to_join` /
+`answer_join_request` carry a request, and `set_plan_vote` upserts a vote
+(D133). The owner is deliberately **not** a `plan_members` row (D107) — the
+plan's `owner_id` says so — which is why the client counts them in itself.
+
+**`requested` is not a membership** (D154). Four reads had to be told so
+one at a time, because each had its own copy of the question:
+`is_plan_member` (and with it `member plans select`, `plan members see
+members`, `plan votes select` and the two vote-write policies), the `own
+membership update` policy — without which a requester PATCHes themselves to
+`going` — and the inline membership tests inside `get_plan_people` and
+`get_plan_votes`. A requester can therefore see nothing of the plan but the
+row saying they asked.
 
 See [Plans-Calendar.md](Plans-Calendar.md).
+
+### `push_tokens`
+
+`token text primary key`, `user_id` → `profiles` (cascade), `platform text
+check in ('ios','android')`, `updated_at`. Indexed on `user_id`.
+
+The token is the primary key rather than a surrogate: a token *is* the
+identity of an install, so the same device moving to another account moves
+the row instead of leaving a second one pointed at the old owner. One
+owner-only `all` policy; nothing signed in reads another account's tokens and
+the only reader is the `send-push` edge function under `service_role`.
+
+See [Plans-Calendar.md](Plans-Calendar.md) and D152.
 
 ### `profiles`
 
@@ -399,7 +431,7 @@ a fix with no reverse-geocoded name clears the stale one instead of keeping it
 
 | Function | Returns | Notes |
 |---|---|---|
-| `create_plan(p_restaurant_id, p_plan_date, p_plan_time, p_time_label, p_with_friends)` | `plans` | Upserts on `(owner_id, restaurant_id, plan_date)` (D107). A cancelled plan comes back `planned`. |
+| `create_plan(p_restaurant_id, p_plan_date, p_plan_time, p_time_label, p_with_friends, p_shared)` | `plans` | Upserts on `(owner_id, restaurant_id, plan_date)` (D107). A cancelled plan comes back `planned`. `p_shared` sets `shared_with_friends` (D153) and the upsert overwrites it. |
 | `mark_plan_kept(p_today date default current_date)` | `integer` | Flips the caller's past `planned` rows to `kept` (D108). Returns the count. Called by the client on every load. |
 | `plan_stats(p_today date default current_date)` | `table(plans_kept int, streak_weeks int)` | The You tab's two figures. The streak counts consecutive ISO weeks back from the most recent past week holding a plan; that week must be the current one or the one before, else the streak is 0. |
 | `is_plan_member(p_plan_id bigint)` | `boolean` | RLS helper, `security definer` (D109). Checks `auth.uid()` inside itself, so it can only answer about the caller. |
@@ -415,7 +447,10 @@ Added 2026-09-06 by `20260906160100_plan_people_invites_and_votes.sql`.
 |---|---|---|
 | `get_plan_people` | `(p_plan_ids bigint[]) → table(plan_id bigint, user_id uuid, status text, name text, avatar_url text)` | The roster for a page of plans in one call. `security definer` — `profiles` is owner-only (D129) |
 | `invite_to_plan` | `(p_plan_id bigint, p_user_ids uuid[]) → integer` | Owner-only. Inserts `plan_members` rows at `invited`; returns how many were added |
-| `answer_plan_invite` | `(p_plan_id bigint, p_status text) → plan_members` | The invitee moves their **own** row to `going` or `declined` |
+| `answer_plan_invite` | `(p_plan_id bigint, p_status text) → plan_members` | The invitee moves their **own** row to `going` or `declined`. Refuses a `requested` row (D154) |
+| `ask_to_join` | `(p_plan_id bigint, p_today date default current_date) → plan_members` | Writes a `requested` row, or raises `22023` with one neutral sentence. `security definer`: the whole gate — friend of the owner, shared, live, not past — is the insert's own `where`, because the caller cannot see the plan yet |
+| `answer_join_request` | `(p_plan_id bigint, p_user_id uuid, p_accept boolean) → boolean` | Owner-only, security **invoker**. Accept moves `requested` → `going`; decline deletes the row. Returns whether anything changed |
+| `get_friends_plans` | `(p_from date, p_limit integer default 100) → table(plan_id, owner_id, owner_name, owner_avatar_url, restaurant_id, restaurant_name, cover_url, plan_date, plan_time, time_label, going_count, going_friends jsonb, asked boolean)` | The Calendar's Friends section. `security definer` (D129). Accepted friends' shared, live plans only; `going_friends` names **only** the caller's own friends, capped at 6, and `going_count` is the number. Excludes plans the caller is already on |
 | `set_plan_vote` | `(p_plan_id bigint, p_plan_time time default null, p_time_label text default null) → plan_time_votes` | Upserts the caller's own vote (D133), and refuses a caller who is not on the plan (D143) |
 | `get_plan_votes` | `(p_plan_id bigint) → table(user_id uuid, name text, avatar_url text, plan_time time, time_label text)` | `security definer`, so a vote can carry a name; counts only voters still on the plan (D143) |
 | `friends_who_liked` | `(p_restaurant_id bigint) → table(id uuid, name text, avatar_url text)` | The detail screen's friends row. `security definer` |
@@ -455,24 +490,40 @@ and nothing else about a person is in any return type (D129).
 | `get_thumbnail_refresh_key` | `security definer`. Vault fallback for the cron caller's auth |
 | `record_thumbnail_refresh_failure` | Increments `refresh_attempts` |
 | `submit_quiz_answer` | `(p_question_id, p_option_id) → quiz_options` — **orphaned** |
+| `notify_plan_member_change` | `security definer`. `after insert or update of status` on `plan_members`: POSTs `{type, plan_id, user_id}` at the `send-push` edge function (D152). EXECUTE revoked from every API role |
 
-Five triggers on `public` tables: `profiles_touch_updated_at`,
+Seven triggers on `public` tables: `profiles_touch_updated_at`,
 `swipes_touch_updated_at`, `plans_touch_updated_at`,
-`friendships_touch_updated_at` and `restaurants_sync_cuisines`. Two more sit on
+`friendships_touch_updated_at`, `restaurants_sync_cuisines`,
+`reviews_refresh_rating` and `plan_members_notify`. Two more sit on
 `auth.users` — `on_auth_user_created` (`handle_new_user`) and
 `on_auth_user_phone_verified` (`sync_phone_hash`).
 
-**14 functions are `security definer`**, and every one of them pins
-`set search_path = ''`: `contact_match_pepper`, `friends_who_liked`,
-`get_friend_requests`, `get_friends`, `get_ngap_count`, `get_plan_people`,
-`get_plan_votes`, `get_thumbnail_refresh_key`, `handle_new_user`,
-`is_plan_member`, `match_contacts`, `peppered_phone_hash`, `sync_phone_hash`,
-`sync_restaurant_cuisines`. They are all reads that cross an owner-only RLS
-boundary — a name beside a friend's avatar, an aggregate over other people's
-swipes — or triggers that write a table the user cannot. Eight are executable
-by `authenticated` and `get_ngap_count` by `anon` as well; the advisor warns
-about each, and each warning is accepted for the reason written into its
-migration (D109, D129).
+`plan_members_notify` is the whole notification pipeline on the database side.
+Its body sits inside `exception when others then raise warning`, so a push
+that cannot be sent never fails the invite that caused it, and it reads
+`push_url` / `push_key` from this environment's vault at fire time — missing
+either, it returns without sending. A local stack or a fresh restore is
+therefore inert rather than pushing at production's users, the same shape the
+thumbnail cron uses.
+
+**19 functions are `security definer`**, and every one of them pins
+`set search_path = ''`: `ask_to_join`, `contact_match_pepper`,
+`friends_who_liked`, `get_friend_requests`, `get_friends`,
+`get_friends_plans`, `get_ngap_count`, `get_plan_people`, `get_plan_votes`,
+`get_thumbnail_refresh_key`, `handle_new_user`, `is_plan_member`,
+`match_contacts`, `notify_plan_member_change`, `peppered_phone_hash`,
+`record_visit_answer`, `refresh_restaurant_rating`, `sync_phone_hash`,
+`sync_restaurant_cuisines`. They are all reads that cross
+an owner-only RLS boundary — a name beside a friend's avatar, an aggregate
+over other people's swipes — or triggers that write a table the user cannot.
+`ask_to_join` is the one definer that *writes* on the caller's behalf, and
+only because the plan it writes against is one the caller cannot see yet.
+Twelve are executable by `authenticated` and `get_ngap_count` by `anon` as well;
+the advisor warns about each, and each warning is accepted for the reason
+written into its migration (D109, D129). `notify_plan_member_change` is not
+among them — a trigger function is called by its trigger, never over REST, so
+EXECUTE is revoked from `public`, `anon` and `authenticated` alike.
 
 **Three `security invoker` functions deliberately have no pin.**
 `haversine_km`, `tiktok_video_id` and `deck_jitter` gave theirs up in D142:
@@ -504,7 +555,8 @@ Owner-only — to `authenticated`, `using` **and** `with check` on
 one `all`, because each verb was spelled out when the table was added),
 `profiles` (`select` + `update` only — insert is the trigger's job, and there
 is no delete policy because account deletion goes through the cascade),
-`plans` (owner `all`).
+`plans` (owner `all`), `push_tokens` (all — a device registers and
+unregisters itself, and the sender is `service_role`, which RLS skips).
 
 Shared-by-invitation — to `authenticated`, resolved through the
 `security definer` helper `is_plan_member` rather than through policies that
@@ -586,7 +638,9 @@ production.
   `cuisine_aliases_cuisine_id_idx`, `profile_cuisines_cuisine_id_idx`,
   `profile_dietary_tags_tag_idx`, `wishlist_items_restaurant_idx`,
   `wishlist_items_from_user_idx`, `plans_restaurant_idx`, `plan_members_user_idx`
-  and `plan_time_votes_user_idx`. Re-check after real usage; do not drop them now.
+  and `plan_time_votes_user_idx`. `plans_shared_date_idx` and
+  `push_tokens_user_idx` joined them the day they were created, for the same
+  reason. Re-check after real usage; do not drop them now.
 - **`friendships_requester_id_fkey` has no index.** The other two columns of the
   pair are the primary key and `friendships_user_hi_idx`; `requester_id` is only
   ever read out of a row already found, so the advisor's warning costs nothing

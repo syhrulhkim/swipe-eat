@@ -15,3 +15,8 @@ verify_jwt = false
 # calls, and the function deletes the token owner's own account only.
 [functions.delete-account]
 verify_jwt = true
+
+# The trigger `plan_members_notify` POSTs here from Postgres, not a client:
+# verify_jwt stays off and `x-push-key` (vault `push_key`) is the gate.
+[functions.send-push]
+verify_jwt = false
