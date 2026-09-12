@@ -1,101 +1,285 @@
-import '../../../core/storage/token_storage.dart';
+import 'dart:async';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/config/app_config.dart';
 import '../models/app_user.dart';
-import '../models/auth_session.dart';
-import 'auth_api.dart';
+import 'oauth_provider_client.dart';
+
+/// Outcome of a sign-up. Email confirmation is enabled on the project, so a
+/// successful `signUp` returns a user but **no session** — the account only
+/// becomes usable after the link in the email is opened. Callers must not
+/// assume they are signed in afterwards.
+enum SignUpOutcome {
+  /// Session issued immediately (only happens with confirmation disabled).
+  signedIn,
+
+  /// Account created; the confirmation email has been sent.
+  confirmationRequired,
+}
+
+/// Anything the auth layer can fail with, already turned into a sentence that
+/// is safe to show a user. Supabase's raw messages leak internals ("Database
+/// error querying schema"), so they are mapped rather than surfaced.
+class AuthFailure implements Exception {
+  const AuthFailure(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
 
 class AuthRepository {
-  static const String demoEmail = 'demo@swipeeat.test';
-  static const String demoPassword = 'password';
-  static const String demoToken = 'demo-token';
-
   AuthRepository({
-    required AuthApi authApi,
-    required TokenStorage tokenStorage,
-  })  : _authApi = authApi,
-        _tokenStorage = tokenStorage;
+    SupabaseClient? client,
+    OAuthProviderClient? oauth,
+  })  : _client = client ?? Supabase.instance.client,
+        _oauth = oauth ?? const OAuthProviderClient();
 
-  final AuthApi _authApi;
-  final TokenStorage _tokenStorage;
+  final SupabaseClient _client;
+  final OAuthProviderClient _oauth;
 
-  Future<AuthSession?> restoreSession() async {
-    final token = await _tokenStorage.readToken();
-    if (token == null || token.isEmpty) {
+  static const String _profileColumns =
+      'id, name, avatar_url, onboarded_at, search_radius_km, last_place_name, '
+      'last_latitude, last_longitude, '
+      'filter_cuisine_ids, filter_dietary_tag_ids, filter_min_rating, '
+      'created_at, halal_only, vegetarian, spice_level, budget_min, budget_max';
+
+  GoTrueClient get _auth => _client.auth;
+
+  Session? get currentSession => _auth.currentSession;
+
+  Stream<AuthState> get onAuthStateChange => _auth.onAuthStateChange;
+
+  /// True when the running build has the client ids Google/Apple sign-in
+  /// needs. Those come from out-of-repo console setup, so the buttons stay
+  /// hidden until they are supplied rather than failing at tap time.
+  bool get supportsGoogleSignIn => AppConfig.hasGoogleSignIn;
+
+  bool get supportsAppleSignIn => _oauth.isAppleAvailable;
+
+  /// True when the build was made with `PHONE_AUTH_ENABLED=true`. The provider
+  /// itself is switched on in the Supabase dashboard, which this repo cannot
+  /// do, so the define is what the button reads (D113).
+  bool get supportsPhoneSignIn => AppConfig.phoneAuthEnabled;
+
+  /// True when the build was made with `GUEST_BROWSING_ENABLED=true` (D115).
+  bool get supportsGuestBrowsing => AppConfig.guestBrowsingEnabled;
+
+  /// Reads the profile row for the signed-in user. Returns null when there is
+  /// no session. The row is created by the `handle_new_user` trigger, but a
+  /// just-confirmed account can race it, so a missing row is retried once.
+  Future<AppUser?> loadCurrentUser() async {
+    final authUser = _auth.currentUser;
+    if (authUser == null) {
       return null;
     }
 
-    if (token == demoToken) {
-      return AuthSession(token: token, user: _demoUser());
-    }
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final row = await _client
+          .from('profiles')
+          .select(_profileColumns)
+          .eq('id', authUser.id)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 15));
 
-    try {
-      final user = await _authApi.me(token);
-      return AuthSession(token: token, user: user);
-    } catch (_) {
-      await _tokenStorage.clearToken();
-      return null;
-    }
-  }
-
-  Future<AuthSession> login({
-    required String email,
-    required String password,
-  }) async {
-    if (email.trim().toLowerCase() == demoEmail &&
-        password == demoPassword) {
-      final session = AuthSession(token: demoToken, user: _demoUser());
-      await _tokenStorage.saveToken(session.token);
-      return session;
-    }
-
-    final payload = await _authApi.login(
-      email: email,
-      password: password,
-    );
-
-    final user = payload.user ?? await _authApi.me(payload.token);
-    final session = AuthSession(token: payload.token, user: user);
-    await _tokenStorage.saveToken(session.token);
-    return session;
-  }
-
-  Future<AuthSession> register({
-    required String name,
-    required String email,
-    required String password,
-    required String passwordConfirmation,
-  }) async {
-    final payload = await _authApi.register(
-      name: name,
-      email: email,
-      password: password,
-      passwordConfirmation: passwordConfirmation,
-    );
-
-    final user = payload.user ?? await _authApi.me(payload.token);
-    final session = AuthSession(token: payload.token, user: user);
-    await _tokenStorage.saveToken(session.token);
-    return session;
-  }
-
-  Future<void> logout() async {
-    final token = await _tokenStorage.readToken();
-    if (token != null && token.isNotEmpty) {
-      try {
-        await _authApi.logout(token);
-      } catch (_) {
-        // Local logout should always win.
+      if (row != null) {
+        return AppUser.fromProfile(row, authUser: authUser);
+      }
+      if (attempt == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
       }
     }
 
-    await _tokenStorage.clearToken();
+    // The trigger has not landed. Fall back to the auth record so the app is
+    // usable; the onboarding write will create the row.
+    return AppUser.fromProfile(const {}, authUser: authUser);
   }
 
-  AppUser _demoUser() {
-    return const AppUser(
-      id: 1,
-      name: 'Demo User',
-      email: demoEmail,
-      role: 'customer',
-    );
+  Future<void> login({
+    required String email,
+    required String password,
+  }) async {
+    await _guard(() => _auth.signInWithPassword(
+          email: email.trim(),
+          password: password,
+        ));
+  }
+
+  Future<SignUpOutcome> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final response = await _guard(() => _auth.signUp(
+          email: email.trim(),
+          password: password,
+          data: {'name': name.trim()},
+        ));
+
+    return response.session == null
+        ? SignUpOutcome.confirmationRequired
+        : SignUpOutcome.signedIn;
+  }
+
+  /// Native Google sign-in: the platform sheet returns id/access tokens which
+  /// are exchanged for a Supabase session. This keeps the whole flow in-app
+  /// (no browser round trip) and works the same on iOS and Android.
+  Future<void> signInWithGoogle() async {
+    final tokens = await _guard(_oauth.googleTokens);
+    if (tokens == null) {
+      throw const AuthFailure('Google sign-in was cancelled.');
+    }
+
+    await _guard(() => _auth.signInWithIdToken(
+          provider: OAuthProvider.google,
+          idToken: tokens.idToken,
+          accessToken: tokens.accessToken,
+        ));
+  }
+
+  Future<void> signInWithApple() async {
+    final tokens = await _guard(_oauth.appleTokens);
+    if (tokens == null) {
+      throw const AuthFailure('Apple sign-in was cancelled.');
+    }
+
+    await _guard(() => _auth.signInWithIdToken(
+          provider: OAuthProvider.apple,
+          idToken: tokens.idToken,
+          nonce: tokens.rawNonce,
+        ));
+
+    // Apple only sends the name on the very first authorisation, so it has to
+    // be captured then or it is lost forever.
+    final name = tokens.displayName;
+    if (name != null && name.isNotEmpty) {
+      await _guard(
+          () => _auth.updateUser(UserAttributes(data: {'name': name})));
+      await _client.from('profiles').update({'name': name}).eq(
+        'id',
+        _auth.currentUser!.id,
+      );
+    }
+  }
+
+  /// Sends the six-digit SMS code to [phone], which must already be in E.164
+  /// form (`+60…`). No session exists yet — [verifyPhoneOtp] is what signs the
+  /// user in.
+  Future<void> signInWithPhone(String phone) async {
+    await _guard(() => _auth.signInWithOtp(phone: phone.trim()));
+  }
+
+  /// Exchanges the code for a session. A wrong code and an expired one come
+  /// back as the same Supabase error, so they read as one sentence.
+  Future<void> verifyPhoneOtp({
+    required String phone,
+    required String token,
+  }) async {
+    await _guard(() => _auth.verifyOTP(
+          type: OtpType.sms,
+          phone: phone.trim(),
+          token: token.trim(),
+        ));
+  }
+
+  /// Signs in without an account, for the sign-up screen's "Later".
+  Future<void> signInAsGuest() async {
+    await _guard(_auth.signInAnonymously);
+  }
+
+  Future<void> sendPasswordReset(String email) async {
+    await _guard(() => _auth.resetPasswordForEmail(email.trim()));
+  }
+
+  Future<void> logout() async {
+    try {
+      await _auth.signOut();
+    } on AuthException {
+      // A stale or already-revoked token still has to clear locally.
+    }
+    await _oauth.signOut();
+  }
+
+  /// Permanently deletes the signed-in account.
+  ///
+  /// A client cannot delete its own `auth.users` row, so this calls the
+  /// `delete-account` edge function, which takes the user id from the caller's
+  /// own JWT and deletes with the service role. Everything user-scoped cascades
+  /// from `profiles`, so one delete removes the lot.
+  ///
+  /// Throws [AuthFailure] if the account still exists afterwards — the caller
+  /// must not report success on a failed delete.
+  Future<void> deleteAccount() async {
+    await _guard(() async {
+      final response = await _client.functions
+          .invoke('delete-account', method: HttpMethod.post)
+          .timeout(const Duration(seconds: 20));
+
+      if (response.status != 200) {
+        throw AuthFailure(
+          'Your account could not be deleted (error ${response.status}). '
+          'Try again, or email support if it keeps failing.',
+        );
+      }
+    });
+  }
+
+  /// Runs a Supabase call and rewrites its errors as [AuthFailure].
+  Future<T> _guard<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } on AuthException catch (error) {
+      throw AuthFailure(_messageFor(error));
+    } on PostgrestException catch (error) {
+      throw AuthFailure(error.message);
+    } on FunctionException catch (error) {
+      // `functions.invoke` throws on any non-2xx, so an edge function failure
+      // arrives here rather than as a status on the response.
+      throw AuthFailure(
+        'The server rejected the request (error ${error.status}).',
+      );
+    } on AuthFailure {
+      rethrow;
+    } on TimeoutException {
+      throw const AuthFailure('The server took too long to respond.');
+    }
+  }
+
+  static String _messageFor(AuthException error) {
+    switch (error.code) {
+      case 'invalid_credentials':
+        return 'That email and password do not match an account.';
+      case 'email_not_confirmed':
+        return 'Confirm your email address first — check your inbox.';
+      case 'user_already_exists':
+      case 'email_exists':
+        return 'An account already uses that email. Sign in instead.';
+      case 'weak_password':
+        return 'Pick a stronger password (at least 8 characters).';
+      case 'email_address_invalid':
+        return 'That email address is not accepted. Use a real address.';
+      case 'over_email_send_rate_limit':
+        return 'Too many attempts. Wait a minute and try again.';
+      case 'validation_failed':
+        return 'Check the details you entered and try again.';
+      case 'otp_expired':
+        // Supabase answers a wrong code with this too, so the sentence has to
+        // cover both without guessing which happened.
+        return 'That code is wrong or has expired. Ask for a new one.';
+      case 'otp_disabled':
+      case 'phone_provider_disabled':
+        return 'Phone sign-in is not switched on yet. Use email instead.';
+      case 'over_sms_send_rate_limit':
+        return 'Too many codes for that number. Wait a minute and try again.';
+      case 'sms_send_failed':
+        return 'The code could not be sent to that number. Check it and try '
+            'again.';
+      case 'anonymous_provider_disabled':
+        return 'Browsing without an account is not switched on yet.';
+      default:
+        return error.message;
+    }
   }
 }

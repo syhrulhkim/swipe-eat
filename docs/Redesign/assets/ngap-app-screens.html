@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ngap — swipe, pick a day, eat · Mobile app screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   TOKENS — Ngap brand. Change these, the whole app rebrands.
+   ============================================================ */
+:root{
+  /* color */
+  --ember:#FF8A3D;
+  --lava:#E8541C;
+  --char:#5A160C;
+  --ink:#140A05;
+  --cream:#FFF3E8;
+  --cream-70:rgba(255,243,232,.72);
+  --cream-45:rgba(255,243,232,.45);
+  --bg:#0B0605;            /* the screen. warm black, not grey */
+  --surface:#171010;       /* cards, panels, nav */
+  --surface-2:#221614;     /* raised elements on a card */
+  --glass:rgba(255,255,255,.07);
+  --glass-strong:rgba(255,255,255,.12);
+  --glass-line:rgba(255,255,255,.14);
+  --fresh:#9DF2B8;
+  --shadow-card:0 24px 48px -16px rgba(0,0,0,.8);
+  --grad-cta:linear-gradient(135deg,var(--ember),var(--lava));
+  /* the orange lives as a glow at the top of every screen, then the screen goes black */
+  --grad:radial-gradient(130% 48% at 50% -6%,var(--lava) 0%,var(--char) 42%,transparent 72%),var(--bg);
+
+  /* type */
+  --font-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --font-body:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;
+  --fs-hero:44px; --on-ember:#140A05; --fs-h1:30px; --fs-h2:20px; --fs-body:15px; --fs-small:13px; --fs-micro:11px;
+
+  /* space & shape (4px grid) */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px;
+  --r-card:28px; --r-chip:999px; --r-tile:18px; --r-sm:10px;
+
+  /* motion */
+  --dur:220ms; --ease:cubic-bezier(.2,.8,.2,1);
+
+  /* prototype frame */
+  --phone-w:390px; --phone-h:844px; --bezel:12px;
+  --gallery-bg:#120A09; --gallery-ink:#F3E4DA; --gallery-mute:#9E8378;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--gallery-bg);color:var(--gallery-ink);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cream);outline-offset:3px;border-radius:var(--r-sm)}
+.skip{position:absolute;left:-999px;top:0;background:var(--cream);color:var(--ink);padding:8px 12px}
+.skip:focus{left:12px;top:12px;z-index:99}
+
+/* ============================================================
+   GALLERY (the prototype board, not the app)
+   ============================================================ */
+.board{max-width:1400px;margin:0 auto;padding:40px 24px 64px}
+.board-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:28px}
+.board-head h1{font-family:var(--font-display);font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-.02em;line-height:1}
+.board-head h1 span{color:var(--ember)}
+.board-head p{max-width:52ch;color:var(--gallery-mute);font-size:15px;line-height:1.5;margin-top:10px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;color:var(--gallery-mute);font-size:13px}
+.legend b{color:var(--gallery-ink);font-weight:600}
+.gallery{display:flex;gap:28px;overflow-x:auto;padding:8px 4px 24px;scroll-snap-type:x proximity;scrollbar-width:thin;scrollbar-color:var(--char) transparent}
+.slot{flex:0 0 auto;scroll-snap-align:start;width:calc(var(--phone-w)*var(--scale,1));height:calc((var(--phone-h) + 40px)*var(--scale,1))}
+.slot-label{font-size:12px;color:var(--gallery-mute);letter-spacing:.02em;margin-bottom:12px;display:flex;justify-content:space-between}
+.slot-label b{color:var(--gallery-ink);font-weight:600}
+.phone{width:var(--phone-w);height:var(--phone-h);transform:scale(var(--scale,1));transform-origin:top left;border-radius:54px;background:#000;padding:var(--bezel);box-shadow:0 30px 80px -20px rgba(0,0,0,.8),inset 0 0 0 2px #2a2a2a;position:relative}
+.screen{width:100%;height:100%;border-radius:44px;overflow:hidden;position:relative;background:var(--grad);color:var(--cream);display:flex;flex-direction:column}
+.island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:118px;height:34px;background:#000;border-radius:20px;z-index:20}
+.statusbar{height:54px;flex:none;display:flex;justify-content:space-between;align-items:flex-end;padding:0 30px 4px;font-size:15px;font-weight:600}
+.statusbar svg{height:12px}
+
+/* ============================================================
+   APP PRIMITIVES
+   ============================================================ */
+.body{flex:1;overflow:hidden;position:relative;padding:var(--s3) var(--s5) 0;display:flex;flex-direction:column;min-height:0}
+.body>*{flex-shrink:0}
+.body>.deck,.body>.content,.body>.map{flex:1 1 auto;min-height:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s4)}
+.h-hero{font-family:var(--font-display);font-size:var(--fs-hero);font-weight:800;line-height:.98;letter-spacing:-.025em}
+.h1{font-family:var(--font-display);font-size:var(--fs-h1);font-weight:700;line-height:1.05;letter-spacing:-.02em}
+.h2{font-family:var(--font-display);font-size:var(--fs-h2);font-weight:700;line-height:1.15;letter-spacing:-.01em}
+.small{font-size:var(--fs-small);color:var(--cream-70)}
+.micro{font-size:var(--fs-micro);color:var(--cream-70)}
+.iconbtn{width:44px;height:44px;border-radius:50%;background:var(--glass);border:1px solid var(--glass-line);display:grid;place-items:center;position:relative}
+.iconbtn svg{width:20px;height:20px;stroke:var(--cream);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.iconbtn .dot{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--cream);color:var(--ink);font-size:11px;font-weight:700;display:grid;place-items:center}
+.chip{height:36px;padding:0 var(--s4);border-radius:var(--r-chip);border:1px solid var(--glass-line);background:transparent;font-size:var(--fs-small);font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background var(--dur) var(--ease),color var(--dur) var(--ease)}
+.chip[aria-pressed="true"]{background:var(--ember);border-color:var(--ember);color:var(--on-ember)}
+.chiprow{display:flex;gap:var(--s2);overflow-x:auto;scrollbar-width:none;margin:0 calc(-1*var(--s5));padding:0 var(--s5) var(--s1)}
+.chiprow::-webkit-scrollbar{display:none}
+.btn{height:52px;padding:0 var(--s6);border-radius:var(--r-chip);font-weight:600;font-size:var(--fs-body);display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform var(--dur) var(--ease)}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--grad-cta);color:var(--on-ember)}
+.btn-light{background:var(--ember);color:var(--on-ember)}
+.btn-ghost{background:var(--glass);border:1px solid var(--glass-line);color:var(--cream)}
+.btn-block{width:100%}
+.avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--ink);border:2px solid var(--bg);flex:none;background-size:cover;background-position:center;overflow:hidden}
+.avatar.img-ok{color:transparent}
+.avatar.a1{background:#FFD8B8}.avatar.a2{background:#F9B98A}.avatar.a3{background:#FFE8A3}.avatar.a4{background:#E9C7FF}.avatar.a5{background:#BEE7FF}
+.stack{display:flex}.stack .avatar{margin-left:-10px}.stack .avatar:first-child{margin-left:0}
+.glass-card{background:var(--surface);border:1px solid var(--glass-line);border-radius:var(--r-tile)}
+
+/* Video placeholder — replace with a 10–15s vertical clip (9:16, muted, looping).
+   Drift animation only suggests motion; it's not the final asset. */
+.video{position:absolute;inset:0;overflow:hidden;background:#1a0c08 center/cover no-repeat}
+.video::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,6,5,.25) 0%,rgba(11,6,5,0) 30%,rgba(11,6,5,.92) 100%)}
+.video .tag{position:absolute;top:var(--s4);left:var(--s4);z-index:2;display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.35);border:1px solid var(--glass-line);border-radius:var(--r-chip);padding:5px 10px 5px 7px;font-size:var(--fs-micro);font-weight:600;letter-spacing:.02em}
+.video .tag i{width:14px;height:14px;border-radius:50%;background:var(--cream);display:grid;place-items:center}
+.video .tag i::after{content:"";border-left:6px solid var(--ink);border-top:4px solid transparent;border-bottom:4px solid transparent;margin-left:1px}
+@media (prefers-reduced-motion:no-preference){
+  .card.front .video{animation:kenburns 16s ease-in-out infinite alternate}
+  @keyframes kenburns{from{background-size:100% auto;background-position:50% 40%}to{background-size:112% auto;background-position:50% 60%}}
+}
+
+/* The bite — Ngap's signature. Saved/liked restaurant surfaces carry it. */
+.bite{-webkit-mask:radial-gradient(circle 30px at calc(100% - 6px) 6px,transparent 98%,#000 100%);mask:radial-gradient(circle 30px at calc(100% - 6px) 6px,transparent 98%,#000 100%)}
+
+/* Bottom nav — black pill bar, active tab expands into a label */
+.nav{flex:none;margin:var(--s3) var(--s4) 22px;height:64px;background:var(--surface);border:1px solid var(--glass-line);border-radius:var(--r-chip);display:flex;align-items:center;padding:5px;gap:2px;box-shadow:0 12px 30px -10px rgba(0,0,0,.8)}
+.nav button{flex:1;height:52px;border-radius:var(--r-chip);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--cream-70);font-size:var(--fs-small);font-weight:600;transition:flex var(--dur) var(--ease),background var(--dur) var(--ease),color var(--dur) var(--ease)}
+.nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.nav button span{display:none}
+.nav button[aria-current="page"]{flex:2.3;background:var(--ember);color:var(--on-ember)}
+.nav button[aria-current="page"] span{display:inline}
+.nav button:focus-visible{outline-color:var(--cream)}
+.homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--cream-45);z-index:20}
+
+/* ============================================================
+   S1 · ONBOARDING
+   ============================================================ */
+.onb .body{padding-bottom:var(--s6);justify-content:flex-end}
+.onb .brand{position:absolute;top:var(--s4);left:var(--s5);font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:-.02em}
+.onb .stackpreview{position:absolute;top:9%;left:0;right:0;height:38%;display:grid;place-items:center}
+.onb .stackpreview .card{position:absolute;width:196px;height:244px;border-radius:var(--r-card);overflow:hidden;box-shadow:var(--shadow-card);border:1px solid var(--glass-line)}
+.onb .screen{--grad:radial-gradient(140% 60% at 50% -8%,var(--ember) 0%,var(--char) 44%,transparent 74%),var(--bg)}
+.onb .stackpreview .card:nth-child(1){transform:rotate(-12deg) translateX(-38px) scale(.92);opacity:.75}
+.onb .stackpreview .card:nth-child(2){transform:rotate(9deg) translateX(40px) scale(.96);opacity:.85}
+.onb .stackpreview .card:nth-child(3){transform:rotate(-2deg)}
+.onb .stackpreview .card .video{position:absolute}
+.onb .stackpreview .card .name{position:absolute;bottom:14px;left:14px;font-family:var(--font-display);font-weight:700;font-size:18px;z-index:2}
+.onb .copy{margin-bottom:var(--s5)}
+.onb .copy .h-hero{font-size:40px}
+.onb .copy .h-hero{margin-bottom:var(--s3)}
+.onb .copy .h-hero em{font-style:normal;display:block}
+.onb .copy p{color:var(--cream-70);font-size:var(--fs-body);line-height:1.45;max-width:30ch}
+.onb .actions{display:grid;gap:var(--s2)}
+.onb .fineprint{text-align:center;margin-top:var(--s3);color:var(--cream-45);font-size:var(--fs-micro)}
+
+/* ============================================================
+   S2 · SWIPE (home)
+   ============================================================ */
+.swipe .loc{display:flex;align-items:center;gap:8px;font-weight:600;font-size:var(--fs-body)}
+.swipe .loc svg{width:18px;height:18px;stroke:var(--cream);fill:none;stroke-width:1.8}
+.swipe .loc small{display:block;font-weight:400;color:var(--cream-70);font-size:var(--fs-micro)}
+.deck{position:relative;flex:1;margin-bottom:var(--s4);touch-action:none}
+.card{position:absolute;inset:0;border-radius:var(--r-card);overflow:hidden;box-shadow:var(--shadow-card);border:1px solid var(--glass-line);background:var(--surface);user-select:none;transition:transform var(--dur) var(--ease),opacity var(--dur) var(--ease)}
+.card.back2{transform:translateY(20px) scale(.92);opacity:.7}
+.card.back1{transform:translateY(10px) scale(.96);opacity:.9}
+.card.front{transform:none;opacity:1;cursor:grab}
+.card.front.dragging{transition:none;cursor:grabbing}
+.card.fly{transition:transform 320ms var(--ease),opacity 320ms var(--ease)}
+.card .info{position:absolute;left:var(--s5);right:var(--s5);bottom:var(--s5);z-index:2}
+.card .info .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--s2)}
+.card .info .tags span{font-size:var(--fs-micro);font-weight:600;padding:4px 9px;border-radius:var(--r-chip);background:rgba(255,255,255,.14);border:1px solid var(--glass-line)}
+.card .info .tags span.open{background:rgba(157,242,184,.16);border-color:rgba(157,242,184,.5)}
+.card .info .tags span.open::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--fresh);display:inline-block;margin-right:5px;vertical-align:1px}
+.card .info h3{font-family:var(--font-display);font-size:34px;font-weight:800;line-height:.98;letter-spacing:-.025em;margin-bottom:6px}
+.card .info .meta{display:flex;gap:10px;font-size:var(--fs-small);color:var(--cream-70)}
+.card .info .meta b{color:var(--cream);font-weight:600}
+.card .stamp{position:absolute;top:26px;z-index:3;font-family:var(--font-display);font-weight:800;font-size:28px;letter-spacing:-.02em;padding:6px 14px;border:3px solid;border-radius:14px;opacity:0;transform:rotate(-12deg);transition:opacity 120ms}
+.card .stamp.yes{right:22px;color:var(--ember);border-color:var(--ember)}
+.card .stamp.no{left:22px;color:var(--cream);border-color:var(--cream);transform:rotate(12deg)}
+.actions3{display:flex;justify-content:center;align-items:center;gap:var(--s5);margin-bottom:var(--s1)}
+.actions3 button{border-radius:50%;display:grid;place-items:center;transition:transform var(--dur) var(--ease)}
+.actions3 button:active{transform:scale(.92)}
+.actions3 .no,.actions3 .later{width:56px;height:56px;background:var(--surface);border:1px solid var(--glass-line)}
+.actions3 .yes{width:72px;height:72px;background:var(--grad-cta);color:var(--on-ember);font-family:var(--font-display);font-weight:800;font-size:15px;letter-spacing:-.01em;box-shadow:0 14px 30px -12px rgba(0,0,0,.7)}
+.actions3 svg{width:22px;height:22px;stroke:var(--cream);fill:none;stroke-width:2;stroke-linecap:round}
+
+/* ============================================================
+   S3 · RESTAURANT DETAIL
+   ============================================================ */
+.detail .body{padding:0}
+.detail .hero{position:relative;height:41%;flex:none}
+.detail .hero .video{position:absolute}
+.detail .hero .topbar{position:absolute;top:var(--s3);left:var(--s5);right:var(--s5);z-index:3;margin:0}
+.detail .hero .title{position:absolute;left:var(--s5);right:var(--s5);bottom:var(--s5);z-index:2}
+.detail .hero .title .h1{font-size:36px;margin-bottom:6px}
+.detail .content{padding:var(--s4) var(--s5) 0;display:flex;flex-direction:column;gap:var(--s3);overflow:hidden}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.fact{padding:var(--s3);border-radius:var(--r-tile);background:var(--surface);border:1px solid var(--glass-line)}
+.fact b{display:block;font-family:var(--font-display);font-size:17px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.fact span{font-size:var(--fs-micro);color:var(--cream-70)}
+.dishes{display:grid;gap:var(--s2)}
+.dish{display:flex;align-items:center;gap:var(--s3);padding:6px 0;border-bottom:1px solid var(--glass-line)}
+.dish:last-child{border-bottom:0}
+.dish .thumb{width:40px;height:40px;border-radius:12px;background:var(--surface-2) center/cover;flex:none}
+.dish .t{flex:1}.dish .t b{display:block;font-weight:600;font-size:var(--fs-body)}.dish .t span{font-size:var(--fs-small);color:var(--cream-70)}
+.dish .price{font-family:var(--font-display);font-weight:700;font-size:16px}
+.friends{display:flex;align-items:center;gap:var(--s3);font-size:var(--fs-small);color:var(--cream-70)}
+.detail .cta{padding:var(--s3) var(--s5) 22px;display:flex;gap:var(--s2)}
+.detail .cta .btn-primary{flex:1}
+
+/* ============================================================
+   S4 · PICK A DATE (and S6 calendar shares the grid)
+   ============================================================ */
+.cal-head{display:flex;justify-content:space-between;align-items:center;margin:var(--s2) 0 var(--s3)}
+.cal-head .month{font-weight:600;font-size:var(--fs-body)}
+.cal-head .arrows{display:flex;gap:var(--s2)}
+.cal-head .arrows button{width:32px;height:32px;border-radius:50%;background:var(--glass);border:1px solid var(--glass-line);display:grid;place-items:center}
+.cal-head .arrows svg{width:14px;height:14px;stroke:var(--cream);fill:none;stroke-width:2}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px 2px;justify-items:center}
+.cal .dow{font-size:var(--fs-micro);color:var(--cream-70);font-weight:600;height:20px}
+.cal .dow.today{color:var(--cream)}
+.day{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--glass-line);display:grid;place-items:center;font-size:var(--fs-small);font-weight:600;position:relative;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+.day.past{border-color:rgba(255,255,255,.14);color:var(--cream-45)}
+.day.blank{visibility:hidden}
+.day[aria-pressed="true"]{background:var(--ember);border-color:var(--ember);color:var(--on-ember)}
+.day.today{background:var(--cream);border-color:var(--cream);color:var(--ink)}
+.day.today::after{content:"";position:absolute;bottom:-9px;width:4px;height:4px;border-radius:50%;background:var(--ember)}
+.day.planned{border-color:var(--ember);background:var(--surface)}
+.day.planned .th{position:absolute;inset:2px;border-radius:50%;background:var(--surface-2) center/cover;border:2px solid var(--ember);display:grid;place-items:center;font-size:12px;font-weight:600}
+.day.planned .th.img-ok{color:transparent}
+.day .pips{position:absolute;bottom:-8px;display:flex;gap:2px}
+.day .pips i{width:4px;height:4px;border-radius:50%;background:var(--cream-45)}
+.day .pips i.me{background:var(--ember)}
+.slots{display:flex;gap:var(--s2);flex-wrap:wrap}
+.slots .chip{height:40px}
+.row-toggle{display:flex;align-items:center;justify-content:space-between;padding:var(--s2) var(--s4)}
+.row-toggle .t b{display:block;font-weight:600}.row-toggle .t span{font-size:var(--fs-small);color:var(--cream-70)}
+.switch{width:50px;height:30px;border-radius:15px;background:var(--surface-2);border:1px solid var(--glass-line);position:relative;transition:background var(--dur) var(--ease)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--cream);transition:transform var(--dur) var(--ease)}
+.switch[aria-checked="true"]{background:var(--ember);border-color:var(--ember)}
+.switch[aria-checked="true"]::after{transform:translateX(20px)}
+.picked{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);border-radius:var(--r-tile);background:var(--surface);border:1px solid var(--glass-line);color:var(--cream);margin-top:auto}
+.picked .thumb{width:40px;height:40px;border-radius:12px;background:var(--surface-2) center/cover;flex:none}
+.picked .t{flex:1;min-width:0}.picked .t b{display:block;font-weight:600;white-space:nowrap;font-size:14px}.picked .t span{font-size:var(--fs-small);color:var(--cream-70)}
+.pad-b{padding-bottom:22px}
+
+/* ============================================================
+   S5 · INVITE FRIENDS
+   ============================================================ */
+.search{display:flex;align-items:center;gap:var(--s2);height:46px;padding:0 var(--s4);border-radius:var(--r-chip);background:var(--surface);border:1px solid var(--glass-line);color:var(--cream-70);font-size:var(--fs-body)}
+.search svg{width:18px;height:18px;stroke:var(--cream-70);fill:none;stroke-width:1.8}
+.people{display:grid;gap:var(--s1);margin-top:var(--s3)}
+.person{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) 0;width:100%;text-align:left}
+.person .avatar{width:44px;height:44px;font-size:15px}
+.person .t{flex:1}.person .t b{display:block;font-weight:600}.person .t span{font-size:var(--fs-small);color:var(--cream-70)}
+.person .check{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--glass-line);display:grid;place-items:center;transition:background var(--dur) var(--ease)}
+.person .check svg{width:14px;height:14px;stroke:var(--ink);fill:none;stroke-width:2.5;opacity:0}
+.person[aria-pressed="true"] .check{background:var(--ember);border-color:var(--ember)}
+.person[aria-pressed="true"] .check svg{opacity:1}
+.invite-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:var(--s3)}
+.invite-foot .count{font-size:var(--fs-small);color:var(--cream-70)}
+.invite-foot .count b{display:block;font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--cream)}
+
+/* ============================================================
+   S6 · CALENDAR (plans)
+   ============================================================ */
+.plans-head{display:flex;justify-content:space-between;align-items:baseline;margin:var(--s5) 0 var(--s3)}
+.plan{display:flex;align-items:center;gap:var(--s3);padding:var(--s3);border-radius:var(--r-tile);margin-bottom:var(--s2)}
+.plan .logo{width:48px;height:48px;border-radius:14px;background:var(--surface-2) center/cover;flex:none;display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--cream)}
+.plan .logo.img-ok{color:transparent}
+.plan .t{flex:1;min-width:0}.plan .t b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.plan .t .sub{display:flex;align-items:center;gap:6px;font-size:var(--fs-small);color:var(--cream-70);margin-top:2px}
+.plan .time{background:var(--ember);color:var(--on-ember);font-weight:700;font-size:var(--fs-small);padding:8px 12px;border-radius:var(--r-chip);flex:none}
+
+/* ============================================================
+   S7 · LIKES
+   ============================================================ */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3);margin-top:var(--s4)}
+.tile{position:relative;aspect-ratio:4/5;border-radius:var(--r-tile);overflow:hidden;border:1px solid var(--glass-line);background:var(--surface)}
+.tile .video{position:absolute}
+.tile .t{position:absolute;left:var(--s3);right:var(--s3);bottom:var(--s3);z-index:2}
+.tile .t b{display:block;font-family:var(--font-display);font-weight:700;font-size:17px;line-height:1.05;letter-spacing:-.01em}
+.tile .t span{font-size:var(--fs-micro);color:var(--cream-70)}
+.tile .planned{position:absolute;top:var(--s2);left:var(--s2);z-index:2;background:var(--ember);color:var(--on-ember);font-size:var(--fs-micro);font-weight:700;padding:4px 8px;border-radius:var(--r-chip)}
+
+/* ============================================================
+   S8 · NEARBY
+   ============================================================ */
+.nearby .body{padding:0}
+.map{position:relative;flex:1;overflow:hidden}
+.map .topbar{position:absolute;top:var(--s3);left:var(--s5);right:var(--s5);z-index:5;margin:0}
+.map .streets{position:absolute;inset:0;opacity:.5;background:
+  linear-gradient(rgba(255,255,255,.25) 1px,transparent 1px) 0 0/100% 54px,
+  linear-gradient(90deg,rgba(255,255,255,.25) 1px,transparent 1px) 0 0/62px 100%;
+  mask:radial-gradient(70% 60% at 50% 45%,#000 40%,transparent 100%);-webkit-mask:radial-gradient(70% 60% at 50% 45%,#000 40%,transparent 100%)}
+.pin{position:absolute;width:88px;text-align:center;display:grid;justify-items:center;gap:6px}
+.pin .blob{width:76px;height:76px;border-radius:50%;background:var(--surface);border:2px solid var(--glass-line);position:relative}
+.pin.big .blob{border-color:var(--ember)}
+.pin .blob .video{position:absolute;border-radius:50%}
+.pin .blob .video.bite{-webkit-mask:radial-gradient(circle 20px at 84% 16%,transparent 98%,#000 100%);mask:radial-gradient(circle 20px at 84% 16%,transparent 98%,#000 100%)}
+.pin .blob::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+.pin .dist{position:absolute;top:-8px;right:-4px;background:var(--ember);color:var(--on-ember);font-size:10px;font-weight:700;padding:3px 7px;border-radius:var(--r-chip);z-index:2}
+.pin .n{font-size:var(--fs-small);font-weight:600;line-height:1.15}
+.pin .n span{display:block;font-size:var(--fs-micro);color:var(--cream-70);font-weight:400}
+.pin .open{font-size:10px;color:var(--fresh);font-weight:600}
+.pin.big .blob{width:96px;height:96px}
+.me{position:absolute;left:50%;top:52%;width:18px;height:18px;border-radius:50%;background:var(--ember);border:4px solid var(--bg);transform:translate(-50%,-50%);box-shadow:0 0 0 12px rgba(232,84,28,.22)}
+.radius{position:absolute;right:var(--s5);bottom:var(--s5);z-index:5;display:flex;align-items:center;gap:var(--s3)}
+.radius .val{text-align:center}.radius .val span{display:block;font-size:var(--fs-micro);color:var(--cream-70)}.radius .val b{font-family:var(--font-display);font-size:30px;font-weight:800;letter-spacing:-.02em}
+.radius .val b small{font-size:14px;font-weight:600}
+.radius button{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:600}
+.radius .minus{background:var(--surface);border:1px solid var(--glass-line)}.radius .plus{background:var(--ember);color:var(--on-ember)}
+.results{flex:none;background:var(--surface);border:1px solid var(--glass-line);border-bottom:0;color:var(--cream);margin:0 var(--s4) 0;border-radius:var(--r-tile) var(--r-tile) 0 0;padding:var(--s4) var(--s5);display:flex;align-items:center;gap:var(--s5)}
+.results .k span{display:block;font-size:var(--fs-micro);color:var(--cream-70)}.results .k b{font-family:var(--font-display);font-size:18px;font-weight:700;white-space:nowrap}
+.results .btn{margin-left:auto;height:46px}
+.nearby .nav{margin-top:0}
+
+/* ============================================================
+   S9 · PROFILE
+   ============================================================ */
+.profile .me-row{display:flex;align-items:center;gap:var(--s4);margin:var(--s2) 0 var(--s5)}
+.profile .me-row .avatar{width:64px;height:64px;font-size:22px;border-color:var(--ember)}
+.profile .me-row .t b{display:block;font-family:var(--font-display);font-size:24px;font-weight:700;letter-spacing:-.01em}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.stat{padding:var(--s3) var(--s3) var(--s3);border-radius:var(--r-tile);text-align:left}
+.stat b{display:block;font-family:var(--font-display);font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.stat span{font-size:var(--fs-micro);color:var(--cream-70)}
+.prefs{margin-top:var(--s5)}
+.prefs .h2{margin-bottom:var(--s3)}
+.pref{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) 0;border-bottom:1px solid var(--glass-line)}
+.pref:last-child{border-bottom:0}
+.pref .l{font-weight:500}
+.pref .v{font-size:var(--fs-small);color:var(--cream-70);display:flex;align-items:center;gap:6px}
+.pref .v svg{width:14px;height:14px;stroke:var(--cream-70);fill:none;stroke-width:2}
+.spice{display:flex;gap:4px}.spice i{width:8px;height:8px;border-radius:50%;background:var(--surface-2)}.spice i.on{background:var(--ember)}
+.settings{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);margin-bottom:var(--s2)}
+.settings .btn{height:46px;font-size:var(--fs-small)}
+
+
+/* ============================================================
+   S8 · WISHLIST (a checklist of places to try; cross off when eaten)
+   ============================================================ */
+.wl-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:var(--s3)}
+.wl-head .h1{line-height:1}
+.wl-counts{display:flex;gap:var(--s4);font-size:var(--fs-small);color:var(--cream-70)}
+.wl-counts b{color:var(--cream);font-family:var(--font-display);font-size:18px;font-weight:700;margin-right:4px}
+.wl-add{display:flex;align-items:center;gap:var(--s2);height:50px;padding:0 var(--s2) 0 var(--s4);border-radius:var(--r-chip);background:var(--surface);border:1px solid var(--glass-line)}
+.wl-add input{flex:1;background:none;border:0;color:var(--cream);font:inherit;font-size:var(--fs-body);min-width:0}
+.wl-add input::placeholder{color:var(--cream-45)}
+.wl-add input:focus{outline:none}
+.wl-add button{width:36px;height:36px;border-radius:50%;background:var(--ember);color:var(--on-ember);display:grid;place-items:center;flex:none}
+.wl-add button svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
+.wl-list{list-style:none;margin-top:var(--s3);display:grid;gap:2px;overflow:hidden;min-width:0}
+.wl-list li{min-width:0}
+.wl-sep{font-size:var(--fs-micro);color:var(--cream-45);font-weight:600;letter-spacing:.02em;padding:var(--s3) 0 var(--s1)}
+.wl{display:flex;align-items:center;gap:var(--s2);width:100%;text-align:left;padding:var(--s2) var(--s1);border-radius:var(--r-sm);transition:background var(--dur) var(--ease)}
+.wl:hover{background:var(--glass)}
+.wl .box{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--glass-line);display:grid;place-items:center;flex:none;transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.wl .box svg{width:14px;height:14px;stroke:var(--on-ember);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.wl .thumb{width:40px;height:40px;border-radius:12px;background:var(--surface-2) center/cover;flex:none;transition:filter var(--dur) var(--ease),opacity var(--dur) var(--ease)}
+.wl .t{flex:1 1 0;min-width:0;overflow:hidden}
+.wl .t b{font-family:var(--font-display);font-weight:700;font-size:16px;letter-spacing:-.01em;position:relative;display:inline-block;line-height:1.1;max-width:100%;vertical-align:bottom}
+.wl .t b::after{content:"";position:absolute;left:-2px;right:-2px;top:52%;height:2px;background:var(--ember);border-radius:2px;transform:scaleX(0);transform-origin:left;transition:transform 260ms var(--ease)}
+.wl .t span{display:block;font-size:var(--fs-small);color:var(--cream-70);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wl .from{font-size:var(--fs-micro);color:var(--cream-45);flex:0 0 58px;text-align:right;white-space:nowrap}
+.wl .from em{font-style:normal;display:block;color:var(--cream-70)}
+.wl[aria-pressed="true"] .box{background:var(--ember);border-color:var(--ember)}
+.wl[aria-pressed="true"] .box svg{opacity:1}
+.wl[aria-pressed="true"] .t b::after{transform:scaleX(1)}
+.wl[aria-pressed="true"] .t b,.wl[aria-pressed="true"] .t span{color:var(--cream-45)}
+.wl[aria-pressed="true"] .thumb{filter:grayscale(1);opacity:.5}
+.wl-foot{margin-top:auto;padding:var(--s2) 0 var(--s1);display:flex;justify-content:space-between;align-items:center;font-size:var(--fs-small);color:var(--cream-70)}
+.wl-foot button{color:var(--ember);font-weight:600}
+.tile .wish{position:absolute;top:var(--s2);right:var(--s2);z-index:2;width:28px;height:28px;border-radius:50%;background:rgba(11,6,5,.55);border:1px solid var(--glass-line);display:grid;place-items:center}
+.tile .wish svg{width:14px;height:14px;stroke:var(--cream);fill:none;stroke-width:2;stroke-linejoin:round}
+
+
+/* ============================================================
+   FIRST-RUN FLOW (01b–01g): sign up → location → taste → diet & budget → friends → how to swipe
+   ============================================================ */
+.steps{display:flex;gap:5px;flex:1;margin:0 var(--s3)}
+.steps i{flex:1;height:3px;border-radius:2px;background:var(--glass-line)}
+.steps i.on{background:var(--ember)}
+.steps i.done{background:var(--cream-45)}
+.fr .topbar{margin-bottom:var(--s5)}
+.fr .h1{margin-bottom:var(--s2)}
+.fr .lede{color:var(--cream-70);font-size:var(--fs-body);line-height:1.45;max-width:32ch;margin-bottom:var(--s5)}
+.fr .foot{margin-top:auto;display:grid;gap:var(--s2);padding-bottom:22px}
+.fr .foot .why{text-align:center;color:var(--cream-45);font-size:var(--fs-micro)}
+.textbtn{color:var(--cream-70);font-size:var(--fs-small);font-weight:600;padding:var(--s2)}
+/* sign up */
+.su .brand{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:-.02em}
+.su .hero{position:relative;height:38%;border-radius:var(--r-card);overflow:hidden;border:1px solid var(--glass-line);margin-bottom:var(--s5)}
+.su .hero .video{position:absolute}
+.su .hero .cap{position:absolute;left:var(--s4);bottom:var(--s4);z-index:2}
+.su .hero .cap b{display:block;font-family:var(--font-display);font-weight:700;font-size:18px}
+.su .hero .cap span{font-size:var(--fs-small);color:var(--cream-70)}
+.su .btn{justify-content:flex-start;padding:0 var(--s5)}
+.su .btn .ic{width:22px;height:22px;border-radius:50%;background:currentColor;opacity:.9;margin-right:var(--s2);flex:none;display:grid;place-items:center}
+.su .btn-ghost .ic{background:var(--cream)}
+.su .btn .ic svg{width:12px;height:12px;stroke:var(--bg);fill:none;stroke-width:2.4;stroke-linecap:round}
+.su .legal{color:var(--cream-45);font-size:var(--fs-micro);text-align:center;line-height:1.5;margin-top:var(--s2)}
+/* location */
+.loc-vis{position:relative;flex:1;min-height:0;border-radius:var(--r-card);overflow:hidden;border:1px solid var(--glass-line);background:var(--surface);margin-bottom:var(--s4)}
+.loc-vis .streets{position:absolute;inset:0;opacity:.6;background:linear-gradient(rgba(255,255,255,.22) 1px,transparent 1px) 0 0/100% 46px,linear-gradient(90deg,rgba(255,255,255,.22) 1px,transparent 1px) 0 0/54px 100%;-webkit-mask:radial-gradient(70% 70% at 50% 50%,#000 30%,transparent 100%);mask:radial-gradient(70% 70% at 50% 50%,#000 30%,transparent 100%)}
+.loc-vis .ring{position:absolute;left:50%;top:50%;width:150px;height:150px;border-radius:50%;border:1.5px solid rgba(232,84,28,.5);transform:translate(-50%,-50%)}
+.loc-vis .ring.r2{width:230px;height:230px;border-color:rgba(232,84,28,.25)}
+.loc-vis .me{left:50%;top:50%}
+.loc-vis .pip{position:absolute;width:34px;height:34px;border-radius:50%;background:var(--surface-2) center/cover;border:2px solid var(--bg)}
+.loc-vis .lbl{position:absolute;left:var(--s4);bottom:var(--s4);background:var(--surface);border:1px solid var(--glass-line);border-radius:var(--r-chip);padding:8px 12px;font-size:var(--fs-small);font-weight:600;display:flex;align-items:center;gap:8px}
+.loc-vis .lbl i{width:8px;height:8px;border-radius:50%;background:var(--fresh)}
+@media (prefers-reduced-motion:no-preference){.loc-vis .ring{animation:pulse 2.4s ease-out infinite}.loc-vis .ring.r2{animation-delay:.6s}@keyframes pulse{0%{transform:translate(-50%,-50%) scale(.85);opacity:1}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}}
+/* taste */
+.taste-grid{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.taste-grid .chip{height:42px;font-size:var(--fs-body);padding:0 var(--s4) 0 var(--s3)}
+.taste-grid .chip .em{font-size:16px}
+.taste-count{margin-top:var(--s4);font-size:var(--fs-small);color:var(--cream-70)}
+.taste-count b{color:var(--cream)}
+/* diet & budget */
+.setrow{padding:var(--s4);border-radius:var(--r-tile);background:var(--surface);border:1px solid var(--glass-line);margin-bottom:var(--s2)}
+.setrow .lbl{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s3)}
+.setrow .lbl b{font-weight:600}.setrow .lbl span{font-size:var(--fs-small);color:var(--cream-70)}
+.setrow .lbl output{font-family:var(--font-display);font-weight:700;font-size:16px}
+.seg{display:flex;gap:4px;background:var(--surface-2);border-radius:var(--r-chip);padding:4px}
+.seg button{flex:1;height:36px;border-radius:var(--r-chip);font-size:var(--fs-small);font-weight:600;color:var(--cream-70);transition:background var(--dur) var(--ease),color var(--dur) var(--ease)}
+.seg button[aria-pressed="true"]{background:var(--ember);color:var(--on-ember)}
+input[type=range]{width:100%;accent-color:var(--ember);height:28px}
+.range-ends{display:flex;justify-content:space-between;font-size:var(--fs-micro);color:var(--cream-45);margin-top:-4px}
+.setrow.inline{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4)}
+.setrow.inline .t b{display:block;font-weight:600}.setrow.inline .t span{font-size:var(--fs-small);color:var(--cream-70)}
+/* how to swipe */
+.howto{position:relative;flex:1;min-height:0;display:grid;place-items:center;margin-bottom:var(--s3)}
+.howto .mini{position:relative;width:50%;aspect-ratio:3/4;border-radius:var(--r-card);overflow:hidden;border:1px solid var(--glass-line);box-shadow:var(--shadow-card);transform:rotate(-4deg)}
+.howto .mini .video{position:absolute}
+.howto .mini .n{position:absolute;left:var(--s4);bottom:var(--s4);z-index:2;font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:-.02em;line-height:1}
+.howto .hint{position:absolute;width:82px;display:grid;justify-items:center;gap:4px;text-align:center;font-size:var(--fs-small);font-weight:600;line-height:1.15}
+.howto .hint span{font-size:var(--fs-micro);color:var(--cream-70);font-weight:400}
+.howto .hint .arr{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--glass-line)}
+.howto .hint .arr svg{width:20px;height:20px;stroke:var(--cream);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.howto .hint.yes .arr{background:var(--grad-cta);border-color:transparent}.howto .hint.yes .arr svg{stroke:var(--on-ember)}
+.howto .hint.yes{right:0;top:42%}.howto .hint.no{left:0;top:42%}.howto .hint.up{left:50%;top:0;transform:translateX(-50%)}
+@media (prefers-reduced-motion:no-preference){.howto .mini{animation:nudge 3s ease-in-out infinite}@keyframes nudge{0%,100%{transform:rotate(-4deg) translateX(0)}30%{transform:rotate(-1deg) translateX(18px)}60%{transform:rotate(-6deg) translateX(-12px)}}}
+
+
+/* taste — photo tiles; picking a taste is taking a bite out of it */
+.taste-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 calc(-1*var(--s5));padding:0 var(--s5) var(--s3);scrollbar-width:none;-webkit-mask:linear-gradient(#000 calc(100% - 28px),transparent);mask:linear-gradient(#000 calc(100% - 28px),transparent)}
+.taste-scroll::-webkit-scrollbar{display:none}
+.tt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.tt{position:relative;aspect-ratio:1/.92;border-radius:14px;text-align:left;transition:transform var(--dur) var(--ease)}
+.tt:active{transform:scale(.96)}
+.tt .img{position:absolute;inset:0;border-radius:14px;overflow:hidden;background:var(--surface) center/cover no-repeat;border:1px solid var(--glass-line);transition:border-color var(--dur) var(--ease)}
+.tt .img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,6,5,.05) 30%,rgba(11,6,5,.85) 100%)}
+.tt .lbl{position:absolute;left:10px;right:8px;bottom:9px;z-index:2;font-weight:600;font-size:13px;line-height:1.15;letter-spacing:-.005em}
+.tt .lbl small{display:block;font-weight:400;font-size:10px;color:var(--cream-70);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt .chk{position:absolute;top:-5px;right:-5px;z-index:3;width:24px;height:24px;border-radius:50%;background:var(--ember);display:grid;place-items:center;transform:scale(0);transition:transform var(--dur) var(--ease)}
+.tt .chk svg{width:13px;height:13px;stroke:var(--on-ember);fill:none;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
+.tt[aria-pressed="true"] .img{border-color:var(--ember);-webkit-mask:radial-gradient(circle 16px at calc(100% - 4px) 4px,transparent 98%,#000 100%);mask:radial-gradient(circle 16px at calc(100% - 4px) 4px,transparent 98%,#000 100%)}
+.tt[aria-pressed="true"] .chk{transform:scale(1)}
+.tt[aria-pressed="true"] .img::after{background:linear-gradient(180deg,rgba(232,84,28,.12) 0%,rgba(11,6,5,.88) 100%)}
+.tt:focus-visible{outline:2px solid var(--cream);outline-offset:3px;border-radius:14px}
+.taste-more{margin-top:var(--s4)}
+.taste-more .k{font-size:var(--fs-micro);color:var(--cream-45);font-weight:600;letter-spacing:.02em;margin-bottom:var(--s2)}
+.taste-more .chiprow{margin:0;padding:0 0 var(--s1)}
+.taste-more .chip{height:34px;font-size:12px}
+.taste-foot{flex:none;padding:var(--s2) 0 22px;display:grid;gap:var(--s2)}
+.taste-foot .sel{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);font-size:var(--fs-small);color:var(--cream-70);min-height:18px}
+.taste-foot .sel b{color:var(--cream);font-family:var(--font-display);font-size:18px;font-weight:700;margin-right:6px}
+.taste-foot .sel .names{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.btn[disabled]{background:var(--surface);color:var(--cream-45);cursor:not-allowed;border:1px solid var(--glass-line)}
+.btn[disabled]:active{transform:none}
+
+/* board notes */
+.notes{margin-top:36px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.note{padding:20px;border-radius:18px;background:#22110F;border:1px solid #3a1f1a}
+.note h3{font-family:var(--font-display);font-size:16px;font-weight:700;margin-bottom:8px;color:var(--gallery-ink)}
+.note p,.note li{color:var(--gallery-mute);font-size:14px;line-height:1.5}
+.note ul{padding-left:18px}
+.note .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px;border:1px solid rgba(255,255,255,.2)}
+</style>
+</head>
+<body>
+<a class="skip" href="#gallery">Skip to screens</a>
+<main class="board">
+  <header class="board-head">
+    <div>
+      <h1>Ngap<span>.</span> — swipe, pick a day, eat</h1>
+      <p>Sixteen screens for a video-first restaurant swiper in Kuala Lumpur, including the six-step first-run flow. Tap the bottom nav in any phone to jump between screens; drag the front card on Swipe.</p>
+    </div>
+    <div class="legend"><span><b>Drag</b> the swipe card</span><span><b>Tap</b> days, chips, friends</span><span><b>Nav</b> jumps screens</span></div>
+  </header>
+
+  <section class="gallery" id="gallery" aria-label="App screens">
+
+    <!-- ================= S1 ONBOARDING ================= -->
+    <div class="slot" data-screen="onboarding">
+      <div class="slot-label"><b>01a</b><span>Welcome</span></div>
+      <div class="phone"><div class="screen onb">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="brand">Ngap.</div>
+          <div class="stackpreview" aria-hidden="true">
+            <div class="card"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1603088549155-6ae9395b928f?auto=format&fit=crop&w=600&q=70)"></div><div class="name">Bakar &amp; Bara</div></div>
+            <div class="card bite"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=600&q=70)"></div><div class="name">Kak Ros</div></div>
+            <div class="card"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=600&q=70)"><span class="tag"><i></i>0:12</span></div><div class="name">Chili Pan Mee 88</div></div>
+          </div>
+          <div class="copy">
+            <h2 class="h-hero">Where to eat? <em>Swipe it.</em></h2>
+            <p>Fifteen seconds of video per restaurant. Bite the ones you want, pick a day, bring whoever's hungry.</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary btn-block" data-go="signup">Start swiping</button>
+            <button class="btn btn-ghost btn-block" data-go="swipe">I already have an account</button>
+          </div>
+          <p class="fineprint">Uses your location to find places nearby</p>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= 01b SIGN UP ================= -->
+    <div class="slot" data-screen="signup">
+      <div class="slot-label"><b>01b</b><span>Sign up</span></div>
+      <div class="phone"><div class="screen fr su">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar"><span class="brand">Ngap.</span><button class="textbtn" data-go="location">Later</button></div>
+          <div class="hero"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=900&q=70)"></div><div class="cap"><b>Save your bites across phones</b><span>Your likes, plans and wishlist follow you.</span></div></div>
+          <h2 class="h1">Let's get you in</h2>
+          <div class="foot" style="margin-top:var(--s3)">
+            <button class="btn btn-primary btn-block" data-go="location"><span class="ic"><svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/></svg></span>Continue with phone number</button>
+            <button class="btn btn-ghost btn-block" data-go="location"><span class="ic"></span>Continue with Apple</button>
+            <button class="btn btn-ghost btn-block" data-go="location"><span class="ic"></span>Continue with Google</button>
+            <p class="legal">By continuing you agree to the Terms and Privacy Policy. We never post without asking.</p>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= 01c LOCATION ================= -->
+    <div class="slot" data-screen="location">
+      <div class="slot-label"><b>01c</b><span>Location</span></div>
+      <div class="phone"><div class="screen fr">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="signup"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <div class="steps" aria-label="Step 1 of 6"><i class="on"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></div>
+            <span style="width:44px"></span>
+          </div>
+          <h2 class="h1">Where are you eating?</h2>
+          <p class="lede">Ngap only shows places you can actually get to tonight. We use your location while the app is open, nothing more.</p>
+          <div class="loc-vis" aria-hidden="true">
+            <div class="streets"></div><div class="ring r2"></div><div class="ring"></div><div class="me"></div>
+            <div class="pip" style="left:22%;top:26%;background-image:url(https://images.unsplash.com/photo-1754617438035-712ddf5500ef?auto=format&fit=crop&w=200&q=70)"></div>
+            <div class="pip" style="left:68%;top:20%;background-image:url(https://images.unsplash.com/photo-1624957389019-0c814505746d?auto=format&fit=crop&w=200&q=70)"></div>
+            <div class="pip" style="left:30%;top:66%;background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=200&q=70)"></div>
+            <div class="pip" style="left:72%;top:62%;background-image:url(https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=200&q=70)"></div>
+            <div class="lbl"><i></i>38 places open within 3 km</div>
+          </div>
+          <div class="foot">
+            <button class="btn btn-primary btn-block" data-go="taste">Allow location</button>
+            <button class="btn btn-ghost btn-block" data-go="taste">Type an area instead</button>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= 01d TASTE ================= -->
+    <div class="slot" data-screen="taste">
+      <div class="slot-label"><b>01d</b><span>Taste</span></div>
+      <div class="phone"><div class="screen fr">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="location"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <div class="steps" aria-label="Step 2 of 6"><i class="done"></i><i class="on"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></div>
+            <button class="textbtn" data-go="diet">Skip</button>
+          </div>
+          <h2 class="h1">What do you crave?</h2>
+          <p class="lede" style="margin-bottom:var(--s4)">Bite at least two. Your first swipes come from these.</p>
+          <div class="taste-scroll">
+            <div class="tt-grid" data-taste>
+              <button class="tt" aria-pressed="true" data-name="Nasi lemak"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Nasi lemak<small>the morning kind</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Mamak"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1624957389019-0c814505746d?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Mamak<small>roti &amp; teh tarik</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="true" data-name="Satay"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1636301175218-6994458a4b0a?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Satay<small>over charcoal</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Pan mee"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Pan mee<small>dry, with chili</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Banana leaf"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1638569099509-2f46eb4bb94e?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Banana leaf<small>Brickfields style</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="true" data-name="Kopitiam"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1754617438035-712ddf5500ef?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Kopitiam<small>toast &amp; kopi</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Char kuey teow"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1707886114166-e4030473a8fb?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Char kuey teow<small>wok hei</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Desserts"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1647093953000-9065ed6f85ef?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Desserts<small>cendol &amp; more</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Seafood"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1569058242252-623df46b5025?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Seafood<small>sambal, grilled</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Nasi kandar"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1787329681345-032a992efcb1?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Nasi kandar<small>flooded</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Hawker nights"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1756133570715-1b931bfb4482?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Hawker nights<small>pasar malam</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+              <button class="tt" aria-pressed="false" data-name="Bak kut teh"><span class="img" style="background-image:url(https://images.unsplash.com/photo-1666239308347-4292ea2ff777?auto=format&fit=crop&w=400&q=70)"></span><span class="lbl">Bak kut teh<small>Klang-style</small></span><span class="chk"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            </div>
+            <div class="taste-more">
+              <p class="k">Also into</p>
+              <div class="chiprow" data-multi>
+                <button class="chip" aria-pressed="false">Japanese</button>
+                <button class="chip" aria-pressed="false">Thai</button>
+                <button class="chip" aria-pressed="false">Korean</button>
+                <button class="chip" aria-pressed="false">Western</button>
+                <button class="chip" aria-pressed="false">Cafés</button>
+                <button class="chip" aria-pressed="false">Middle Eastern</button>
+                <button class="chip" aria-pressed="false">Vegetarian</button>
+              </div>
+            </div>
+          </div>
+          <div class="taste-foot">
+            <div class="sel"><span><b data-taste-count>3</b>picked</span><span class="names" data-taste-names>Nasi lemak, Satay, Kopitiam</span></div>
+            <button class="btn btn-primary btn-block" data-go="diet" data-taste-cta>Continue</button>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= 01e DIET & BUDGET ================= -->
+    <div class="slot" data-screen="diet">
+      <div class="slot-label"><b>01e</b><span>Diet &amp; budget</span></div>
+      <div class="phone"><div class="screen fr">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="taste"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <div class="steps" aria-label="Step 3 of 6"><i class="done"></i><i class="done"></i><i class="on"></i><i class=""></i><i class=""></i><i class=""></i></div>
+            <button class="textbtn" data-go="friends">Skip</button>
+          </div>
+          <h2 class="h1">Any rules?</h2>
+          <p class="lede">So we never show you somewhere you can't eat.</p>
+          <div class="setrow inline"><div class="t"><b>Halal only</b><span>Hides places without halal certification</span></div><button class="switch" role="switch" aria-checked="true" aria-label="Halal only"></button></div>
+          <div class="setrow inline"><div class="t"><b>Vegetarian options</b><span>Must have a real veg section</span></div><button class="switch" role="switch" aria-checked="false" aria-label="Vegetarian options"></button></div>
+          <div class="setrow">
+            <div class="lbl"><b>Spice</b><span>How hot is too hot?</span></div>
+            <div class="seg" data-seg><button aria-pressed="false">Mild</button><button aria-pressed="false">Medium</button><button aria-pressed="true">Pedas</button><button aria-pressed="false">Bring it</button></div>
+          </div>
+          <div class="setrow">
+            <div class="lbl"><b>Budget per person</b><output data-budget-out>RM 10–40</output></div>
+            <input type="range" min="5" max="100" step="5" value="40" aria-label="Budget per person, upper limit" data-budget>
+            <div class="range-ends"><span>RM 5</span><span>RM 100+</span></div>
+          </div>
+          <div class="foot">
+            <button class="btn btn-primary btn-block" data-go="friends">Continue</button>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= 01f FRIENDS ================= -->
+    <div class="slot" data-screen="friends">
+      <div class="slot-label"><b>01f</b><span>Friends</span></div>
+      <div class="phone"><div class="screen fr">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="diet"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <div class="steps" aria-label="Step 4 of 6"><i class="done"></i><i class="done"></i><i class="done"></i><i class="on"></i><i class=""></i><i class=""></i></div>
+            <button class="textbtn" data-go="howto">Skip</button>
+          </div>
+          <h2 class="h1">Eat with people</h2>
+          <p class="lede">Six of your contacts are already on Ngap. Add them and you can plan a dinner in two taps. Optional, always.</p>
+          <div class="people" data-people>
+            <button class="person" aria-pressed="true"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&h=240&crop=faces&q=70)" aria-label="AZ">AZ</span><span class="t"><b>Aiman Zulkifli</b><span>142 bites · Bangsar</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="true"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&h=240&crop=faces&q=70)" aria-label="MK">MK</span><span class="t"><b>Mei Kee Tan</b><span>Ngap'd 3 of your picks</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="true"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&h=240&crop=faces&q=70)" aria-label="SY">SY</span><span class="t"><b>Syafiq Rahman</b><span>Kampung Baru</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="false"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=240&h=240&crop=faces&q=70)" aria-label="PR">PR</span><span class="t"><b>Priya Raj</b><span>Vegetarian</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="false"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=240&h=240&crop=faces&q=70)" aria-label="JW">JW</span><span class="t"><b>Jia Wen Lim</b><span>Cheras</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="false"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=240&h=240&crop=faces&q=70)" aria-label="DN">DN</span><span class="t"><b>Danial Ng</b><span>Kajang</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+          </div>
+          <div class="foot">
+            <button class="btn btn-primary btn-block" data-go="howto">Add <span data-count>3</span> friends</button>
+            <p class="why">We don't upload your contacts. Matching happens on your phone.</p>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= 01g HOW TO SWIPE ================= -->
+    <div class="slot" data-screen="howto">
+      <div class="slot-label"><b>01g</b><span>How to swipe</span></div>
+      <div class="phone"><div class="screen fr">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="friends"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <div class="steps" aria-label="Step 5 of 6"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="on"></i><i class=""></i></div>
+            <span style="width:44px"></span>
+          </div>
+          <h2 class="h1">Three moves</h2>
+          <p class="lede">Every card is a 15-second video from the restaurant. Watch, then flick.</p>
+          <div class="howto" aria-label="Swipe right to Ngap, left to skip, up to save for later">
+            <div class="hint up"><span class="arr"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span>Later<span>save without deciding</span></div>
+            <div class="hint no"><span class="arr"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></span>Skip<span>not tonight</span></div>
+            <div class="mini"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1603088549155-6ae9395b928f?auto=format&fit=crop&w=700&q=70)"></div><div class="n">Bakar &amp; Bara</div></div>
+            <div class="hint yes"><span class="arr"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>Ngap!<span>I want this</span></div>
+          </div>
+          <div class="foot">
+            <button class="btn btn-primary btn-block" data-go="swipe">Show me dinner</button>
+            <p class="why">Bitten places land in Your bites. Set a date from there.</p>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S2 SWIPE ================= -->
+    <div class="slot" data-screen="swipe">
+      <div class="slot-label"><b>02</b><span>Swipe · home</span></div>
+      <div class="phone"><div class="screen swipe">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <div class="loc"><svg viewBox="0 0 24 24"><path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><div>Bangsar, KL<small>within 3 km · dinner</small></div></div>
+            <button class="iconbtn" aria-label="Filters"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>
+          </div>
+          <div class="deck" id="deck"></div>
+          <div class="actions3">
+            <button class="no" aria-label="Skip" data-swipe="left"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            <button class="yes" data-swipe="right">Ngap!</button>
+            <button class="later" aria-label="Save for later" data-swipe="up"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Main"></nav>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S3 DETAIL ================= -->
+    <div class="slot" data-screen="detail">
+      <div class="slot-label"><b>03</b><span>Restaurant</span></div>
+      <div class="phone"><div class="screen detail">
+        <div class="island"></div>
+        <div class="statusbar" style="position:absolute;left:0;right:0;z-index:3"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="hero">
+            <div class="video" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=1000&q=70)"><span class="tag" style="top:64px"><i></i>0:14 · tap to unmute</span></div>
+            <div class="topbar" style="top:64px">
+              <button class="iconbtn" aria-label="Back" data-go="swipe"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <div style="display:flex;gap:8px"><button class="iconbtn" aria-label="Add to wishlist" data-go="wishlist"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button><button class="iconbtn" aria-label="Share"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 13v6h14v-6"/></svg></button></div>
+            </div>
+            <div class="title">
+              <div class="tags" style="display:flex;gap:6px;margin-bottom:8px"><span class="chip" style="height:26px;font-size:11px;background:rgba(0,0,0,.3)">Nasi lemak</span><span class="chip" style="height:26px;font-size:11px;background:rgba(0,0,0,.3)">Halal</span></div>
+              <h2 class="h1">Warung Kak Ros</h2>
+              <p class="small">Kampung Baru · 1.2 km · open till 2 am</p>
+            </div>
+          </div>
+          <div class="content">
+            <div class="facts">
+              <div class="fact"><b>RM 8–15</b><span>per person</span></div>
+              <div class="fact"><b>4.7</b><span>1,204 ngaps</span></div>
+              <div class="fact"><b>~10 min</b><span>wait, evenings</span></div>
+            </div>
+            <div>
+              <h3 class="h2" style="margin-bottom:6px">What people bite</h3>
+              <div class="dishes">
+                <div class="dish"><div class="thumb" style="background-image:url(https://images.unsplash.com/photo-1677921755291-c39158477b8e?auto=format&fit=crop&w=200&q=70)"></div><div class="t"><b>Nasi lemak ayam berempah</b><span>Coconut rice, spiced fried chicken, sambal</span></div><div class="price">RM 12</div></div>
+                <div class="dish"><div class="thumb" style="background-image:url(https://images.unsplash.com/photo-1569058242252-623df46b5025?auto=format&fit=crop&w=200&q=70)"></div><div class="t"><b>Sambal sotong</b><span>Squid in sweet-hot sambal</span></div><div class="price">RM 15</div></div>
+                <div class="dish"><div class="thumb" style="background-image:url(https://images.unsplash.com/photo-1666239308347-4292ea2ff777?auto=format&fit=crop&w=200&q=70)"></div><div class="t"><b>Teh tarik</b><span>Pulled, frothy, very sweet</span></div><div class="price">RM 3</div></div>
+              </div>
+            </div>
+            <div class="friends"><div class="stack"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="AZ">AZ</span><span class="avatar a2" style="background-image:url(https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="MK">MK</span><span class="avatar a4" style="background-image:url(https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="SY">SY</span></div><span>Aiman, Mei Kee and 4 friends ngap'd this</span></div>
+          </div>
+          <div class="cta">
+            <button class="btn btn-ghost" aria-label="Directions"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg></button>
+            <button class="btn btn-primary" data-go="date">Set a date</button>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S4 PICK A DATE ================= -->
+    <div class="slot" data-screen="date">
+      <div class="slot-label"><b>04</b><span>Pick a date</span></div>
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body pad-b">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="detail"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <span class="small">Warung Kak Ros</span>
+            <span style="width:44px"></span>
+          </div>
+          <h2 class="h1">When are we going?</h2>
+          <div class="cal-head"><span class="month">September 2026</span><div class="arrows"><button aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><button aria-label="Next month"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div></div>
+          <div class="cal" data-cal="pick" role="group" aria-label="Choose a day"></div>
+          <h3 class="h2" style="margin:var(--s4) 0 var(--s2)">Time</h3>
+          <div class="slots" data-slots>
+            <button class="chip" aria-pressed="false">12:30</button>
+            <button class="chip" aria-pressed="false">18:30</button>
+            <button class="chip" aria-pressed="true">20:00</button>
+            <button class="chip" aria-pressed="false">21:30</button>
+            <button class="chip" aria-pressed="false">Late</button>
+          </div>
+          <div class="glass-card row-toggle" style="margin-top:var(--s3)">
+            <div class="t"><b>Bring friends</b><span>Optional — they'll get a vote on the time</span></div>
+            <button class="switch" role="switch" aria-checked="true" aria-label="Bring friends"></button>
+          </div>
+          <div class="picked" style="margin-top:auto">
+            <div class="thumb" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=200&q=70)"></div>
+            <div class="t"><b>Fri 4 Sep · 20:00</b><span>Kak Ros · 3 friends</span></div>
+            <button class="btn btn-light" style="height:40px;padding:0 14px;font-size:14px;white-space:nowrap" data-go="invite">Lock it in</button>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S5 INVITE ================= -->
+    <div class="slot" data-screen="invite">
+      <div class="slot-label"><b>05</b><span>Invite friends</span></div>
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body pad-b">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="date"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <span class="small">Fri 4 Sep · 8:00 pm</span>
+            <button class="btn btn-ghost" style="height:36px;padding:0 14px;font-size:13px" data-go="calendar">Skip</button>
+          </div>
+          <h2 class="h1" style="margin-bottom:var(--s4)">Who's hungry?</h2>
+          <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Search friends</div>
+          <p class="micro" style="margin-top:var(--s4);font-weight:600;letter-spacing:.02em">Ate with recently</p>
+          <div class="people" data-people>
+            <button class="person" aria-pressed="true"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="AZ">AZ</span><span class="t"><b>Aiman Zulkifli</b><span>Ngap'd Kak Ros too</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="true"><span class="avatar a2" style="background-image:url(https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="MK">MK</span><span class="t"><b>Mei Kee Tan</b><span>Free Friday evening</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="true"><span class="avatar a4" style="background-image:url(https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="SY">SY</span><span class="t"><b>Syafiq Rahman</b><span>Lives 400 m from there</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="false"><span class="avatar a3" style="background-image:url(https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="PR">PR</span><span class="t"><b>Priya Raj</b><span>Vegetarian — warn her about the sambal</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="false"><span class="avatar a5" style="background-image:url(https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="JW">JW</span><span class="t"><b>Jia Wen Lim</b><span>Last ate together in July</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+            <button class="person" aria-pressed="false"><span class="avatar a1" style="background-image:url(https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="DN">DN</span><span class="t"><b>Danial Ng</b><span>Free most weekends</span></span><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span></button>
+          </div>
+          <div class="invite-foot">
+            <div class="count"><b data-count>3</b>selected</div>
+            <button class="btn btn-primary" style="flex:1;max-width:220px" data-go="calendar">Send invites</button>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S6 CALENDAR ================= -->
+    <div class="slot" data-screen="calendar">
+      <div class="slot-label"><b>06</b><span>Calendar · your plans</span></div>
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <h2 class="h1">Calendar</h2>
+            <div style="display:flex;gap:8px">
+              <button class="iconbtn" aria-label="Search plans"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+              <button class="iconbtn" aria-label="New plan" data-go="swipe"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            </div>
+          </div>
+          <div class="glass-card" style="padding:var(--s4) var(--s3) var(--s5)">
+            <div class="cal-head" style="margin-top:0"><span class="month">September 2026</span><button class="chip" style="height:30px;font-size:12px" aria-pressed="false">This month ▾</button></div>
+            <div class="cal" data-cal="plans" role="group" aria-label="Your plans this month"></div>
+          </div>
+          <div class="plans-head"><h3 class="h2">Today</h3><span class="small">2 plans</span></div>
+          <div class="plan glass-card"><div class="logo" style="background-image:url(https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=200&q=70)">88</div><div class="t"><b>Chili Pan Mee 88</b><div class="sub"><span class="stack"><span class="avatar a2" style="width:20px;height:20px;font-size:9px;border-width:1.5px;background-image:url(https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)">MK</span><span class="avatar a4" style="width:20px;height:20px;font-size:9px;border-width:1.5px;background-image:url(https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)">SY</span></span>Lunch · Kepong · 6 km</div></div><div class="time">12:30</div></div>
+          <div class="plan glass-card"><div class="logo" style="background-image:url(https://images.unsplash.com/photo-1603088549155-6ae9395b928f?auto=format&fit=crop&w=200&q=70)">BB</div><div class="t"><b>Bakar &amp; Bara Satay</b><div class="sub">Just you · Kajang · 22 km</div></div><div class="time">20:30</div></div>
+          <div class="plans-head" style="margin-top:var(--s2)"><h3 class="h2">Fri 4</h3><span class="small">1 plan</span></div>
+          <div class="plan glass-card"><div class="logo" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=200&q=70)">KR</div><div class="t"><b>Warung Kak Ros</b><div class="sub"><span class="stack"><span class="avatar a1" style="width:20px;height:20px;font-size:9px;border-width:1.5px;background-image:url(https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)">AZ</span><span class="avatar a2" style="width:20px;height:20px;font-size:9px;border-width:1.5px;background-image:url(https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)">MK</span><span class="avatar a4" style="width:20px;height:20px;font-size:9px;border-width:1.5px;background-image:url(https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)">SY</span></span>3 friends · 2 confirmed</div></div><div class="time">20:00</div></div>
+        </div>
+        <nav class="nav" aria-label="Main"></nav>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S7 LIKES ================= -->
+    <div class="slot" data-screen="likes">
+      <div class="slot-label"><b>07</b><span>Likes</span></div>
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar"><h2 class="h1">Your bites</h2><span class="small">14 saved</span></div>
+          <div class="chiprow" data-filters>
+            <button class="chip" aria-pressed="true">All</button>
+            <button class="chip" aria-pressed="false">Not planned yet</button>
+            <button class="chip" aria-pressed="false">Planned</button>
+            <button class="chip" aria-pressed="false" data-go="wishlist">Wishlist →</button>
+            <button class="chip" aria-pressed="false">Halal</button>
+          </div>
+          <div class="grid2">
+            <button class="tile bite" data-go="detail"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=600&q=70)"></div><span class="planned">Fri 4</span><span class="wish" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg></span><div class="t"><b>Warung Kak Ros</b><span>Nasi lemak · Kampung Baru</span></div></button>
+            <button class="tile bite" data-go="detail"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1754617438035-712ddf5500ef?auto=format&fit=crop&w=600&q=70)"></div><div class="t"><b>Kopitiam Heng Kee</b><span>Kaya toast · Pudu</span></div></button>
+            <button class="tile bite" data-go="detail"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1638569099509-2f46eb4bb94e?auto=format&fit=crop&w=600&q=70)"></div><div class="t"><b>Banana Leaf House</b><span>South Indian · Brickfields</span></div></button>
+            <button class="tile bite" data-go="detail"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=600&q=70)"></div><span class="planned">Today</span><div class="t"><b>Chili Pan Mee 88</b><span>Dry noodles · Kepong</span></div></button>
+            <button class="tile bite" data-go="detail"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1707886114166-e4030473a8fb?auto=format&fit=crop&w=600&q=70)"></div><div class="t"><b>Kuey Teow Ah Seng</b><span>Char kuey teow · Cheras</span></div></button>
+            <button class="tile bite" data-go="detail"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1647093953000-9065ed6f85ef?auto=format&fit=crop&w=600&q=70)"></div><div class="t"><b>Cendol Tepi Jalan</b><span>Dessert · Chow Kit</span></div></button>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Main"></nav>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S8 WISHLIST ================= -->
+    <div class="slot" data-screen="wishlist" data-nav="likes">
+      <div class="slot-label"><b>08</b><span>Wishlist</span></div>
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar">
+            <button class="iconbtn" aria-label="Back" data-go="likes"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+            <button class="iconbtn" aria-label="Share wishlist"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 13v6h14v-6"/></svg></button>
+          </div>
+          <div class="wl-head">
+            <h2 class="h1">Places to<br>try</h2>
+            <div class="wl-counts"><span><b data-wl-todo>6</b>to go</span><span><b data-wl-done>3</b>eaten</span></div>
+          </div>
+          <div class="wl-add">
+            <input type="text" placeholder="Add a place…" aria-label="Add a place to your wishlist" data-wl-input>
+            <button aria-label="Add" data-wl-addbtn><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+          </div>
+          <ul class="wl-list" data-wl>
+            <li class="wl-sep">Tap a place once you've eaten there</li>
+            <li><button class="wl" aria-pressed="false"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Warung Kak Ros</b><span>Nasi lemak · Kampung Baru</span></span><span class="from">Planned<em>Fri 4</em></span></button></li>
+            <li><button class="wl" aria-pressed="false"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1624957389019-0c814505746d?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Roti Canai Corner</b><span>Mamak · TTDI · open 24 h</span></span><span class="from">From Aiman<em></em></span></button></li>
+            <li><button class="wl" aria-pressed="false"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1707886114166-e4030473a8fb?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Kuey Teow Ah Seng</b><span>Char kuey teow · Cheras</span></span><span class="from">Swiped<em></em></span></button></li>
+            <li><button class="wl" aria-pressed="false"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1603088549155-6ae9395b928f?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Bakar &amp; Bara Satay</b><span>Satay · Kajang</span></span><span class="from">Planned<em>Tonight</em></span></button></li>
+            <li><button class="wl" aria-pressed="false"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1638569099509-2f46eb4bb94e?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Banana Leaf House</b><span>South Indian · Brickfields</span></span><span class="from">From Priya<em></em></span></button></li>
+            <li><button class="wl" aria-pressed="false"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1647093953000-9065ed6f85ef?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Cendol Tepi Jalan</b><span>Dessert · Chow Kit</span></span><span class="from">Swiped<em></em></span></button></li>
+            <li><button class="wl" aria-pressed="true"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1754617438035-712ddf5500ef?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Kopitiam Heng Kee</b><span>Kaya toast · Pudu</span></span><span class="from">Eaten<em>24 Aug</em></span></button></li>
+            <li><button class="wl" aria-pressed="true"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Chili Pan Mee 88</b><span>Dry noodles · Kepong</span></span><span class="from">Eaten<em>12 Aug</em></span></button></li>
+            <li><button class="wl" aria-pressed="true"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb" style="background-image:url(https://images.unsplash.com/photo-1787329681345-032a992efcb1?auto=format&fit=crop&w=200&q=70)"></span><span class="t"><b>Mee Rebus Mak Enon</b><span>Mee rebus · Kampung Baru</span></span><span class="from">Eaten<em>2 Aug</em></span></button></li>
+          </ul>
+          <div class="wl-foot"><span>Eaten ones sink to the bottom</span><button data-wl-clear>Clear eaten</button></div>
+        </div>
+        <nav class="nav" aria-label="Main"></nav>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S9 NEARBY ================= -->
+    <div class="slot" data-screen="nearby">
+      <div class="slot-label"><b>09</b><span>Nearby</span></div>
+      <div class="phone"><div class="screen nearby">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="map">
+            <div class="streets" aria-hidden="true"></div>
+            <div class="topbar">
+              <button class="iconbtn" aria-label="Back" data-go="swipe"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+              <button class="iconbtn" aria-label="Filters, 2 active"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg><span class="dot">2</span></button>
+            </div>
+            <div class="me" aria-label="You are here"></div>
+            <div class="pin" style="left:8%;top:14%"><div class="blob"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1754617438035-712ddf5500ef?auto=format&fit=crop&w=300&q=70)"></div><span class="dist">2.1 km</span></div><div class="n">Kopitiam Heng Kee<span>Kaya toast</span></div><span class="open">Open</span></div>
+            <div class="pin big" style="left:38%;top:9%"><div class="blob"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1624957389019-0c814505746d?auto=format&fit=crop&w=300&q=70)"></div><span class="dist">0.8 km</span></div><div class="n">Roti Canai Corner<span>Mamak</span></div><span class="open">Open · 24 h</span></div>
+            <div class="pin" style="right:6%;top:18%"><div class="blob"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1638569099509-2f46eb4bb94e?auto=format&fit=crop&w=300&q=70)"></div><span class="dist">450 m</span></div><div class="n">Banana Leaf House<span>South Indian</span></div><span class="micro" style="color:var(--cream-45)">Closes 10 pm</span></div>
+            <div class="pin" style="left:12%;top:44%"><div class="blob"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=300&q=70)"></div><span class="dist">1.2 km</span></div><div class="n">Warung Kak Ros<span>Nasi lemak</span></div><span class="open">Open</span></div>
+            <div class="pin big" style="right:8%;top:46%"><div class="blob"><div class="video bite" style="background-image:url(https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=300&q=70)"></div><span class="dist">600 m</span></div><div class="n">Chili Pan Mee 88<span>Dry noodles</span></div><span class="open">Open</span></div>
+            <div class="pin" style="left:36%;top:60%"><div class="blob"><div class="video" style="background-image:url(https://images.unsplash.com/photo-1647093953000-9065ed6f85ef?auto=format&fit=crop&w=300&q=70)"></div><span class="dist">1.6 km</span></div><div class="n">Cendol Tepi Jalan<span>Dessert</span></div><span class="open">Open</span></div>
+            <div class="radius">
+              <button class="minus" aria-label="Smaller radius">−</button>
+              <div class="val"><span>Away from you</span><b>3.4<small> km</small></b></div>
+              <button class="plus" aria-label="Larger radius">+</button>
+            </div>
+          </div>
+          <div class="results">
+            <div class="k"><span>From</span><b>RM 8</b></div>
+            <div class="k"><span>Open now</span><b>6</b></div>
+            <button class="btn btn-light" style="white-space:nowrap;padding:0 20px" data-go="swipe">Swipe all 6</button>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Main"></nav>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+    <!-- ================= S10 PROFILE ================= -->
+    <div class="slot" data-screen="profile">
+      <div class="slot-label"><b>10</b><span>Profile</span></div>
+      <div class="phone"><div class="screen profile">
+        <div class="island"></div>
+        <div class="statusbar"><span>19:41</span><span>●●● ⌔ ▮</span></div>
+        <div class="body">
+          <div class="topbar"><h2 class="h1">You</h2><button class="iconbtn" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 1 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/></svg><span class="dot">1</span></button></div>
+          <div class="me-row"><span class="avatar a3" style="background-image:url(https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=240&q=70&h=240&crop=faces)" aria-label="HA">HA</span><div class="t"><b>Hana Abdullah</b><span class="small">Bangsar · eating out since Mar 2026</span></div></div>
+          <div class="stats">
+            <div class="stat glass-card"><b>142</b><span>bites</span></div>
+            <div class="stat glass-card"><b>27</b><span>plans kept</span></div>
+            <div class="stat glass-card"><b>6 wk</b><span>eating-out streak</span></div>
+          </div>
+          <div class="prefs">
+            <h3 class="h2">Your taste</h3>
+            <div class="pref"><span class="l">Halal only</span><span class="v">On <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+            <div class="pref"><span class="l">Spice</span><span class="v"><span class="spice"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span></div>
+            <div class="pref"><span class="l">Budget per person</span><span class="v">RM 10–40 <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+            <div class="pref"><span class="l">Default radius</span><span class="v">3 km <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+            <div class="pref"><span class="l">Videos autoplay</span><span class="v">Wi-Fi only <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+          </div>
+          <div class="settings">
+            <button class="btn btn-ghost">Friends · 38</button>
+            <button class="btn btn-ghost">Settings</button>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Main"></nav>
+        <div class="homebar"></div>
+      </div></div>
+    </div>
+
+  </section>
+
+  <section class="notes" aria-label="Design notes">
+    <div class="note"><h3>Palette</h3><p><span class="sw" style="background:#0B0605"></span>bg #0B0605 · <span class="sw" style="background:#171010"></span>surface #171010 · <span class="sw" style="background:#FF8A3D"></span>ember #FF8A3D · <span class="sw" style="background:#E8541C"></span>lava #E8541C · <span class="sw" style="background:#5A160C"></span>char #5A160C · <span class="sw" style="background:#FFF3E8"></span>cream #FFF3E8 · <span class="sw" style="background:#9DF2B8"></span>fresh #9DF2B8. Black is the surface; orange means action, selection, or the heat at the top of a screen.</p></div>
+    <div class="note"><h3>Type</h3><p>Bricolage Grotesque 700/800 for anything the user reads first; Instrument Sans 400–600 for everything else. No all-caps labels, no monospace data.</p></div>
+    <div class="note"><h3>The bite</h3><p>Any restaurant surface the user has liked carries a bite-shaped notch in its top-right corner. It's the only decorative device in the app and it means one thing.</p></div>
+    <div class="note"><h3>Placeholders</h3><ul><li>Unsplash stills stand in for 9:16 restaurant videos (hotlinked; download and self-host before shipping).</li><li>Unsplash portraits stand in for friend photos; the street grid stands in for map tiles.</li><li>Restaurant names are invented; prices are typical KL ranges.</li></ul></div>
+  </section>
+</main>
+
+<script>
+/* ---------- data ---------- */
+const RESTAURANTS=[
+  {name:"Warung Kak Ros",img:"https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=900&q=70",cuisine:"Nasi lemak",area:"Kampung Baru",dist:"1.2 km",price:"RM 8–15",open:"Open till 2 am",halal:true},
+  {name:"Chili Pan Mee 88",img:"https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=900&q=70",cuisine:"Dry noodles",area:"Kepong",dist:"600 m",price:"RM 10–14",open:"Open",halal:false},
+  {name:"Bakar & Bara Satay",img:"https://images.unsplash.com/photo-1636301175218-6994458a4b0a?auto=format&fit=crop&w=900&q=70",cuisine:"Satay",area:"Kajang",dist:"22 km",price:"RM 15–30",open:"Open till 11 pm",halal:true},
+  {name:"Banana Leaf House",img:"https://images.unsplash.com/photo-1638569099509-2f46eb4bb94e?auto=format&fit=crop&w=900&q=70",cuisine:"South Indian",area:"Brickfields",dist:"450 m",price:"RM 12–25",open:"Closes 10 pm",halal:false},
+  {name:"Kopitiam Heng Kee",img:"https://images.unsplash.com/photo-1754617438035-712ddf5500ef?auto=format&fit=crop&w=900&q=70",cuisine:"Kaya toast",area:"Pudu",dist:"2.1 km",price:"RM 5–12",open:"Open",halal:false},
+  {name:"Cendol Tepi Jalan",img:"https://images.unsplash.com/photo-1787329681345-032a992efcb1?auto=format&fit=crop&w=900&q=70",cuisine:"Dessert",area:"Chow Kit",dist:"1.6 km",price:"RM 4–8",open:"Open",halal:true},
+];
+const NAV=[
+  ["swipe","Swipe",'<path d="M4 12a8 8 0 0 1 16 0"/><path d="M12 12l4-4"/><path d="M4 12v6h16v-6"/>'],
+  ["nearby","Nearby",'<path d="M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>'],
+  ["likes","Bites",'<path d="M12 21s-7-4.6-9-9.4A5.2 5.2 0 0 1 12 6a5.2 5.2 0 0 1 9 5.6C19 16.4 12 21 12 21z"/>'],
+  ["calendar","Calendar",'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>'],
+  ["profile","You",'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'],
+];
+
+/* ---------- bottom nav in every screen that has one ---------- */
+document.querySelectorAll(".nav").forEach(nav=>{
+  const slot=nav.closest(".slot");const here=slot.dataset.nav||slot.dataset.screen;
+  nav.innerHTML=NAV.map(([id,label,path])=>`<button data-go="${id}" ${id===here?'aria-current="page"':''} aria-label="${label}"><svg viewBox="0 0 24 24">${path}</svg><span>${label}</span></button>`).join("");
+});
+
+/* ---------- screen jumps ---------- */
+const gallery=document.getElementById("gallery");
+function go(id){
+  const slot=gallery.querySelector(`.slot[data-screen="${id}"]`);
+  if(!slot)return;
+  gallery.scrollTo({left:slot.offsetLeft-gallery.offsetLeft-4,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+  slot.querySelector(".screen").animate?.([{boxShadow:"0 0 0 0 rgba(255,138,61,0)"},{boxShadow:"0 0 0 6px rgba(255,138,61,.5)"},{boxShadow:"0 0 0 0 rgba(255,138,61,0)"}],{duration:700});
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b){go(b.dataset.go);}});
+
+/* ---------- swipe deck ---------- */
+const deck=document.getElementById("deck");
+let queue=[...RESTAURANTS];
+function cardHTML(r){
+  return `<div class="video" style="background-image:url(${r.img})"><span class="tag"><i></i>0:15</span></div>
+  <div class="stamp yes">Ngap!</div><div class="stamp no">Skip</div>
+  <div class="info">
+    <div class="tags"><span class="open">${r.open}</span><span>${r.cuisine}</span>${r.halal?'<span>Halal</span>':''}</div>
+    <h3>${r.name}</h3>
+    <div class="meta"><span><b>${r.dist}</b> · ${r.area}</span><span><b>${r.price}</b> pp</span></div>
+  </div>`;
+}
+function renderDeck(){
+  deck.innerHTML="";
+  queue.slice(0,3).reverse().forEach((r,i,arr)=>{
+    const el=document.createElement("div");
+    const pos=arr.length-1-i; // 0 front
+    el.className="card "+(pos===0?"front":pos===1?"back1":"back2");
+    el.innerHTML=cardHTML(r);
+    el.setAttribute("role","group");el.setAttribute("aria-label",`${r.name}, ${r.cuisine}, ${r.dist}`);
+    deck.appendChild(el);
+  });
+  attachDrag();
+}
+function swipe(dir){
+  const front=deck.querySelector(".card.front");if(!front)return;
+  front.classList.remove("dragging");front.classList.add("fly");
+  const x=dir==="left"?-520:dir==="right"?520:0, y=dir==="up"?-700:40, rot=dir==="left"?-18:dir==="right"?18:0;
+  front.style.transform=`translate(${x}px,${y}px) rotate(${rot}deg)`;front.style.opacity="0";
+  const r=queue.shift();queue.push(r);
+  setTimeout(renderDeck,300);
+}
+document.querySelectorAll("[data-swipe]").forEach(b=>b.addEventListener("click",()=>swipe(b.dataset.swipe)));
+function attachDrag(){
+  const front=deck.querySelector(".card.front");if(!front)return;
+  let sx=0,sy=0,dx=0,dy=0,down=false;
+  const yes=front.querySelector(".stamp.yes"),no=front.querySelector(".stamp.no");
+  front.addEventListener("pointerdown",e=>{down=true;sx=e.clientX;sy=e.clientY;front.classList.add("dragging");front.setPointerCapture(e.pointerId);});
+  front.addEventListener("pointermove",e=>{
+    if(!down)return;dx=e.clientX-sx;dy=e.clientY-sy;
+    front.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/18}deg)`;
+    yes.style.opacity=Math.min(1,Math.max(0,dx/90));no.style.opacity=Math.min(1,Math.max(0,-dx/90));
+  });
+  const end=()=>{
+    if(!down)return;down=false;front.classList.remove("dragging");
+    if(dx>110)swipe("right");else if(dx<-110)swipe("left");else if(dy<-140)swipe("up");
+    else{front.style.transform="";yes.style.opacity=0;no.style.opacity=0;}
+    dx=dy=0;
+  };
+  front.addEventListener("pointerup",end);front.addEventListener("pointercancel",end);
+}
+renderDeck();
+
+/* ---------- calendars: September 2026, Monday first ---------- */
+const TODAY=2; // Wed 2 Sep 2026
+const PLANS={2:{img:"https://images.unsplash.com/photo-1689997122000-c94449288dd1?auto=format&fit=crop&w=120&q=70",pips:["me","f"]},4:{img:"https://images.unsplash.com/photo-1770966485209-e20d97337f1a?auto=format&fit=crop&w=120&q=70",pips:["me","f","f"]},12:{img:"https://images.unsplash.com/photo-1638569099509-2f46eb4bb94e?auto=format&fit=crop&w=120&q=70",pips:["me"]},19:{img:"https://images.unsplash.com/photo-1647093953000-9065ed6f85ef?auto=format&fit=crop&w=120&q=70",pips:["f"]},26:{img:"https://images.unsplash.com/photo-1754617438035-712ddf5500ef?auto=format&fit=crop&w=120&q=70",pips:["me","f"]}};
+function buildCal(el,mode){
+  const dows=["M","T","W","T","F","S","S"];
+  let html=dows.map((d,i)=>`<span class="dow ${i===2?'today':''}">${d}</span>`).join("");
+  html+=`<span class="day blank"></span>`; // Sept 1 2026 is a Tuesday
+  for(let d=1;d<=30;d++){
+    const past=d<TODAY, isT=d===TODAY, plan=PLANS[d];
+    if(mode==="plans"){
+      const cls=["day",past&&!plan?"past":"",isT?"today":"",plan?"planned":""].join(" ");
+      html+=`<button class="${cls}" aria-label="${d} September${plan?', has a plan':''}">${plan&&!isT?`<span class="th" style="background-image:url(${plan.img})">${d}</span>`:d}${plan?`<span class="pips">${plan.pips.map(p=>`<i class="${p==='me'?'me':''}"></i>`).join("")}</span>`:""}</button>`;
+    }else{
+      const cls=["day",past?"past":"",isT?"today":""].join(" ");
+      html+=`<button class="${cls}" aria-pressed="${d===4}" ${past?'disabled':''} aria-label="${d} September">${d}</button>`;
+    }
+  }
+  el.innerHTML=html;
+  if(mode==="pick"){
+    el.addEventListener("click",e=>{const b=e.target.closest(".day");if(!b||b.disabled)return;el.querySelectorAll(".day").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");
+      const d=+b.textContent;const dow=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(2026,8,d).getDay()];
+      const picked=el.closest(".screen").querySelector(".picked b");const t=el.closest(".screen").querySelector("[data-slots] [aria-pressed='true']")?.textContent||"20:00";
+      picked.textContent=`${dow} ${d} Sep · ${t}`;});
+  }
+}
+document.querySelectorAll("[data-cal]").forEach(el=>buildCal(el,el.dataset.cal));
+
+/* ---------- single-select chip groups ---------- */
+document.querySelectorAll("[data-slots],[data-filters]").forEach(g=>g.addEventListener("click",e=>{
+  const b=e.target.closest(".chip");if(!b)return;
+  g.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");
+  const picked=g.closest(".screen")?.querySelector(".picked b");if(picked&&g.hasAttribute("data-slots")){picked.textContent=picked.textContent.replace(/·.*$/,"· "+b.textContent);}
+}));
+
+/* ---------- friends multi-select ---------- */
+document.querySelectorAll("[data-people]").forEach(g=>g.addEventListener("click",e=>{
+  const p=e.target.closest(".person");if(!p)return;
+  p.setAttribute("aria-pressed",p.getAttribute("aria-pressed")!=="true");
+  g.closest(".screen").querySelector("[data-count]").textContent=g.querySelectorAll("[aria-pressed='true']").length;
+}));
+
+/* ---------- switches ---------- */
+document.querySelectorAll(".switch").forEach(s=>s.addEventListener("click",()=>s.setAttribute("aria-checked",s.getAttribute("aria-checked")!=="true")));
+
+
+
+
+/* ---------- taste tiles: at least two before continuing ---------- */
+document.querySelectorAll("[data-taste]").forEach(g=>{
+  const screen=g.closest(".screen");
+  const cnt=screen.querySelector("[data-taste-count]"),names=screen.querySelector("[data-taste-names]"),cta=screen.querySelector("[data-taste-cta]");
+  function update(){
+    const on=[...g.querySelectorAll('.tt[aria-pressed="true"]')].map(b=>b.dataset.name);
+    const extra=screen.querySelectorAll('.taste-more .chip[aria-pressed="true"]').length;
+    const n=on.length+extra;
+    cnt.textContent=n;names.textContent=on.join(", ")+(extra?` +${extra} more`:"");
+    if(n>=2){cta.disabled=false;cta.textContent="Continue";}
+    else{cta.disabled=true;cta.textContent=n===0?"Pick 2 to continue":"Pick 1 more";}
+  }
+  g.addEventListener("click",e=>{const b=e.target.closest(".tt");if(!b)return;b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true");update();});
+  screen.querySelector(".taste-more").addEventListener("click",e=>{if(e.target.closest(".chip"))setTimeout(update,0);});
+  update();
+});
+
+/* ---------- first-run: multi-select chips, segmented control, budget slider ---------- */
+document.querySelectorAll("[data-multi]").forEach(g=>g.addEventListener("click",e=>{
+  const b=e.target.closest(".chip");if(!b)return;
+  b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true");
+  const c=g.closest(".screen").querySelector("[data-multi-count]");if(c)c.textContent=g.querySelectorAll('[aria-pressed="true"]').length;
+}));
+document.querySelectorAll("[data-seg]").forEach(g=>g.addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  g.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");
+}));
+document.querySelectorAll("[data-budget]").forEach(r=>{
+  const out=r.closest(".screen").querySelector("[data-budget-out]");
+  const upd=()=>{out.textContent=r.value>=100?"RM 10–100+":"RM 10–"+r.value;};r.addEventListener("input",upd);upd();
+});
+
+/* ---------- wishlist: tap to cross off, add new, eaten sink to bottom ---------- */
+document.querySelectorAll("[data-wl]").forEach(list=>{
+  const screen=list.closest(".screen");
+  const input=screen.querySelector("[data-wl-input]");
+  const fmt=()=>{const d=new Date();return d.getDate()+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];};
+  function sort(){
+    const items=[...list.querySelectorAll("li:not(.wl-sep)")];
+    const todo=items.filter(li=>li.querySelector(".wl").getAttribute("aria-pressed")!=="true");
+    const done=items.filter(li=>li.querySelector(".wl").getAttribute("aria-pressed")==="true");
+    [...todo,...done].forEach(li=>list.appendChild(li));
+    screen.querySelector("[data-wl-todo]").textContent=todo.length;
+    screen.querySelector("[data-wl-done]").textContent=done.length;
+  }
+  list.addEventListener("click",e=>{
+    const b=e.target.closest(".wl");if(!b)return;
+    const now=b.getAttribute("aria-pressed")!=="true";
+    b.setAttribute("aria-pressed",now);
+    const from=b.querySelector(".from");
+    if(now){from.dataset.prev=from.innerHTML;from.innerHTML="Eaten<em>"+fmt()+"</em>";}
+    else if(from.dataset.prev){from.innerHTML=from.dataset.prev;}
+    setTimeout(sort,280);
+  });
+  function add(){
+    const v=(input.value||"").trim();if(!v)return;
+    const li=document.createElement("li");
+    li.innerHTML=`<button class="wl" aria-pressed="false"><span class="box"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></span><span class="thumb"></span><span class="t"><b></b><span>Added by you · tap to find it</span></span><span class="from">Note<em></em></span></button>`;
+    li.querySelector("b").textContent=v;
+    list.insertBefore(li,list.children[1]);
+    input.value="";sort();
+  }
+  screen.querySelector("[data-wl-addbtn]").addEventListener("click",add);
+  input.addEventListener("keydown",e=>{if(e.key==="Enter")add();});
+  screen.querySelector("[data-wl-clear]").addEventListener("click",()=>{
+    list.querySelectorAll('.wl[aria-pressed="true"]').forEach(b=>b.closest("li").remove());sort();
+  });
+  sort();
+});
+
+/* ---------- photo fallback: keep initials/numbers until the image really loads ---------- */
+function watchImages(root=document){
+  root.querySelectorAll('[style*="background-image"]').forEach(el=>{
+    if(el.dataset.watched)return;el.dataset.watched=1;
+    const m=el.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/);if(!m)return;
+    const im=new Image();im.onload=()=>el.classList.add("img-ok");im.src=m[1];
+  });
+}
+watchImages();
+new MutationObserver(()=>watchImages()).observe(document.body,{childList:true,subtree:true});
+
+/* ---------- scale phones to fit narrow viewports ---------- */
+function fit(){const vw=document.documentElement.clientWidth;const s=Math.min(1,(vw-48)/390);document.documentElement.style.setProperty("--scale",s.toFixed(3));}
+fit();addEventListener("resize",fit);
+</script>
+</body>
+</html>

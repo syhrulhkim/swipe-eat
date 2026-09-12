@@ -1,126 +1,289 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../profile/data/profile_cache.dart';
+import '../../restaurants/data/deck_cache.dart';
 import '../data/auth_repository.dart';
 import '../models/app_user.dart';
 
 enum AuthStatus {
+  /// Nothing decided yet — the persisted session is still being restored, or
+  /// the profile behind a fresh session has not loaded. The router must hold
+  /// on a splash screen while this is the state, otherwise every cold start
+  /// flashes the login (or the onboarding) page before settling.
+  unknown,
   authenticated,
   unauthenticated,
 }
 
 class AuthController extends ChangeNotifier {
-  AuthController(this._repository);
+  AuthController(this._repository, {ProfileCache? profileCache})
+      : _profileCache = profileCache ?? const ProfileCache();
 
   final AuthRepository _repository;
 
-  AuthStatus _status = AuthStatus.unauthenticated;
+  /// The last profile read, kept on the device so a launch with no connection
+  /// still knows who is signed in.
+  final ProfileCache _profileCache;
+  StreamSubscription<AuthState>? _subscription;
+
+  AuthStatus _status = AuthStatus.unknown;
   AppUser? _user;
   bool _isBusy = false;
   String? _errorMessage;
+
+  /// Set after a sign-up that needs the emailed confirmation link. The login
+  /// page shows it, because the account exists but cannot sign in yet.
+  String? _notice;
 
   AuthStatus get status => _status;
   AppUser? get user => _user;
   bool get isBusy => _isBusy;
   String? get errorMessage => _errorMessage;
+  String? get notice => _notice;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
 
+  /// The signed-in account's id straight from the session, available even
+  /// when the profile row could not be read.
+  String? get sessionUserId => _repository.currentSession?.user.id;
+
+  /// The router's gate: false means "do not redirect yet".
+  bool get isResolved => _status != AuthStatus.unknown;
+
+  /// Null `onboarded_at` on the profile means the wizard is still owed. Only
+  /// meaningful once [isResolved] and [isAuthenticated].
+  bool get needsOnboarding => _user?.needsOnboarding ?? false;
+
+  bool get supportsGoogleSignIn => _repository.supportsGoogleSignIn;
+  bool get supportsAppleSignIn => _repository.supportsAppleSignIn;
+  bool get supportsPhoneSignIn => _repository.supportsPhoneSignIn;
+  bool get supportsGuestBrowsing => _repository.supportsGuestBrowsing;
+
+  /// Restores any persisted session and starts listening for auth changes.
+  /// Subscribing before the first resolve means a token refresh or a sign-out
+  /// triggered on another device propagates here without polling.
   Future<void> bootstrap() async {
-    _setBusy(true);
-
-    try {
-      final session = await _repository.restoreSession();
-      if (session == null) {
-        _status = AuthStatus.unauthenticated;
-        _user = null;
-        return;
-      }
-
-      _status = AuthStatus.authenticated;
-      _user = session.user;
-    } finally {
-      _setBusy(false);
-    }
+    _subscription ??= _repository.onAuthStateChange.listen(_handleAuthState);
+    await _resolve();
   }
 
   Future<bool> login({
     required String email,
     required String password,
-  }) async {
-    _setBusy(true);
-    _errorMessage = null;
-
-    try {
-      final session = await _repository.login(
-        email: email,
-        password: password,
-      );
-      _status = AuthStatus.authenticated;
-      _user = session.user;
-      return true;
-    } catch (error) {
-      _errorMessage = error.toString();
-      return false;
-    } finally {
-      _setBusy(false);
-    }
+  }) {
+    return _run(() => _repository.login(email: email, password: password));
   }
 
+  /// Returns true when the account was created. Email confirmation is on, so
+  /// success usually means "check your inbox", not "signed in" — [notice]
+  /// carries that message and the caller must not navigate to the dashboard.
   Future<bool> register({
     required String name,
     required String email,
     required String password,
-    required String passwordConfirmation,
   }) async {
-    _setBusy(true);
-    _errorMessage = null;
-
-    try {
-      final session = await _repository.register(
+    final ok = await _run(() async {
+      final outcome = await _repository.register(
         name: name,
         email: email,
         password: password,
-        passwordConfirmation: passwordConfirmation,
       );
-      _status = AuthStatus.authenticated;
-      _user = session.user;
-      return true;
-    } catch (error) {
-      _errorMessage = error.toString();
-      return false;
-    } finally {
-      _setBusy(false);
-    }
+      if (outcome == SignUpOutcome.confirmationRequired) {
+        _notice = 'Account created. Open the confirmation link we emailed to '
+            '${email.trim()}, then sign in.';
+      }
+    });
+    return ok;
+  }
+
+  Future<bool> signInWithGoogle() => _run(_repository.signInWithGoogle);
+
+  /// Asks for the SMS code. True means "sent", not "signed in" — the session
+  /// only arrives once [verifyPhoneOtp] accepts the code.
+  Future<bool> signInWithPhone(String phone) {
+    return _run(() async {
+      await _repository.signInWithPhone(phone);
+      _notice = 'Code sent to $phone.';
+    });
+  }
+
+  Future<bool> verifyPhoneOtp({
+    required String phone,
+    required String code,
+  }) {
+    return _run(
+      () => _repository.verifyPhoneOtp(phone: phone, token: code),
+    );
+  }
+
+  /// Signs in anonymously so the app can be browsed before an account exists.
+  Future<bool> continueAsGuest() => _run(_repository.signInAsGuest);
+
+  Future<bool> signInWithApple() => _run(_repository.signInWithApple);
+
+  Future<bool> sendPasswordReset(String email) {
+    return _run(() async {
+      await _repository.sendPasswordReset(email);
+      _notice = 'Password reset link sent to ${email.trim()}.';
+    });
   }
 
   Future<void> logout() async {
     _setBusy(true);
-
     try {
       await _repository.logout();
+      // The caches are account data; the next account on this device must not
+      // inherit them.
+      await _profileCache.clear();
+      await const DeckCache().clear();
       _status = AuthStatus.unauthenticated;
       _user = null;
       _errorMessage = null;
+      _notice = null;
     } finally {
       _setBusy(false);
     }
   }
 
+  /// Deletes the account, then tears down the session and the on-device caches
+  /// exactly as [logout] does. Returns false and sets [errorMessage] when the
+  /// delete failed, so the caller can keep the user signed in rather than
+  /// showing an empty app for an account that still exists.
+  Future<bool> deleteAccount() async {
+    final ok = await _run(_repository.deleteAccount);
+    if (!ok) {
+      return false;
+    }
+
+    // The account is gone; sign-out only clears the local token, and a failure
+    // there must not be reported as a failed deletion.
+    try {
+      await _repository.logout();
+    } on Object catch (error) {
+      debugPrint('Sign-out after account deletion failed: $error');
+    }
+    await _profileCache.clear();
+    await const DeckCache().clear();
+    _status = AuthStatus.unauthenticated;
+    _user = null;
+    _errorMessage = null;
+    _notice = null;
+    notifyListeners();
+    return true;
+  }
+
+  /// Re-reads the profile row — call after onboarding or a preference write so
+  /// `needsOnboarding` and the displayed name reflect the database.
   Future<void> refreshUser() async {
     if (!isAuthenticated) {
       return;
     }
+    _user = await _repository.loadCurrentUser();
+    notifyListeners();
+  }
 
-    _setBusy(true);
+  /// Replaces the cached profile with one the caller already has.
+  ///
+  /// `complete_onboarding` and `update_preferences` both return the whole
+  /// `profiles` row, so the writer can hand it straight back instead of making
+  /// the controller re-read what it just wrote.
+  void applyUser(AppUser user) {
+    _user = user;
+    unawaited(_profileCache.save(user));
+    if (_status != AuthStatus.authenticated) {
+      _status = AuthStatus.authenticated;
+    }
+    notifyListeners();
+  }
 
-    try {
-      final restored = await _repository.restoreSession();
-      if (restored == null) {
+  /// Lets a completed onboarding update the gate without a round trip.
+  void markOnboarded(DateTime onboardedAt) {
+    final current = _user;
+    if (current == null) {
+      return;
+    }
+    _user = current.copyWith(onboardedAt: onboardedAt);
+    notifyListeners();
+  }
+
+  void clearNotice() {
+    if (_notice == null) {
+      return;
+    }
+    _notice = null;
+    notifyListeners();
+  }
+
+  void _handleAuthState(AuthState state) {
+    switch (state.event) {
+      case AuthChangeEvent.signedOut:
         _status = AuthStatus.unauthenticated;
         _user = null;
-        return;
-      }
+        notifyListeners();
+      case AuthChangeEvent.signedIn:
+      case AuthChangeEvent.initialSession:
+      case AuthChangeEvent.userUpdated:
+        unawaited(_resolve());
+      default:
+        // tokenRefreshed / passwordRecovery / mfaChallengeVerified change no
+        // state the router cares about.
+        break;
+    }
+  }
 
-      _user = restored.user;
+  /// Single place that moves the controller out of [AuthStatus.unknown]: the
+  /// status only becomes `authenticated` once the profile is in hand, so the
+  /// router never sees a session without a resolved `needsOnboarding`.
+  Future<void> _resolve() async {
+    if (_repository.currentSession == null) {
+      _status = AuthStatus.unauthenticated;
+      _user = null;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final user = await _repository.loadCurrentUser();
+      _user = user;
+      _status =
+          user == null ? AuthStatus.unauthenticated : AuthStatus.authenticated;
+      if (user != null) {
+        unawaited(_profileCache.save(user));
+      }
+    } on Object catch (error) {
+      // Deliberately everything: the profile read can fail as a Postgrest
+      // error, a socket error or a timeout, and a session that cannot load its
+      // profile (offline, RLS change) still counts as signed in — the profile
+      // retries on the next refresh.
+      _errorMessage = error.toString();
+      _status = AuthStatus.authenticated;
+      // Offline, then: fall back to the profile this device last read for this
+      // account, so the app knows the user's name, radius and onboarding state
+      // instead of showing a signed-in shell with nothing in it.
+      _user ??= await _profileCache.read(sessionUserId ?? '');
+    }
+    notifyListeners();
+  }
+
+  Future<bool> _run(Future<void> Function() action) async {
+    _setBusy(true);
+    _errorMessage = null;
+    _notice = null;
+
+    try {
+      await action();
+      return true;
+    } on AuthFailure catch (error) {
+      _errorMessage = error.message;
+      return false;
+    } on Object catch (error) {
+      // Anything the repository did not translate into an [AuthFailure] still
+      // has to reach the form; a swallowed error would leave the button spinning
+      // with no explanation.
+      _errorMessage = error.toString();
+      return false;
     } finally {
       _setBusy(false);
     }
@@ -130,8 +293,13 @@ class AuthController extends ChangeNotifier {
     if (_isBusy == value) {
       return;
     }
-
     _isBusy = value;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
   }
 }

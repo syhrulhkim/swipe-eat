@@ -15,17 +15,24 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>swipe_eat</string>
+	<string>Swipe Eat</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<!-- The app only uses HTTPS and the platform's own crypto, which App Store
+	     Connect treats as exempt encryption. Declaring it here means the export
+	     compliance questions are answered on upload instead of per-build. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSContactsUsageDescription</key>
+	<string>Swipe Eat checks which of your contacts already use the app so you can add them as friends. Numbers are scrambled before they are sent, names are never sent, and nothing is kept.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Swipe Eat uses your location to show how far each restaurant is from you.</string>
 	<key>UIApplicationSceneManifest</key>

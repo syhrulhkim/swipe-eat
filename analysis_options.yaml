@@ -1,6 +1,8 @@
 analyzer:
   exclude:
     - build/**
+    # Vendored Flutter checkout; not project source.
+    - flutter-sdk/**
     - android/**
     - ios/**
     - web/**
@@ -9,3 +11,15 @@ analyzer:
     - linux/**
 include: package:flutter_lints/flutter.yaml
 
+linter:
+  rules:
+    # A dropped future is a silently lost error and a race; make the intent
+    # explicit with `await` or `unawaited`.
+    - unawaited_futures
+    # `catch (_)` hides failures the app should either handle or report.
+    - avoid_catches_without_on_clauses
+    - cancel_subscriptions
+    - close_sinks
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - use_super_parameters

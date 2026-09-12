@@ -1,7 +1,9 @@
 name: swipe_eat
-description: A Forui-first mobile starter for Swipe Eat with Laravel-ready auth screens.
+description: Swipe Eat — a restaurant discovery app on a dark CREME-style design system, backed by Supabase.
 publish_to: "none"
-version: 0.1.0+1
+# The build number is what the stores order releases by, and neither store lets
+# you reuse one — bump `+N` on every upload, even a rejected one.
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -9,18 +11,104 @@ environment:
 
 dependencies:
   cupertino_icons: ^1.0.8
-  dio: ^5.9.2
+  # Hashes the Apple sign-in nonce.
+  crypto: ^3.0.6
   flutter:
     sdk: flutter
-  flutter_secure_storage: ^10.3.1
   forui: ^0.22.3
-  go_router: ^17.3.0
+  geocoding: ^5.0.0
   geolocator: ^14.0.2
+  go_router: ^17.3.0
+  google_sign_in: ^7.2.0
+  # Plays the small vector loops in assets/lottie (splash mark, spinner,
+  # empty-state art). Bundled JSON only — nothing is fetched at runtime.
+  lottie: ^3.3.2
+  shared_preferences: ^2.5.5
+  sign_in_with_apple: ^8.1.0
+  supabase_flutter: ^2.17.2
+  # Hands a maps / navigation URL to the OS so directions open in the maps app.
+  url_launcher: ^6.3.1
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
   webview_flutter: ^4.13.0
+  # The platform packages are direct dependencies because the TikTok player
+  # needs their gesture/inline-playback settings, which the facade does not
+  # expose.
+  webview_flutter_android: ^4.14.0
   webview_flutter_wkwebview: ^3.26.0
+  sentry_flutter: ^9.28.0
+  # Hands the wishlist to the OS share sheet as plain text, so "where should we
+  # eat" can leave the app in whatever chat the group already uses.
+  share_plus: ^13.3.0
+  # Tells the autoplay setting whether this is Wi-Fi or somebody's data plan
+  # (D146). Reached only through an injected stream, so no test touches the
+  # platform channel.
+  connectivity_plus: ^6.1.0
+  # Reads phone numbers off the address book for the onboarding friends step.
+  # Numbers are normalised and hashed before they leave the device and the
+  # list is never held past the call — see `ContactsReader` (D122). Reached
+  # only through an injected typedef, so no test touches the platform channel.
+  flutter_contacts: ^2.3.1
 
 dev_dependencies:
   flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  # Generates every Android mipmap and iOS AppIcon size from the two source
+  # PNGs below. Run `dart run flutter_launcher_icons` after replacing them.
+  flutter_launcher_icons: ^0.14.4
+
+# Store icon requirements the two source files have to satisfy:
+#   * assets/icon/app_icon.png        1024×1024, no alpha channel, no rounded
+#                                     corners of its own — Apple rejects
+#                                     transparency and masks the corners itself.
+#   * assets/icon/app_icon_fg.png     1024×1024, transparent, artwork inside the
+#                                     centre ~66% so Android's adaptive mask
+#                                     cannot crop it.
+# See docs/Release/STORE.md.
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: "ic_launcher"
+  adaptive_icon_background: "#16150F"
+  adaptive_icon_foreground: "assets/icon/app_icon_fg.png"
+  ios: true
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
+
+  assets:
+    # Hand-authored vector loops, a few KB each. Kept deliberately small and
+    # abstract: a spinner, a heart and a location pulse, not illustrations.
+    - assets/lottie/
+
+  # Bundled rather than fetched at runtime: the app serves a cached deck with
+  # no connection, and a first offline launch that falls back to the platform
+  # font would undo the redesign.
+  #
+  # Upstream ships both of these as variable fonts. The files here are static
+  # instances cut from them, because Flutter picks a face by the weights
+  # declared below and cannot instance a variable axis from a `fontWeight`
+  # alone — shipping the variable TTF silently breaks every weight above 400.
+  # Licences sit next to them.
+  fonts:
+    # Display: anything the user reads first — headings, restaurant names.
+    - family: BricolageGrotesque
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque-600.ttf
+          weight: 600
+        - asset: assets/fonts/BricolageGrotesque-700.ttf
+          weight: 700
+        - asset: assets/fonts/BricolageGrotesque-800.ttf
+          weight: 800
+    # Body: everything else — copy, labels, chips, metadata.
+    - family: InstrumentSans
+      fonts:
+        - asset: assets/fonts/InstrumentSans-400.ttf
+          weight: 400
+        - asset: assets/fonts/InstrumentSans-500.ttf
+          weight: 500
+        - asset: assets/fonts/InstrumentSans-600.ttf
+          weight: 600
+        - asset: assets/fonts/InstrumentSans-700.ttf
+          weight: 700

@@ -1,9 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Asked for on the onboarding friends step, which is skippable. Skipping
+         reads nothing: the permission is only requested when the user taps
+         "Find friends from contacts". -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <application
-        android:label="swipe_eat"
+        android:label="Swipe Eat"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -43,6 +47,17 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Package visibility for the navigation app the directions button
+             hands a google.navigation: URL to; without this Android 11+
+             reports no handler. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="google.navigation"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

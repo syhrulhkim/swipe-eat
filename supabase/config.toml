@@ -1,0 +1,17 @@
+project_id = "swipe-eat"
+
+# Clients never call this function; it authenticates via the x-refresh-key
+# header (see supabase/README.md). Keep verify_jwt off or `supabase functions
+# deploy` will reset it to true and silently break the pg_cron caller.
+[functions.refresh-thumbnails]
+verify_jwt = false
+
+# The privacy / deletion / terms pages have to open in any browser with no key —
+# Google Play checks the deletion URL itself, before installing anything.
+[functions.legal]
+verify_jwt = false
+
+# Left at the default (true) on purpose: the platform rejects unauthenticated
+# calls, and the function deletes the token owner's own account only.
+[functions.delete-account]
+verify_jwt = true

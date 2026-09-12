@@ -1,63 +1,132 @@
-# Swipe Eat Mobile Starter
+# Swipe Eat
 
-This repo now contains a Flutter starter app with:
+A Flutter app for finding places to eat by swiping through restaurant cards,
+backed by Supabase.
 
-- Forui as the main UI system
-- Login, register, and dashboard screens
-- Laravel-friendly auth plumbing using bearer tokens
-- Auth persistence with `flutter_secure_storage`
+- **UI**: forui components under the custom **Ngap** design system
+  (`lib/core/ui/design_tokens.dart`) — warm blacks under a radial ember glow,
+  Bricolage Grotesque over Instrument Sans, rounded corners.
+- **Backend**: Supabase — Postgres with Row Level Security, Supabase Auth
+  (email, Google, Apple), Storage for cached thumbnails, and edge functions.
+- **Routing**: go_router, with redirects driven by `AuthController`.
+- **Video**: TikTok clips embedded through TikTok's own player in a WebView.
 
 ## Setup
 
-1. Use the bundled Flutter SDK in `./flutter-sdk`.
-2. If you want to use that SDK from this shell session, run:
+1. Install Flutter 3.47.1 or newer, or use the checkout bundled in
+   `./flutter-sdk` (untracked):
+
+   ```bash
+   export PATH="$PWD/flutter-sdk/bin:$PATH"
+   ```
+
+2. Fetch dependencies:
+
+   ```bash
+   flutter pub get
+   ```
+
+3. Run:
+
+   ```bash
+   flutter run
+   ```
+
+The Supabase URL and publishable key are compiled in with defaults, so the app
+runs against the shared project with no configuration. The publishable key is
+meant to ship — Row Level Security, not key secrecy, is the security boundary.
+
+## Configuration
+
+Everything configurable lives in `lib/core/config/app_config.dart` and is
+supplied with `--dart-define`:
+
+| Define | Default | Purpose |
+| --- | --- | --- |
+| `SUPABASE_URL` | the shared project | Point at a different Supabase project |
+| `SUPABASE_KEY` | that project's publishable key | Matching publishable key |
+| `APP_NAME` | `Swipe Eat` | Window and task-switcher title |
+| `GOOGLE_WEB_CLIENT_ID` | none | Audience Supabase validates Google tokens against |
+| `GOOGLE_IOS_CLIENT_ID` | none | Identifies the app to the iOS Google sheet |
+| `SENTRY_DSN` | none | Turns on crash reporting; unset means nothing is sent |
+| `SENTRY_ENVIRONMENT` | `development` | Which deployment a report came from |
+
+Both Google ids are required for native Google sign-in; with them unset the
+Google button is hidden rather than failing at tap time. See
+`docs/Features/Auth.md` for how to obtain them and how Apple sign-in is wired.
+
+Crash reporting is off unless `SENTRY_DSN` is passed, so local runs and CI
+report nothing. Release builds should pass it along with the environment:
 
 ```bash
-export PATH="$PWD/flutter-sdk/bin:$PATH"
+flutter build ipa \
+  --dart-define=SENTRY_DSN=https://...ingest.sentry.io/... \
+  --dart-define=SENTRY_ENVIRONMENT=production
 ```
 
-3. Run `flutter pub get`.
-4. Start the app with a Laravel API URL:
+The release name comes from `version` in `pubspec.yaml`, which sentry_flutter
+reads from the bundle — there is no second copy to keep in sync.
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
+flutter run \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=... \
+  --dart-define=GOOGLE_IOS_CLIENT_ID=...
 ```
 
-## Laravel contract
+## Layout
 
-The app is ready for a Laravel API that exposes these endpoints:
-
-- `POST /api/login`
-- `POST /api/register`
-- `GET /api/user`
-- `POST /api/logout`
-
-Expected auth response shape:
-
-```json
-{
-  "token": "your-bearer-token",
-  "user": {
-    "id": 1,
-    "name": "Jane Doe",
-    "email": "jane@example.com"
-  }
-}
+```
+lib/
+  app/          MaterialApp, theme, router
+  core/         config, location, Supabase helpers, design system
+  features/     auth, onboarding, dashboard, restaurants, profile, settings
+  dev/          standalone demo entrypoints, not shipped
+supabase/
+  migrations/   schema, RLS policies, RPCs — mirrors the remote project
+  functions/    edge functions
+  seed.sql      idempotent catalogue seed
+docs/           see docs/README.md — General, Features, Frontend, Tests,
+                Release, History
+scripts/        TikTok metadata scraping helpers
 ```
 
-The app also accepts `access_token` as the token key and will fall back to `GET /api/user` if the user object is not included in the login or register response.
+Full documentation is in [`docs/`](docs/README.md): `General/PLAN.md` for the
+product and architecture, `General/RUNBOOK.md` for commands,
+`Features/` for one spec per feature, and `General/DECISIONS.md` for every
+decision in one place.
 
-## Demo account
+Each feature follows the same shape: `data/` repositories, `models/`,
+`state/` controllers, `presentation/` widgets.
 
-If you want to get into the dashboard immediately without a backend, use:
+## Tests
 
-- Email: `demo@swipeeat.test`
-- Password: `password`
+```bash
+flutter analyze
+flutter test
+```
 
-This demo account is handled locally in the app and does not require Laravel.
+Repositories and controllers are covered by unit tests with hand-written fakes
+(`test/features/**/fake_*.dart`); several screens have widget tests. CI runs
+both commands on every pull request.
 
-## Notes
+## Database
 
-- The default API base URL is `http://10.0.2.2:8000/api`, which is convenient for the Android emulator talking to a Laravel app running on your machine.
-- If you are testing on a physical device, point `API_BASE_URL` to your machine's LAN IP instead.
-- The code is structured so you can extend the dashboard with real task data later without changing the auth flow.
+Migrations under `supabase/migrations/` mirror the remote project. Apply them
+with the Supabase CLI:
+
+```bash
+supabase db push
+```
+
+`supabase/seed.sql` is idempotent and safe to re-run. See
+`docs/Features/Backend-Schema.md` for the as-built schema and
+`supabase/README.md` for operational notes.
+
+## Standalone demos
+
+`lib/dev/` holds entrypoints that are not part of the app, for looking at
+components in isolation:
+
+```bash
+flutter run -t lib/dev/lunar_gallery.dart
+```

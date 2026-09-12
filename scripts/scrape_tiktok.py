@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Scrape a TikTok user's public videos and upsert them into Supabase.
+"""Scrape a TikTok user's public videos.
 
-Setup:
-    python3 -m pip install --user yt-dlp "curl_cffi>=0.10"
+`--out` writes the mapped fields (what a `tiktok_videos` table would hold);
+`--raw` writes yt-dlp's entries untouched, which is what `extract_restaurants.py`
+reads to build restaurant rows. Scraping and parsing are separate steps on
+purpose: TikTok listing is slow and rate-limited, so a caption is fetched once
+and re-parsed as often as the extractor improves.
+
+Setup (yt-dlp needs curl_cffi for `--impersonate`; without it TikTok answers
+every request with an anti-bot page):
+    python3 -m venv .venv
+    .venv/bin/pip install yt-dlp "curl_cffi>=0.10"
 
 Usage:
-    python3 scripts/scrape_tiktok.py johorfoodie
-    python3 scripts/scrape_tiktok.py johorfoodie --limit 20 --out out.json
+    python3 scripts/scrape_tiktok.py johorfoodie --raw videos.json
+    python3 scripts/scrape_tiktok.py johorfoodie kakifoodie --limit 20 --out out.json
 
-Env (only needed to write to Supabase; otherwise just writes --out JSON):
+Env (only needed by `--upsert`; otherwise this only ever writes files):
     SUPABASE_URL=https://xxxx.supabase.co
     SUPABASE_SERVICE_KEY=your-service-role-key
 """
@@ -27,9 +35,16 @@ from datetime import datetime, timezone
 MAX_ATTEMPTS = 4
 
 
-def fetch_videos(handle, limit):
+def fetch_videos(handle, limit, ytdlp="yt-dlp"):
+    """Every public video on a profile, as yt-dlp's raw entries.
+
+    A profile that has been fully scraped before still returns everything —
+    TikTok has no "since" cursor — so the way to stop re-processing an
+    exhausted account is to filter downstream on the clips already stored,
+    not to ask for fewer here.
+    """
     cmd = [
-        "yt-dlp",
+        ytdlp,
         "--impersonate", "chrome",
         "--flat-playlist",
         "-j",
@@ -48,12 +63,12 @@ def fetch_videos(handle, limit):
     else:
         raise RuntimeError(f"yt-dlp failed for @{handle}: {proc.stderr.strip()}")
 
-    videos = []
+    entries = []
     for line in proc.stdout.splitlines():
         if not line.strip():
             continue
-        videos.append(map_entry(json.loads(line)))
-    return videos
+        entries.append(json.loads(line))
+    return entries
 
 
 def map_entry(entry):
@@ -81,6 +96,13 @@ def map_entry(entry):
 
 
 def upsert_to_supabase(videos, supabase_url, service_key):
+    """POST the mapped videos to a `tiktok_videos` table.
+
+    Opt-in via `--upsert`, and no such table exists in the schema today: the
+    catalogue keeps one clip per restaurant on `restaurants.video_url` instead.
+    Kept for a future raw-clip archive; running it against the current
+    database returns a 404 rather than writing anything.
+    """
     endpoint = f"{supabase_url.rstrip('/')}/rest/v1/tiktok_videos?on_conflict=tiktok_id"
     body = json.dumps(videos).encode("utf-8")
     req = urllib.request.Request(
@@ -102,20 +124,63 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("handles", nargs="+", help="TikTok handles, no @")
     parser.add_argument("--limit", type=int, default=0, help="0 = all videos")
-    parser.add_argument("--out", default=None, help="write scraped JSON here")
+    parser.add_argument("--out", default=None, help="write mapped JSON here")
+    parser.add_argument(
+        "--raw",
+        default=None,
+        help="write yt-dlp's entries here, for extract_restaurants.py",
+    )
+    parser.add_argument(
+        "--ytdlp",
+        default="yt-dlp",
+        help="path to yt-dlp, e.g. .venv/bin/yt-dlp",
+    )
+    parser.add_argument(
+        "--upsert",
+        action="store_true",
+        help="POST the mapped videos to a `tiktok_videos` table (needs SUPABASE_* env)",
+    )
+    parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help="carry on to the next handle when one fails, instead of stopping",
+    )
     args = parser.parse_args()
 
-    all_videos = []
+    raw_entries = []
+    failures = []
     for handle in args.handles:
         print(f"scraping @{handle}...", file=sys.stderr)
-        videos = fetch_videos(handle, args.limit)
-        print(f"  found {len(videos)} videos", file=sys.stderr)
-        all_videos.extend(videos)
+        try:
+            entries = fetch_videos(handle, args.limit, ytdlp=args.ytdlp)
+        except RuntimeError as error:
+            # A dead, renamed or private handle should not cost the run every
+            # other handle behind it.
+            if not args.keep_going:
+                raise
+            print(f"  failed: {error}", file=sys.stderr)
+            failures.append(handle)
+            continue
+        print(f"  found {len(entries)} videos", file=sys.stderr)
+        raw_entries.extend(entries)
+
+    all_videos = [map_entry(entry) for entry in raw_entries]
+
+    if args.raw:
+        with open(args.raw, "w") as f:
+            json.dump(raw_entries, f, ensure_ascii=False)
+        print(f"wrote {args.raw}", file=sys.stderr)
 
     if args.out:
         with open(args.out, "w") as f:
-            json.dump(all_videos, f, indent=2)
+            json.dump(all_videos, f, indent=2, ensure_ascii=False)
         print(f"wrote {args.out}", file=sys.stderr)
+
+    if failures:
+        print(f"handles that failed: {', '.join(failures)}", file=sys.stderr)
+
+    if not args.upsert:
+        return
 
     supabase_url = os.environ.get("SUPABASE_URL")
     service_key = os.environ.get("SUPABASE_SERVICE_KEY")
@@ -124,8 +189,8 @@ def main():
         print(f"upserted {len(all_videos)} videos to supabase (status {status})", file=sys.stderr)
     else:
         print(
-            "SUPABASE_URL / SUPABASE_SERVICE_KEY not set — skipped DB upsert, "
-            "data only written to --out (if given).",
+            "--upsert given but SUPABASE_URL / SUPABASE_SERVICE_KEY are not set; "
+            "nothing was written to the database.",
             file=sys.stderr,
         )
 

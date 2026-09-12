@@ -1,0 +1,445 @@
+Status: ACTIVE
+Owner: Swipe Eat team
+Last updated: 2026-09-10
+Cross-references: [General/PLAN.md](../General/PLAN.md), [Backend-Schema.md](Backend-Schema.md), [TikTok-Video.md](TikTok-Video.md), [Likes-Visits.md](Likes-Visits.md), [Profile-Preferences.md](Profile-Preferences.md), [History/tinder-parity-plan.md](../History/tinder-parity-plan.md)
+
+# Swipe Deck
+
+The product's core surface: a card stack of restaurants, each fronted by its
+TikTok video. Tab index 0.
+
+> **Retired 2026-09-04 (D84).** Super like, rewind, the 50-swipe daily limit,
+> the deck streak and the match moment are **gone** — the new design has none
+> of them, and a control for a retired feature is worse than a missing one. The
+> up gesture is rebound to **Later** (D85). Sections 3, 4 and "The match
+> moment" are kept below as history, struck through.
+
+Files: `lib/features/restaurants/presentation/swipe_deck.dart` (gesture and
+motion), `swipe_card.dart` (one card), `state/deck_controller.dart` (all state),
+`domain/deck_ranker.dart` (offline re-ranking),
+`data/restaurant_repository.dart` + `swipe_repository.dart` (I/O).
+
+## 1. Gestures
+
+| Input | Threshold | Result |
+|---|---|---|
+| Drag right | `dx > 110` | Like |
+| Drag left | `dx < -110` | Pass |
+| Drag up | `dy < -140` **and** `|dx| < 110` | **Later** — save without deciding |
+| Release below threshold | — | Springs back |
+| Tap the card | — | The restaurant's screen (D93) |
+| Action bar buttons | — | Same path as a drag, via `_triggerAction` |
+
+The up-swipe guard on `|dx|` matters: without it a diagonal fling reads as a
+Later, and Later is a decision to make later — it must be deliberate (D14).
+
+The action bar is the design's **three circles**: a 56 px ghost Skip, the 72 px
+gradient **Ngap!** button carrying the word, and a 56 px ghost Later. It was
+five controls — rewind, Pass, the super-like star, Like — until D84.
+
+Since 2026-09-10 the two ghosts carry their word **under** the glyph — `Skip`
+and `Later`, the same words the onboarding "Three moves" primer teaches, so the
+screen that teaches the gesture and the screen that runs it agree. Ngap already
+says its own, so there is no third caption.
+
+The measurements, all tokens rather than literals in `swipe_deck.dart`:
+
+| Piece | Token | Value |
+|---|---|---|
+| The two ghost discs | `kActionButtonSize` | 56 |
+| The Ngap disc | `kNgapButtonSize` | 72 |
+| Between the three columns | `kDeckActionGap` | 20 |
+| Between a disc and its word | `kDeckActionCaptionGap` | 6 |
+
+Each ghost sits in a column that is literally `kNgapButtonSize` wide — the same
+width as the disc in the middle — which is what keeps Ngap dead-centre whatever
+the captions measure at a large text size. The caption is `kFontSizeMicro` w600
+in `kCreamSecondary` at height 1.2, one line, ellipsised.
+
+The captions are `ExcludeSemantics`: a screen reader hears each action named
+once, not twice. The name it hears is the button's own — `Skip` and **`Save for
+later`**, which says what the clock glyph means where the drawn word only has
+room for "Later".
+
+### Motion
+
+One `AnimationController` at **640ms**, easing `easeInOutCubic`, interpolating
+`_animationStartOffset → _animationEndOffset`.
+
+- Exit offset: `(±460, -220)` for Ngap/Skip, `(0, -900)` for Later — straight
+  up, so the gesture and the animation agree.
+- Rotation: `dx / 900`.
+- Like/Nope stamp opacity: `dragPercentage = |travel| / 260`, clamped 0–1. The
+  stamp only shows past 20px of travel, so a resting card is clean.
+- Card lift: `easeOutCubic` over the same `dragPercentage`.
+- A button press seeds a small offset (`±14`) before animating, so a tap and a
+  drag leave along the same arc rather than the tap looking teleported.
+
+### ~~The match moment~~ — removed 2026-09-04 (D84)
+
+~~A celebration overlay fires on every super like, and on 1 in 4 ordinary
+likes.~~ `_MatchOverlay` is gone. A restaurant cannot swipe back, so there was
+never a match to celebrate, and the new design does not stop the flow to say
+otherwise.
+
+It was also the deck's only route to **Get directions**. That affordance
+survives on the card itself and on the detail page, which is where the
+visit-prompt feature is triggered from — so removing the overlay did not take
+the visit prompt with it.
+
+## 2. Ranking
+
+The deck arrives **pre-ranked from `get_deck`** and the client must not re-sort
+it. There are **two** rankers, and they are not the same one: the server scores
+what you see online, and a smaller Dart ranker re-orders a cached deck when
+there is no server to ask.
+
+### `deck_scored` — the server, and what you actually see
+
+In `supabase/migrations/20260910110000_retire_passport_origin.sql`. Every term
+is added; there is no penalty term, because `get_deck` filters swiped rows out
+before scoring is even read.
+
+Out, but not always for good: when fewer than `p_limit` unswiped rows are left,
+`get_deck` tops the deck up with **passes** whose `swiped_at` is more than three
+days old — `swipes.updated_at`, so a re-pass restarts the clock (D135). A like
+never comes back: only a pass gets a second showing, and only once the
+catalogue has run dry. Both buckets are read off one scoring pass and sorted
+together, unseen cards first, so topping up costs a filter rather than a second
+run of the ranker (D142).
+
+A resurfaced pass no longer returns at the score it left with. Above the
+three-day floor it comes back at `score × least(1, age_days / 7)` (D139), so a
+four-day-old pass is quiet and a month-old one is at full strength. The floor
+stays a hard cut rather than becoming part of the curve: a decayed score near
+zero would otherwise ride the jitter straight back to the top of a thin deck.
+On an exhausted deck whose passes ranged 4 to 33 days old, this emptied the
+top thirty of everything younger than a week.
+
+| Signal | Weight | How |
+|---|---|---|
+| Proximity | 0.30 | `2^(−km / 12)` — half-life **12 km**. ×1.5 when `nearby_focus` is on. Unknown location gets 0.5; a row with no origin to measure from gets 0 |
+| Freshness | 0.20 | `percent_rank()` over the TikTok post id — a *percentile*, so gaps between ids cannot skew it |
+| Rating | 0.15 | `least(rating, 5) / 5`, **only when `rating > 0`** |
+| Taste | 0.25 | A block: 0.60 × the cuisine's **like rate** for this user, `(likes + 2 × prior) / (swipes + 2)` over deck swipes only, with prior 1 for an onboarding pick and 0 otherwise (D136), +0.25 when `morning_mode` and the local hour is before 11 and the place is breakfasty, +0.15 scaled by how close its spice level sits to the profile's `spice_bias` |
+| Dietary | 0.10 | The place carries a tag the profile asked for |
+| Open now | **±0.08** | `is_open_at` in Asia/Kuala_Lumpur: +0.08 open, −0.08 known to be shut, **0 when the hours are unknown** — which is 88% of the catalogue, and a term that read that null as "closed" would punish a gap in the data (D138) |
+| Exploration | 0.175 **+ 0.075** | `deck_jitter(id, seed)`. The extra 0.075 is added **when the row is unrated**, so an unrated row hands the rating's weight to exploration instead of being scored as a zero. Halved by D137 once the clustering it was hiding had an explicit fix |
+
+Open-now is never a filter. 1,424 of the 1,605 active rows have no hours at
+all, so filtering would delete the catalogue — D119 is the receipt for that
+lesson. Over a real 522-card 30 km deck the term moves the top sixty from 24
+open / 13 shut / 23 unknown to **42 / 5 / 13**: the rows known to be shut
+mostly leave, and the rows with no hours pay for it. That last line is a data
+problem, not a weight problem.
+
+Every deck swipe also writes two columns nothing reads yet: `dwell_ms`, how
+long the card sat on top, and `unmuted`, whether its clip had sound on at the
+moment of the decision (D149). They are there because they cannot be
+backfilled, not because anything scores them today.
+
+The taste block is the one signal that learns. Before D136 it asked a single
+question — is this one of the cuisines picked during onboarding — so somebody
+who picked Western on day one and passed on every Western place since kept
+getting Western. The shrunk like rate replaces that 1-or-0 with evidence, and
+because the prior is exactly 1 and 0, a cuisine the user has never swiped
+scores precisely what it scored before. The pseudo-count of 2 is the whole of
+the cold-start handling: two likes barely move a picked cuisine, two passes
+pull it to 0.5. Only `source = 'deck'` swipes count — a "Set a date" like
+(D112) and a Nearby-map swipe are not deck exposures.
+
+Then `get_deck` reorders what it was handed: the **nth card of a cuisine loses
+0.02 × (n − 1)** before the limit is applied, so the penalty decides which
+thirty cards are dealt rather than only how they are arranged (D137). It is a
+soft penalty, not a round robin — the cuisine somebody actually likes keeps
+about eight cards before the penalty eats its edge.
+
+The seed is derived from the current date in `Asia/Kuala_Lumpur`, so the order
+is stable for a day and rerolls at midnight for free.
+
+In practice the rating term is **never non-zero**: 2 of 1,607 rows have a
+rating and both are inactive. So every card dealt today carries the full
+**0.25** of jitter. Before D137 that was 0.50, which made exploration
+comfortably the largest signal in the deck and made the order feel arbitrary;
+the diversity penalty now does the anti-clustering the randomness was doing
+blindly. `get_top_picks` shares `deck_scored`, so it inherited the halved
+jitter, but not the penalty — ten cards billed as the best ten should be the
+best ten, and shuffling a cuisine down that list would be a lie about the
+ranking.
+
+### `DeckRanker` — the offline cache only
+
+`domain/deck_ranker.dart`, used only to re-rank a deck that came off the
+device. Adapted from how Tinder describes its post-Elo ranking, and it has to
+handle rows the server would have filtered out, which is why it has a penalty:
+
+| Signal | Weight | How |
+|---|---|---|
+| Exploration | 0.35 | Per-session random jitter, so each session sees a rotated order |
+| Proximity | 0.30 | Exponential decay, half-life **12 km** |
+| Freshness | 0.20 | TikTok post id (which increases with post time), else row id |
+| Quality | 0.15 | `rating`, when one exists |
+| Recently seen | −1.25 | Sinks to the back rather than being re-shown |
+
+Its exploration weight stays at 0.35 where the server's halved to 0.175: D137
+traded jitter for a cuisine penalty, and the cached rows this re-ranks carry no
+cuisine, so there is nothing to trade against here.
+
+It knows nothing of `morning_mode`, `spice_bias`, the taste signal, the radius
+or the discovery filters — those are all server-side, which is part of why a
+cached deck is always labelled as one (D17).
+
+Two deliberate details in the offline ranker:
+
+- The recently-seen penalty (1.25) is strictly larger than the sum of the four
+  weights (1.00), so a perfect-scoring seen card still ranks behind the worst
+  unseen card, while seen cards keep their relative order among themselves.
+- Restaurants at `(0, 0)` are treated as "location unknown" and get **neutral
+  half-credit** on proximity, so a missing geocode never locks a row out of the
+  deck front. 474 rows depend on this.
+
+## 3. ~~Daily limit and streak~~ — removed 2026-09-04 (D84)
+
+> History. None of the code below exists any more: the constant, the
+> `get_swipe_stats` call, `swipesLeft`, `outOfSwipes`, the flame chip and the
+> out-of-swipes empty state are all gone.
+
+`DeckController.dailySwipeLimit = 50`, enforced **client-side** off
+`get_swipe_stats`.
+
+- `swipesLeft` is null while the count is unknown (never loaded, or the stats
+  call failed). `outOfSwipes` is true **only** when the count is known and
+  spent — an unknown count stays swipeable, because a stats hiccup must never
+  brick the deck.
+- `streakDays` is consecutive days with at least one swipe, shown as a flame in
+  the header.
+- Out of swipes, the deck stops dealing but **rewind stays offered** — taking a
+  swipe back refunds it.
+
+## 4. ~~Rewind~~ — removed 2026-09-04 (D84)
+
+> History. `DeckController.rewind`, `canRewind` and every affordance that
+> offered it are gone. `undo_swipe` still exists on the database, unused.
+
+`DeckController.rewind()` → `undo_swipe`, which **deletes** the row rather than
+writing `liked = false`. `get_deck` excludes every restaurant with any swipe
+row, so an "undone" card would otherwise never be dealt again (D6).
+
+**The race this has to survive:** `recordSwipe` is optimistic — the card flies
+out and the write follows. An undo firing before that write lands would delete
+nothing, and then the like would insert, leaving the row behind and the card
+gone for good. The controller holds the in-flight future per restaurant and
+awaits it before deleting.
+
+Rewind also works from the exhausted-deck state, where it brings the very last
+swipe back.
+
+## 5. Load, concurrency and staleness
+
+`load()` is guarded by `_loadGeneration`: only the newest request may publish
+its result, so a slow response from an earlier call can never overwrite a
+fresher deck. Init and every retry button share the path.
+
+The deck is re-dealt when any **deck-shaping** profile field changes — radius,
+discovery filters. The tabs live in an `IndexedStack` that never
+re-inits, so these have to be listened for; they are server-side filters, and
+stale cards would break the promise they make. `lastPlaceName` and the stored
+fix are deliberately excluded, since every load syncs those anyway and
+including them would re-deal on every load.
+
+### Applying the discovery sheet
+
+`AppUser.activeFilterCount` counts **four** kinds — a cuisine choice, a dietary
+choice, a minimum rating, a search radius — one apiece however many cuisines
+are ticked. It is the badge on the header button and it is what the sheet's
+"Apply 2 limits" counts, so the two never disagree about how narrowed the deck
+is.
+
+`applyDiscoveryFilters` does **two writes**, because the radius has its own
+RPC: `update_preferences` (`p_radius_km` / `p_clear_radius`) first and only when
+the radius actually changed, then `set_discovery_filters`. The radius goes first
+so that a failure leaves the filters alone and "could not save" is the whole
+truth rather than half of it. Only the **last** row reaches
+`AuthController.applyUser`, once — applying the radius on its own would re-deal
+the deck under the new radius and the old filters, a whole load thrown away a
+moment later. Whatever landed is applied even when the second write threw, half
+a sheet included. The failure toast is `Could not save your discovery
+settings.`
+
+### Offline
+
+`deck_cache.dart` persists the last dealt deck in `shared_preferences` under
+`deck_cache_v1`, scoped to the user id and expiring after **7 days** — a deck
+from last month knows nothing about where the user is now.
+
+When cards come off the device, `isStale` is true and `stalenessLabel` renders a
+visible notice. A saved deck presented as live is a lie about how close those
+places are.
+
+### The header
+
+The design's `.topbar`: a place icon, the location on one line and
+"within 3 km · dinner" under it, and the **discovery** button with its count
+dot. Nothing else — account settings moved to the You tab on 2026-09-05,
+because the design gives the swipe screen one button. That one button now
+opens the radius as well as the filters
+([Profile-Preferences](Profile-Preferences.md) §3): the subline says how far
+the deck is looking, and the control next to it is where that is changed.
+
+The button is announced as **"Discovery settings"** — the sheet behind it sets
+the radius, cuisines, dietary needs and rating, so it is named for the whole of
+that rather than for one row — with the count as a semantics *value* ("2
+filters on"). When anything is narrowing the deck the glyph goes ember, the
+palette's word for "chosen", so the state is legible before the count is read.
+Nearby's own filter button opens the same sheet and is named and coloured the
+same way.
+
+`locationLabel` is the reverse-geocoded name of the last stored fix, else
+`'Nearby'` for an account that has never granted location — and `'Location
+off'` whenever the device position is the **fallback**, because the stored
+name is then the last town the app managed to geocode, which can be days and a
+hundred kilometres out of date. Printing it plain reads as a claim about where
+the user is standing.
+
+A fallback also means the deck itself is dealt around the stored point rather
+than the device, so `SwipeDeck` re-runs `DeckController.refreshLocation()` on
+`AppLifecycleState.resumed`. Turning location on happens in Settings, which is
+an app switch, and `resolveUserPosition` drops its session cache after a
+fallback — so the resume is where a fix that was granted after launch first
+reaches the app. The refresh is a no-op when a real fix is already in hand: a
+re-deal restarts the stack, and nobody should lose their place six cards in
+just for switching apps.
+
+The name now belongs to the fix rather than to the profile
+([Profile-Preferences](Profile-Preferences.md) §3): `update_location` writes
+whatever the geocoder returned, null included, so a fix in a new town can no
+longer wear the old town's name when reverse geocoding fails. "Nearby" is the
+honest answer there.
+
+The card's distance is measured from `DeckController._deckOrigin` — the real
+device fix, else `AppUser.lastLatitude/lastLongitude` — which is exactly the
+chain `deck_scored` uses to apply the radius. It has to be: measuring from a
+different point is how a card the server picked as "within 15 km" ends up
+labelled 80 km. A **fallback** position is not a fix and is never measured
+from, because the RPC is never told about it either.
+
+When there is no origin at all the label says which kind of nothing it is:
+`Distance loading` while no position has resolved yet — the first fix is still
+the likely answer — and `Distance unknown` once a position exists but no usable
+origin does, which is also what a restaurant sitting on the `0,0` sentinel gets.
+Measuring to Null Island would print a number that reads like an answer.
+
+The second line is the profile's
+`search_radius_km` ("any distance" when unset) and `mealLabel(now)` from
+`domain/meal_label.dart` — breakfast before 11, lunch to 15, tea to 18, dinner
+to 22, supper otherwise.
+
+## 6. Card content
+
+Media is the TikTok video when `video_url` is present, else a paged image
+gallery (tap left/right half). Only the **foreground** card mounts a WebView;
+the card behind shows a static thumbnail, so two videos never run at once. See
+[TikTok-Video.md](TikTok-Video.md).
+
+Over it, low over the scrim, the design's **info block** (`RestaurantInfoBlock`
+in `swipe_card.dart`), changed 2026-09-05 (D93):
+
+- **Tags** — a fresh-tinted "Open till 2 am" chip when the place is open right
+  now (the only fresh thing on the screen, `AppTagChip.fresh`), the cuisine, and
+  "Halal" when the caption says so. A closed place gets no chip: on a card you
+  are being dealt, "closed" is a reason to skip, and the detail screen says when
+  it opens.
+- **Name** — Bricolage 34 px, weight 800, two lines at most.
+- **Meta** — `**1.2 km** · Masai` and `**From RM 19**`. Each part hides when
+  unknown; the distance always shows.
+
+A tap anywhere on the card — the info block, the clip — opens the restaurant's
+screen. The only exception is the sound pill, which is a **real button**, not a
+caption: `MutedHint` in `tiktok_player.dart`, reading `Tap for sound` behind a
+`kHairline` border in `kTextOnPhoto` while the clip is silent and `Sound on`
+behind an ember border in `kAccentEmber` once it is not. Tapping it again mutes.
+Its screen-reader label is the *instruction*, not the drawn word — `Tap for
+sound` when muted, `Mute` when not — and it is 36 px at its minimum, sized as a
+control on a card whose every other pixel means "swipe me". It swallows the tap
+even before the player future resolves, because letting that one fall through
+would open the restaurant instead of doing what the pill says. The sound comes
+on in place, with no reload and no restart (D89, D122 —
+[TikTok-Video](TikTok-Video.md) §2).
+
+The clip goes back to **silent** — muted, never paused — on three events
+besides that second tap:
+
+- **Leaving the Swipe tab.** Every tab stays mounted in the `IndexedStack`, so
+  nothing tears the player down; `SwipeDeck.isActive` going false is the signal,
+  and `_muteCurrentClip` sends the card on screen back to silent.
+- **Opening the detail screen.** `_openDetail` mutes before it pushes, or the
+  deck card would keep playing audio under an opaque route showing the same clip.
+- **The card's `dispose`.** A swiped-away card is off the screen but its player
+  is held warm for four more swipes; unmuted, that is a clip nobody can see
+  still making noise.
+
+The deck no longer has a fullscreen player route; the detail
+screen keeps its own. The card carries **no buttons**: the three actions are
+`DeckActionBar` under the deck (`swipe_deck.dart`), so the card behind is the
+same surface as the card in front. The tap-to-expand panel, the `details`
+paragraph and the review carousel are gone from the card — with 6 reviews across
+1,607 rows the carousel was empty on almost every card, and its pan-gesture lock
+(the carousel had to block the deck's own drag) went with it. Details live on
+the detail screen — [Restaurant-Detail.md](Restaurant-Detail.md), built
+2026-09-06.
+
+Where the facts come from: [Restaurant-Data.md §2a](Restaurant-Data.md) — the
+opening span, the lowest price, halal and the neighbourhood are parsed once
+from the caption into columns (D91). Open state is computed the same way on the
+server (`is_open_at`, Kuala Lumpur time) and on the device (`OpeningHours` in
+`domain/opening_hours.dart`, device-local clock — D92); the card uses the Dart
+one so a cached deck says the same thing a fresh one would.
+
+## 7. Empty and error states
+
+| State | Shown |
+|---|---|
+| Loading | Skeleton, not a spinner over an empty deck |
+| Exhausted | `"No more cards"`, plus what Reload actually does — it brings back places skipped a few days ago — and **Widen the search**, which opens the discovery sheet that owns the radius (D144). There is still no rewind to offer |
+| Error | Message + retry, sequenced through `_loadGeneration` |
+| Stale | The deck plus a visible staleness label |
+| Rules leave nothing | Names the rule that emptied the deck, and offers **Change the rules** beside Reload — the same tap, for the same reason (D144) |
+| Nothing in radius | Uses `nearest_restaurant_km` to say how far the nearest place actually is |
+
+## 8. Known gaps
+
+- Ranking's quality signal is inert: only 2 of 1,607 rows have a rating, and
+  both of those rows are inactive.
+- ~~**The re-surfacing window measures from the first swipe ever.**~~ **Fixed
+  2026-09-11 (D135.)** `deck_scored` read `s.created_at as swiped_at` while
+  `record_swipe`'s upsert never touches `created_at` on conflict and the
+  `swipes_touch_updated_at` trigger maintains `updated_at` instead, so
+  re-passing a card that first came round more than three days ago did not
+  restart its clock — it qualified for the exhaustion fallback again on the very
+  next reload. It now reads `s.updated_at`.
+- `swipe_card.dart`'s comment over the sound pill still says tapping it
+  "reloads it with TikTok's own sound on". It does not — the reload went with
+  D122. A stale comment, not stale behaviour.
+
+## 9. Out of scope
+
+- **Mutual matching, chat, "Likes You", Boost** — a restaurant never swipes
+  back. See [History/tinder-parity-plan.md](../History/tinder-parity-plan.md).
+- **Swipe limits of any kind.** The daily limit was removed with D84 and was
+  never enforced server-side.
+- **Undo.** Rewind went with D84; there is no one-step history to deepen.
+
+## 10. Decision log
+
+| ID | Decision | Status |
+|---|---|---|
+| D3 | Ranking lives in `get_deck`; the client renders serve order and must not re-sort. | locked 2026-08-23 |
+| D6 | ~~Rewind **deletes** the swipe row~~ — **superseded 2026-09-04 by D84.** Rewind is gone; the design has no undo. Unlike still writes `liked = false`. | superseded by D84 |
+| D14 | The up gesture is guarded on `|dx| < 110` so a diagonal fling cannot trigger it. Still true — the gesture now means **Later** (rebound by D85) rather than super like. | locked 2026-08-31, rebound 2026-09-04 |
+| D15 | ~~Celebrate every super like but only 1 in 4 likes~~ — **superseded 2026-09-04 by D84.** The match moment is gone; a restaurant cannot swipe back. | superseded by D84 |
+| D16 | ~~An unknown swipe count stays swipeable; only a known-and-spent count blocks~~ — **superseded 2026-09-04 by D84.** There is no daily limit, so there is nothing to gate. | superseded by D84 |
+| D17 | A stale (cached) deck is always labelled as stale, never presented as live. | locked 2026-08-30 |
+| D18 | `DeckRanker` gives unlocated rows neutral half-credit rather than excluding them. | locked 2026-08-31 |
+| D92 | Open state is computed identically in SQL (`is_open_at`, Asia/Kuala_Lumpur) and Dart (`OpeningHours`, device clock); an unknown span answers null and the chip hides. | locked 2026-09-05 |
+| D93 | The card carries no controls and no expandable panel: the action bar lives under the deck, the info block opens the detail screen, details and reviews live there. | locked 2026-09-05 |
+| D122 | The card's sound pill drives TikTok's player through their documented `x-tiktok-player` postMessage API (`mute` / `unMute`), not through the URL. The clip no longer restarts when the sound comes on. See [TikTok-Video.md](TikTok-Video.md). | locked 2026-09-10 |
